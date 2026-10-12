@@ -1,0 +1,23 @@
+{
+  "name": "waves",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:web": "vite --config vite.web.config.ts --open /index-web.html",
+    "build": "tsc --noEmit && vite build",
+    "build:web": "vite build --config vite.web.config.ts"
+  },
+  "dependencies": {
+    "convex": "1.42.3",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.10",
+    "@types/react-dom": "19.1.0",
+    "@vitejs/plugin-react": "5.1.2",
+    "typescript": "5.9.3",
+    "vite": "6.4.2"
+  }
+}
