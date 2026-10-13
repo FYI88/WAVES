@@ -186,6 +186,9 @@ type Lang = "fr" | "en";
 
 const en = {
   sub: "Wave & Wall Simulator",
+  school: "ENSA · GSR1",
+  madeBy: "Made by",
+  author: "CHETAINE YOUNES",
   tagline: "EM reflection & transmission through multilayer walls",
   parameters: "Parameters",
   material: "Wall material",
@@ -297,6 +300,9 @@ type Dict = typeof en;
 
 const fr: Dict = {
   sub: "Simulateur onde & paroi",
+  school: "ENSA · GSR1",
+  madeBy: "Réalisé par",
+  author: "CHETAINE YOUNES",
   tagline: "Réflexion et transmission EM à travers des parois multicouches",
   parameters: "Paramètres",
   material: "Matériau du mur",
@@ -888,6 +894,8 @@ const mixHex = (a: string, b: string, t: number) => {
   const B = hexRgb(b);
   return "#" + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, "0")).join("");
 };
+
+/** Draws a beam + oscillating field ribbon + moving wavefront crests; returns phase at the segment end. */
 
 /* ════════════════════════════════════════════════════════════════════════
    Chart renderers
@@ -2057,11 +2065,12 @@ export function App() {
         <div className="om-brand">
           <Logo />
           <div className="om-brand-text">
+            <span className="om-school">{t.school}</span>
             <h1>WaveS</h1>
             <p>
-              {t.sub}
+              {t.madeBy} <strong>{t.author}</strong>
               <span className="om-dot-sep" />
-              <span className="om-brand-tag">{t.tagline}</span>
+              <span className="om-brand-tag">{t.sub}</span>
             </p>
           </div>
         </div>

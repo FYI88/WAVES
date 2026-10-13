@@ -76,8 +76,6 @@ export function drawSpatialScene(
 ) {
   const compact = width < 600;
   const scale = Math.min(width / (compact ? 760 : 940), height / 510);
-  /* label unit, shared with the cross-section renderer so both views agree */
-  const u = bound(width / 1180, 0.82, 1.7);
   const center = { x: width * 0.50, y: height * (compact ? 0.46 : 0.50) };
   const ca = Math.cos(options.az), sa = Math.sin(options.az);
   const se = Math.sin(options.el), ce = Math.cos(options.el);
@@ -116,14 +114,14 @@ export function drawSpatialScene(
   };
   const label = (text: string, position: Point, color: string, align: CanvasTextAlign = "center", filled = true) => {
     ctx.save();
-    ctx.font = `500 ${12 * u}px ${MONO}`;
+    ctx.font = `500 ${compact ? 9 : 10}px ${MONO}`;
     const textWidth = ctx.measureText(text).width;
     if (align === "center") position = { ...position, x: bound(position.x, textWidth / 2 + 12, width - textWidth / 2 - 12) };
     const left = align === "center" ? position.x - textWidth / 2 : align === "right" ? position.x - textWidth : position.x;
     if (filled) {
       ctx.fillStyle = palette.dark ? "rgba(9,19,27,.91)" : "rgba(248,252,255,.94)";
       ctx.beginPath();
-      ctx.roundRect(left - 8 * u, position.y - 12 * u, textWidth + 16 * u, 24 * u, 5 * u);
+      ctx.roundRect(left - 8, position.y - 10, textWidth + 16, 22, 5);
       ctx.fill();
       ctx.strokeStyle = alpha(color, 0.2);
       ctx.lineWidth = 0.7;
@@ -460,7 +458,7 @@ export function drawSpatialScene(
 
   const axisOrigin = { x: compact ? 20 : 32, y: height - (compact ? 132 : 75) };
   ctx.save();
-  ctx.font = `${11 * u}px ${MONO}`;
+  ctx.font = `9px ${MONO}`;
   [{ text: "x", dx: 22, dy: -3, color: palette.inc }, { text: "y", dx: 12, dy: 10, color: palette.muted }, { text: "z", dx: 0, dy: -23, color: palette.tra }].forEach(axis => {
     trace([axisOrigin, { x: axisOrigin.x + axis.dx, y: axisOrigin.y + axis.dy }]);
     ctx.strokeStyle = alpha(axis.color, 0.7);
@@ -470,7 +468,7 @@ export function drawSpatialScene(
     ctx.fillText(axis.text, axisOrigin.x + axis.dx + 3, axisOrigin.y + axis.dy + 3);
   });
   ctx.restore();
-  ctx.font = `500 ${11 * u}px ${SANS}`;
+  ctx.font = `500 ${compact ? 8 : 9}px ${SANS}`;
   ctx.fillStyle = palette.faint;
   ctx.textAlign = compact ? "left" : "right";
   ctx.fillText(compact
