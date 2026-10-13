@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "vite --config vite.web.config.ts --open /index-web.html",
     "dev:web": "vite --config vite.web.config.ts --open /index-web.html",
     "build": "tsc --noEmit && vite build",
     "build:web": "vite build --config vite.web.config.ts"
