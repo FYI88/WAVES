@@ -2,5 +2,8 @@ node_modules/
 dist/
 dist-web/
 *.local
+*.log
+.shots/
+.verdent/
 .DS_Store
 Thumbs.db

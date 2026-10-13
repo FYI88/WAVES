@@ -4,13 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "start": "vite --config vite.web.config.ts --open /index-web.html",
-    "dev:web": "vite --config vite.web.config.ts --open /index-web.html",
+    "start": "vite --open",
     "build": "tsc --noEmit && vite build",
-    "build:web": "vite build --config vite.web.config.ts"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "convex": "1.42.3",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },

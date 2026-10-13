@@ -320,7 +320,7 @@ a:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   Onde & Mur — app-specific design layer
+   WaveS — app-specific design layer
    ═══════════════════════════════════════════════════════════════════════ */
 
 .om {
@@ -1042,7 +1042,7 @@ a:hover {
   padding: 5px 10px;
   border-radius: 8px;
   background: var(--om-card);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   box-shadow: var(--om-control-shadow);
 }
@@ -1057,7 +1057,7 @@ a:hover {
 }
 .om-hud-v { font-family: var(--om-mono); font-size: 23px; font-weight: 600; }
 .om-hud-v small { font-size: 11px; }
-.om-hud-k { font-size: 10px; }
+.om-hud-k { font-size: 11px; }
 .om-paused-badge { right: 18px; bottom: 18px; background: var(--om-card); border-radius: 7px; }
 .om-scene:has(.om-scene-toolbar) .om-paused-badge { bottom: 78px; }
 .om-scene:has(.om-scene-toolbar) .om-hud-bl,
@@ -1118,12 +1118,12 @@ a:hover {
 }
 .om-scene-caption strong { display: block; color: var(--om-ink); font-weight: 600; }
 .om-count { background: var(--om-chip-hover); color: var(--om-ink-2); }
-.om-group { padding: 20px 0; }
-.om-section-title, .om-stats-head { font-size: 10px; letter-spacing: 0.13em; color: var(--om-ink-2); }
-.om-label { font-size: 13px; font-weight: 600; }
+.om-group { padding: 24px 0; }
+.om-section-title, .om-stats-head { font-size: 11px; letter-spacing: 0.11em; color: var(--om-ink-2); }
+.om-label { font-size: 14px; font-weight: 600; }
 .om-label-row { margin-bottom: 14px; }
 .om-label-split { display: flex; flex-wrap: wrap; gap: 6px; }
-.om-faint { font-size: 11px; }
+.om-faint { font-size: 12px; }
 .om-strip { height: 48px; padding: 7px; border-radius: 9px; background: var(--om-input); margin-bottom: 12px; }
 .om-strip-seg { box-shadow: inset 0 0 0 1px var(--om-line-2); min-width: 12px; }
 .om-strip-seg.is-on { transform: none; box-shadow: 0 0 0 2px var(--om-inc); }
@@ -1140,7 +1140,7 @@ a:hover {
 .om-layer-sw { width: 22px; height: 28px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--om-line-2); }
 .om-layer-txt { gap: 3px; }
 .om-layer-txt b { font-size: 12px; }
-.om-layer-txt small { font-family: var(--om-mono); font-size: 10px; }
+.om-layer-txt small { font-family: var(--om-mono); font-size: 11px; }
 .om-layer-actions { opacity: 1; gap: 2px; }
 .om-layer-actions button { width: 28px; height: 34px; border-radius: 6px; }
 .om-layer-actions button:hover:not(:disabled) { transform: none; }
@@ -1209,10 +1209,10 @@ a:hover {
 .om-ring { width: 52px; height: 52px; }
 .om-ring-val { filter: none; stroke-width: 6; }
 .om-ring-track { stroke-width: 6; }
-.om-hero-label { font-size: 10px; letter-spacing: 0.09em; color: var(--om-ink-2); }
+.om-hero-label { font-size: 11px; letter-spacing: 0.09em; color: var(--om-ink-2); }
 .om-hero-value { font-size: clamp(28px, 2.7vw, 38px); font-weight: 650; margin-top: 7px; }
 .om-hero-value small { font-size: 14px; }
-.om-hero-sub { font-size: 11px; margin-top: 5px; }
+.om-hero-sub { font-size: 12px; margin-top: 5px; }
 .om-budget { padding: 20px 18px; gap: 14px; }
 .om-budget-head { flex-wrap: wrap; gap: 4px 10px; }
 .om-bar { height: 9px; border-radius: 3px; }
@@ -1226,9 +1226,9 @@ a:hover {
 .om-stat { padding: 16px; border-radius: 11px; box-shadow: none; }
 .om-stat::before { width: 2px; box-shadow: none; top: 18px; bottom: 18px; }
 .om-stat:hover { transform: none; border-color: var(--om-line-2); }
-.om-stat-label { font-size: 11px; white-space: normal; }
+.om-stat-label { font-size: 12px; white-space: normal; }
 .om-stat-value { margin-top: 9px; font-size: 20px; font-weight: 600; flex-wrap: wrap; gap: 4px 6px; }
-.om-stat-sub { font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+.om-stat-sub { font-size: 11.5px; line-height: 1.6; overflow-wrap: anywhere; }
 .om-charts { gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .om-chart { padding: 0; overflow: hidden; }
 .om-chart-head { padding: 18px 18px 14px; gap: 10px 16px; flex-wrap: wrap; border-bottom: 1px solid var(--om-line); min-height: 84px; }
@@ -1385,9 +1385,9 @@ a:hover {
 .om .om-scene-toolbar .om-scene-toggle {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 34px;
-  padding: 6px 8px;
-  font-size: 11px;
+  min-height: 32px;
+  padding: 5px 9px;
+  font-size: 11.5px;
   line-height: 1.35;
   white-space: nowrap;
   border-radius: 5px;
@@ -1732,8 +1732,13 @@ a:hover {
   background: transparent; border: 0; border-radius: 0; box-shadow: none;
   backdrop-filter: none; -webkit-backdrop-filter: none;
 }
-.om-scene { border-radius: 0; height: clamp(360px, 60vh, 700px); }
-.om-scene:has(.om-scene-toolbar[data-view="wave"]) { height: clamp(360px, 60vh, 700px); }
+/* The stage is the hero of the presentation: 66vh with a 460px floor, so the
+   cross-section has a real band to fill. The old 60vh + fixed 86px bottom
+   reserve left the slabs about 40% of the canvas, which is why the drawing
+   looked small in a box that had room to spare. */
+.om-scene { border-radius: 0; height: clamp(460px, 66vh, 820px); }
+.om-scene:has(.om-scene-toolbar),
+.om-scene:has(.om-scene-toolbar[data-view="wave"]) { height: clamp(460px, 66vh, 820px); }
 .om-layout { max-width: none; }
 @media (min-width: 1040px) {
   .om-layout { grid-template-columns: 320px minmax(0, 1fr); }
@@ -1741,14 +1746,43 @@ a:hover {
 @media (min-width: 1680px) {
   .om-layout { grid-template-columns: 320px minmax(0, 1fr) 300px; }
 }
-.om-scene::after { display: none; }
+/* ── ambient depth behind the stage ───────────────────────────────────────
+   The aurora/grain tokens were defined but the layer was stripped for the
+   flat "lab" look, which leaves a wide canvas reading as a dead rectangle.
+   Both layers are static (no animation, no per-frame cost) and sit over the
+   canvas but under the read-outs and the deck. */
+.om-scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 85% at 10% -10%, var(--om-aurora-a), transparent 62%),
+    radial-gradient(110% 95% at 92% 4%, var(--om-aurora-b), transparent 64%),
+    radial-gradient(130% 120% at 50% 118%, var(--om-aurora-c), transparent 66%);
+}
+.om-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  box-shadow: none;
+  pointer-events: none;
+  opacity: var(--om-grain);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .om-scene::after { display: none; }
+}
 .om-results, .om-charts { gap: 0; }
-.om-hero { min-height: 0; padding: 16px; }
-.om-budget { gap: 10px; padding: 16px 18px; }
+.om-hero { min-height: 0; padding: 20px; }
+.om-budget { gap: 14px; padding: 20px; }
 .om-stats { gap: 0; }
 .om-stat { border-radius: 0; }
 .om-stat::before { top: 12px; bottom: 12px; }
-.om-chart-body { height: 240px; }
+.om-chart-body { height: clamp(240px, 30vh, 330px); }
 /* stacked (single column): hairline under each section but the last */
 .om-scene, .om-controls, .om-results { border-bottom: 1px solid var(--om-line); }
 .om-charts { border-bottom: 0; }
@@ -1816,11 +1850,12 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 10px;
+  gap: 6px 8px;
   width: auto;
   min-width: 0;
   margin: 0;
-  padding: 8px 12px;
+  /* a slim deck hands ~10px of height to the canvas */
+  padding: 6px 12px;
   border-radius: 0;
   overflow: visible;
   background: color-mix(in srgb, var(--om-bg) 86%, transparent);
@@ -1833,8 +1868,8 @@ a:hover {
 .om .om-scene-toolbar .om-view-modes { flex: 0 0 auto; }
 .om .om-scene-toolbar .om-view-modes button {
   flex: 0 0 auto;
-  font-size: 11px;
-  padding: 6px 9px;
+  font-size: 11.5px;
+  padding: 5px 10px;
 }
 .om .om-scene-toolbar .om-scene-speed { margin-left: auto; }
 
@@ -1933,6 +1968,14 @@ a:hover {
   .om-scene:has(.om-scene-toolbar) .om-hud-tl > .om-hud-chip:first-child { display: none; }
 }
 
+/* phones: a portrait stage gets more of the screen because the drawing is
+   width-limited there — the extra height goes to the beams and the labels */
+@media (max-width: 639px) {
+  .om-scene,
+  .om-scene:has(.om-scene-toolbar),
+  .om-scene:has(.om-scene-toolbar[data-view="wave"]) { height: clamp(420px, 64vh, 600px); }
+}
+
 /* short screens (landscape phones): leave room for the deck */
 @media (max-height: 560px) and (max-width: 900px) {
   .om-scene,
@@ -1974,5 +2017,22 @@ a:hover {
     padding-bottom: max(24px, env(safe-area-inset-bottom));
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* ── present mode ─────────────────────────────────────────────────────────
+   The deck-only frame hides the inspector, the results and the charts, so the
+   stage may take the whole screen: it was previously caught by the generic
+   clamp() rule above, which capped a projector at 66vh. */
+.om[data-present="true"] .om-scene,
+.om[data-present="true"] .om-scene:has(.om-scene-toolbar) {
+  height: calc(100dvh - 236px);
+  min-height: 420px;
+}
+@media (max-width: 639px) {
+  .om[data-present="true"] .om-scene,
+  .om[data-present="true"] .om-scene:has(.om-scene-toolbar) {
+    height: calc(100dvh - 300px);
+    min-height: 380px;
   }
 }
