@@ -135,13 +135,6 @@ export function drawSpatialScene(
   };
 
   ctx.clearRect(0, 0, width, height);
-  const background = ctx.createLinearGradient(0, 0, width, height);
-  background.addColorStop(0, palette.dark ? "#0b1923" : "#f5fafc");
-  background.addColorStop(0.55, palette.dark ? "#081219" : "#eaf2f7");
-  background.addColorStop(1, palette.dark ? "#101923" : "#f6f9fc");
-  ctx.fillStyle = background;
-  ctx.fillRect(0, 0, width, height);
-  glow({ x: width * 0.49, y: height * 0.45 }, width * 0.52, palette.inc, palette.dark ? 0.1 : 0.045); glow({ x: width * 0.86, y: height * 0.78 }, width * 0.3, palette.tra, palette.dark ? 0.06 : 0.03); glow({ x: width * 0.12, y: height * 0.8 }, width * 0.28, palette.ref, palette.dark ? 0.045 : 0.02); { const vignette = ctx.createRadialGradient(width / 2, height * 0.48, Math.min(width, height) * 0.3, width / 2, height * 0.48, Math.max(width, height) * 0.78); vignette.addColorStop(0, "rgba(0,0,0,0)"); vignette.addColorStop(1, palette.dark ? "rgba(1,4,9,.6)" : "rgba(110,140,165,.18)"); ctx.fillStyle = vignette; ctx.fillRect(0, 0, width, height); }
   ctx.save();
   ctx.globalAlpha = Math.min(1, intro * 2);
 

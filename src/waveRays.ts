@@ -138,16 +138,8 @@ export function drawWaveRays(
     ctx.restore();
   };
 
-  /* ── Backdrop ─────────────────────────────────────────────────────── */
+  /* ── Backdrop: flat, the stage colour is painted by .om-scene in CSS ── */
   ctx.clearRect(0, 0, width, height);
-  const backdrop = ctx.createLinearGradient(0, 0, 0, height);
-  backdrop.addColorStop(0, dark ? "#0a1522" : "#f8fbfd");
-  backdrop.addColorStop(1, dark ? "#05090f" : "#e7eff4");
-  ctx.fillStyle = backdrop;
-  ctx.fillRect(0, 0, width, height);
-  glow(width / 2, middle, Math.max(width, height) * 0.55, palette.inc, dark ? 0.1 : 0.05);
-  glow(width * 0.84, bottom, width * 0.34, palette.tra, dark ? 0.07 : 0.035);
-  glow(width * 0.14, bottom, width * 0.3, palette.ref, dark ? 0.05 : 0.025);
   ctx.save();
   const gridStep = compact ? 22 : 28;
   const horizontal = ctx.createLinearGradient(16, 0, width - 16, 0);

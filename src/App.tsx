@@ -508,9 +508,9 @@ const PALETTES: Record<Theme, Palette> = {
     ink: "#162939",
     muted: "#40596e",
     faint: "#50687c",
-    inc: "#006b86",
-    ref: "#b04438",
-    tra: "#087453",
+    inc: "#55dbf5",
+    ref: "#ff9586",
+    tra: "#79e2bc",
     abs: "#8d5b13",
     acc: "#006b86",
     label: "rgba(255,255,255,0.94)",
@@ -526,33 +526,9 @@ const withAlpha = (hex: string, a: number) => {
   return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, a))})`;
 };
 
-/* Canvas palette is resolved from the CSS theme variables once per theme
-   change so the canvases and the DOM share one source of truth.
-   PALETTES remains the fallback (first paint / no DOM). */
-function readCssPalette(theme: Theme): Palette {
-  const base = PALETTES[theme];
-  if (typeof window === "undefined" || typeof document === "undefined") return base;
-  const host = document.querySelector(".om");
-  if (!host) return base;
-  const cs = getComputedStyle(host);
-  const v = (name: string, fb: string) => {
-    const s = cs.getPropertyValue(name).trim();
-    return s || fb;
-  };
-  return {
-    ...base,
-    bg0: v("--om-bg", base.bg0),
-    ink: v("--om-ink", base.ink),
-    muted: v("--om-ink-2", base.muted),
-    faint: v("--om-ink-3", base.faint),
-    inc: v("--om-inc", base.inc),
-    ref: v("--om-ref", base.ref),
-    tra: v("--om-tra", base.tra),
-    abs: v("--om-abs", base.abs),
-    acc: v("--om-inc", base.acc),
-  };
-}
-
+/* Canvas palette: the scene draws from these per-theme constants only.
+   DOM accents live in the CSS --om-* tokens; the two are kept in sync by
+   hand, but the canvas must never depend on a stale DOM read. */
 const MONO = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 const SANS = '"Inter Tight", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif';
 
@@ -1875,7 +1851,7 @@ export function App() {
 
   const t = DICTS[lang];
   const fmt = useMemo(() => makeFmt(lang), [lang]);
-  const pal = useMemo(() => readCssPalette(theme), [theme]);
+  const pal = PALETTES[theme];
 
   const update = useCallback(<K extends "freq" | "angle" | "pol">(k: K, v: SimState[K]) => {
     setSim((s) => (s[k] === v ? s : { ...s, [k]: v }));

@@ -1751,22 +1751,9 @@ a:hover {
 @media (min-width: 1680px) {
   .om-layout { grid-template-columns: 320px minmax(0, 1fr) 300px; }
 }
-/* ── ambient depth behind the stage ───────────────────────────────────────
-   The aurora/grain tokens were defined but the layer was stripped for the
-   flat "lab" look, which leaves a wide canvas reading as a dead rectangle.
-   Both layers are static (no animation, no per-frame cost) and sit over the
-   canvas but under the read-outs and the deck. */
-.om-scene::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background:
-    radial-gradient(120% 85% at 10% -10%, var(--om-aurora-a), transparent 62%),
-    radial-gradient(110% 95% at 92% 4%, var(--om-aurora-b), transparent 64%),
-    radial-gradient(130% 120% at 50% 118%, var(--om-aurora-c), transparent 66%);
-}
+/* ── grain over the stage ──────────────────────────────────────────────────
+   Flat lab background: the aurora depth layer was removed on request. Only
+   the static grain remains, sitting over the canvas but under the read-outs. */
 .om-scene::after {
   content: "";
   position: absolute;
