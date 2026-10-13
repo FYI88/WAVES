@@ -7,3 +7,4 @@ dist-web/
 .verdent/
 .DS_Store
 Thumbs.db
+.freebuff/
