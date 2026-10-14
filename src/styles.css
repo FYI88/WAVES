@@ -1654,11 +1654,20 @@ a:hover {
 .om-chart { min-width: 0; }
 @media (min-width: 1040px) {
   .om-layout { grid-template-columns: 360px minmax(0, 1fr); grid-template-areas: "controls scene" "controls results" "controls charts"; }
-  .om-controls { position: sticky; top: 84px; max-height: calc(100dvh - 102px); overflow: auto; scrollbar-width: thin; }
+  /* the 2-column compact controls belong to the stacked layout below 1040px;
+     in the sidebar they overlap and wrap badly on 1040–1080 laptops */
+  .om-controls { position: sticky; top: 84px; max-height: calc(100dvh - 102px); overflow: auto; scrollbar-width: thin; display: block; }
   .om-results { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr); }
   .om-budget { grid-column: auto; }
 }
 @media (min-width: 1040px) and (max-width: 1279px) { .om-charts { grid-template-columns: minmax(0, 1fr); } }
+/* ── Desktop default scale ───────────────────────────────────────────────
+   The instrument reads best at 80% on laptops and lecture projectors;
+   at browser zoom 100% it feels oversized. Below 1040px the stacked
+   phone/tablet layout takes over and keeps its native 100% scale. */
+@media (min-width: 1040px) {
+  body { zoom: 0.8; }
+}
 @media (min-width: 1240px) { .om-hud-br { display: flex; } }
 @media (max-width: 1239px) { .om-hud-br { display: none; } }
 @media (min-width: 1680px) {
