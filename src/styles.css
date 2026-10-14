@@ -759,14 +759,14 @@ a:hover {
 .om-kbd { font-family: var(--om-mono); font-size: 11px; }
 
 /* ── Responsive ─────────────────────────────────────────────────────── */
-@media (min-width: 1500px) {
+@media (min-width: 1200px) {
   .om-chart-body { height: 320px; }
 }
-@media (max-width: 1240px) {
+@media (max-width: 1039px) {
   .om-results { grid-template-columns: 1fr 1fr; }
   .om-budget { grid-column: 1 / -1; }
 }
-@media (max-width: 1080px) {
+@media (max-width: 1039px) {
   .om-layout {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "scene" "controls" "results" "charts";
@@ -1254,17 +1254,17 @@ a:hover {
 .om-value:focus-within { border-color: var(--om-inc); box-shadow: 0 0 0 2px var(--om-input), 0 0 0 4px var(--om-inc); }
 .om button:disabled { cursor: not-allowed; }
 
-@media (min-width: 1500px) {
+@media (min-width: 1200px) {
   .om-layout { grid-template-columns: 372px minmax(0, 1fr); gap: 24px; }
   .om-chart-body { height: 310px; }
   .om-controls { padding: 20px; }
 }
-@media (max-width: 1320px) {
+@media (max-width: 1056px) {
   .om-results { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .om-budget { grid-column: 1 / -1; }
   .om-charts { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 1080px) {
+@media (max-width: 1039px) {
   .om-top { position: relative; }
   .om-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "scene" "controls" "results" "charts"; }
   .om-controls { display: block; position: static; max-height: none; overflow: visible; scrollbar-gutter: auto; padding: 20px; }
@@ -1660,10 +1660,21 @@ a:hover {
   .om-results { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr); }
   .om-budget { grid-column: auto; }
 }
-@media (min-width: 1040px) and (max-width: 1279px) { .om-charts { grid-template-columns: minmax(0, 1fr); } }
-@media (min-width: 1240px) { .om-hud-br { display: flex; } }
-@media (max-width: 1239px) { .om-hud-br { display: none; } }
-@media (min-width: 1680px) {
+/* ── Desktop default 80% ─────────────────────────────────────────────────
+   body zoom 0.8 at ≥1040px, plus every desktop breakpoint ×0.8, so the
+   layout responds exactly as browser 80% zoom would (3 columns from real
+   1344px up). The stacked phone/tablet layout below 1040px is untouched:
+   max-width rules that lived in 1040–1300 now end at 1039px, which changes
+   nothing below the gate. */
+@media (min-width: 1040px) {
+  body { zoom: 0.8; }
+}
+/* never matches under zoom (kept for shape): browser 80% zoom would apply
+   single-column charts only below the 1040px gate */
+@media (min-width: 1040px) and (max-width: 1039px) { .om-charts { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 1040px) { .om-hud-br { display: flex; } }
+@media (max-width: 1039px) { .om-hud-br { display: none; } }
+@media (min-width: 1344px) {
   .om-layout { grid-template-columns: 372px minmax(0, 1fr) 340px; grid-template-areas: "controls scene results" "controls charts results"; }
   .om-results { grid-template-columns: minmax(0, 1fr); }
   .om-budget { grid-column: 1 / -1; }
@@ -1750,7 +1761,7 @@ a:hover {
 @media (min-width: 1040px) {
   .om-layout { grid-template-columns: 320px minmax(0, 1fr); }
 }
-@media (min-width: 1680px) {
+@media (min-width: 1344px) {
   .om-layout { grid-template-columns: 320px minmax(0, 1fr) 300px; }
 }
 /* ── grain over the stage ──────────────────────────────────────────────────
@@ -1787,10 +1798,10 @@ a:hover {
   .om-scene, .om-results { border-bottom: 1px solid var(--om-line); }
   .om-chart:first-child { border-right: 1px solid var(--om-line); }
 }
-@media (min-width: 1040px) and (max-width: 1279px) {
+@media (min-width: 1040px) and (max-width: 1039px) {
   .om-chart:first-child { border-right: 0; border-bottom: 1px solid var(--om-line); }
 }
-@media (min-width: 1680px) {
+@media (min-width: 1344px) {
   .om-results { border-bottom: 0; border-left: 1px solid var(--om-line); }
 }
 .om[data-present="true"] .om-scene { border-bottom: 1px solid var(--om-line); }
@@ -1917,7 +1928,7 @@ a:hover {
     background: none;
   }
 }
-@media (min-width: 1240px) {
+@media (min-width: 1040px) {
   .om-scene:has(.om-scene-toolbar) .om-hud-br {
     position: absolute;
     inset: auto 14px 70px auto;
