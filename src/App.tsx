@@ -751,6 +751,12 @@ interface CanvasSize {
   dpr: number;
 }
 
+function cssZoom(): number {
+  if (typeof document === "undefined") return 1;
+  const z = parseFloat(getComputedStyle(document.body).zoom || "1");
+  return z > 0 && Number.isFinite(z) ? z : 1;
+}
+
 function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>): CanvasSize {
   const [size, setSize] = useState<CanvasSize>({ w: 0, h: 0, dpr: 1 });
   useEffect(() => {
@@ -759,10 +765,17 @@ function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>): CanvasSize {
     const update = () => {
       const r = el.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      // getBoundingClientRect is already shrunk by page zoom: size the drawing
+      // in layout px so zoom is a uniform optical shrink. The renderers (their
+      // `compact` branches and absolute-px constants like lambdaPx) then behave
+      // exactly as at zoom 1.
+      const z = cssZoom();
+      const w = r.width / z;
+      const h = r.height / z;
       setSize((prev) =>
-        prev.w === r.width && prev.h === r.height && prev.dpr === dpr
+        prev.w === w && prev.h === h && prev.dpr === dpr
           ? prev
-          : { w: r.width, h: r.height, dpr },
+          : { w, h, dpr },
       );
     };
     update();
@@ -1081,7 +1094,8 @@ function RayScene(props: {
 
   const hit = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
-    const point = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    const z = cssZoom();
+    const point = { x: (event.clientX - bounds.left) / z, y: (event.clientY - bounds.top) / z };
     const tile = layout.current.tiles?.find(item => point.x >= item.x0 && point.x <= item.x1 && point.y >= item.y0 && point.y <= item.y1);
     if (tile) return tile.index;
     const polygons = layout.current.polygons;
@@ -1111,8 +1125,8 @@ function RayScene(props: {
         setHover(hit(event));
         const d = drag.current;
         if (d && view === "spatial") {
-          const dx = event.clientX - d.x;
-          const dy = event.clientY - d.y;
+          const dx = (event.clientX - d.x) / cssZoom();
+          const dy = (event.clientY - d.y) / cssZoom();
           if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
           if (d.moved) {
             setOrbit(o => ({
@@ -1274,7 +1288,8 @@ function AngleChart(props: {
 
   const angleFromEvent = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    const a = ((e.clientX - r.left - PAD.l) / (r.width - PAD.l - PAD.r)) * 90;
+    const x = (e.clientX - r.left) / cssZoom();
+    const a = ((x - PAD.l) / Math.max(1, size.w - PAD.l - PAD.r)) * 90;
     return Math.round(clamp(a, 0, 89) * 2) / 2;
   };
 
@@ -1516,7 +1531,7 @@ function FieldChart(props: {
       aria-label="Field magnitude profile through the wall"
       onPointerMove={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
-        setHover(e.clientX - r.left);
+        setHover((e.clientX - r.left) / cssZoom());
       }}
       onPointerLeave={() => setHover(null)}
     />
