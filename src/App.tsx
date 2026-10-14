@@ -206,6 +206,14 @@ const en = {
   pause: "Pause",
   present: "Present",
   exitPresent: "Exit",
+  helpTitle: "Keyboard shortcuts",
+  helpClose: "Close",
+  scPlay: "Play / pause",
+  scAngle: "Incidence angle ±0.5°",
+  scLayer: "Select layer",
+  scView: "Section / Spatial view",
+  scDisplay: "Curves / Crests / Both",
+  scHelp: "This shortcuts panel",
   share: "Share",
   shareTitle: "Copy a link to this exact setup",
   copied: "Copied ✓",
@@ -252,7 +260,7 @@ const en = {
   sigmaCustom: "Conductivity σ",
   model:
     "Model: ITU-R P.2040 §3 — stack of homogeneous layers in free space (stable transfer recursion), complex permittivity η = ε′ − j·17.98·σ/f, Snell’s law and complex Fresnel coefficients with multiple internal reflections.",
-  shortcuts: "Space play/pause · ↑↓ layer · L language · T theme",
+  shortcuts: "Space play/pause · ←/→ angle · ↑↓ layer · V view · 1/2/3 display · P present · L language · T theme · ? shortcuts",
   theme: "Toggle theme",
   language: "Language",
   linear: "Lin",
@@ -328,6 +336,14 @@ const fr: Dict = {
   pause: "Pause",
   present: "Présenter",
   exitPresent: "Quitter",
+  helpTitle: "Raccourcis clavier",
+  helpClose: "Fermer",
+  scPlay: "Lecture / pause",
+  scAngle: "Angle d'incidence ±0,5°",
+  scLayer: "Choisir la couche",
+  scView: "Vue Coupe / Spatial",
+  scDisplay: "Courbes / Crêtes / Les deux",
+  scHelp: "Ce panneau",
   share: "Partager",
   shareTitle: "Copier un lien vers ce réglage exact",
   copied: "Copié ✓",
@@ -374,7 +390,7 @@ const fr: Dict = {
   sigmaCustom: "Conductivité σ",
   model:
     "Modèle : ITU-R P.2040 §3 — empilement de couches homogènes dans l’air (récursion de transfert stable), permittivité complexe η = ε′ − j·17,98·σ/f, loi de Snell et coefficients de Fresnel complexes avec réflexions internes multiples.",
-  shortcuts: "Espace lecture/pause · ↑↓ couche · L langue · T thème",
+  shortcuts: "Espace lecture/pause · ←/→ angle · ↑↓ couche · V vue · 1/2/3 affichage · P présentation · L langue · T thème · ? raccourcis",
   theme: "Changer de thème",
   language: "Langue",
   linear: "Lin",
@@ -1108,6 +1124,26 @@ function RayScene(props: {
   const patterns = useRef(new Map<string, CanvasPattern | null>());
   const layout = useRef<SceneLayout>({ rects: [] });
   const french = props.lang === "fr";
+
+  // keyboard bridge: App owns the global shortcuts, RayScene owns view/display
+  // state — "waves:set-view"/"waves:set-display" events connect the two
+  useEffect(() => {
+    const onView = (e: Event) => {
+      const v = (e as CustomEvent).detail;
+      if (v === "wave" || v === "spatial") setView(v);
+      else setView((cur) => (cur === "wave" ? "spatial" : "wave"));
+    };
+    const onDisplay = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (d === "field" || d === "fronts" || d === "both") setDisplay(d);
+    };
+    window.addEventListener("waves:set-view", onView);
+    window.addEventListener("waves:set-display", onDisplay);
+    return () => {
+      window.removeEventListener("waves:set-view", onView);
+      window.removeEventListener("waves:set-display", onDisplay);
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -2062,7 +2098,44 @@ export function App() {
   const [flash, setFlash] = useState(0);
   const [present, setPresent] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const copyTimer = useRef(0);
+  const presentRef = useRef(present);
+  presentRef.current = present;
+  // true only when entering present mode requested fullscreen itself, so
+  // leaving never kicks the user out of a pre-existing (F11) fullscreen
+  const fsByUs = useRef(false);
+
+  const setPresentFull = useCallback((on: boolean) => {
+    setPresent(on);
+    try {
+      if (on) {
+        if (!document.fullscreenElement) {
+          fsByUs.current = true;
+          const p = document.documentElement.requestFullscreen() as Promise<void> | undefined;
+          if (p && typeof p.catch === "function") p.catch(() => { fsByUs.current = false; });
+        }
+      } else if (fsByUs.current && document.fullscreenElement) {
+        fsByUs.current = false;
+        const p = document.exitFullscreen() as Promise<void> | undefined;
+        if (p && typeof p.catch === "function") p.catch(() => {});
+      }
+    } catch {
+      /* fullscreen unavailable — present mode still works windowed */
+    }
+  }, []);
+
+  // the browser eats Esc to leave fullscreen first: sync present mode with it
+  useEffect(() => {
+    const onFs = () => {
+      if (!document.fullscreenElement) {
+        fsByUs.current = false;
+        setPresent(false);
+      }
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
 
   const t = DICTS[lang];
   const fmt = useMemo(() => makeFmt(lang), [lang]);
@@ -2225,17 +2298,36 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Escape always works, even when a button is focused (it never
+      // activates controls natively, unlike Space/arrows which do)
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key === "Escape") {
+        if (showHelp) setShowHelp(false);
+        else setPresentFull(false);
+        return;
+      }
       const tag = (e.target as HTMLElement | null)?.tagName ?? "";
       if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag) || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "Escape") {
-        setPresent(false);
-      } else if (e.code === "Space") {
+      if (e.code === "Space") {
         e.preventDefault();
         setPlaying((p) => !p);
+      } else if (e.key === "?") {
+        setShowHelp((v) => !v);
       } else if (e.key === "l" || e.key === "L") {
         setLang((l) => (l === "fr" ? "en" : "fr"));
       } else if (e.key === "t" || e.key === "T") {
         setTheme((th) => (th === "dark" ? "light" : "dark"));
+      } else if (e.key === "p" || e.key === "P") {
+        setPresentFull(!presentRef.current);
+      } else if (e.key === "v" || e.key === "V") {
+        window.dispatchEvent(new CustomEvent("waves:set-view", { detail: "toggle" }));
+      } else if (e.key === "1" || e.key === "2" || e.key === "3") {
+        window.dispatchEvent(
+          new CustomEvent("waves:set-display", { detail: e.key === "1" ? "field" : e.key === "2" ? "fronts" : "both" }),
+        );
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        const d = e.key === "ArrowRight" ? 0.5 : -0.5;
+        setSim((s) => ({ ...s, angle: clamp(Math.round((s.angle + d) * 2) / 2, 0, 89) }));
       } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
         e.preventDefault();
         setSim((s) => ({ ...s, sel: clamp(s.sel + (e.key === "ArrowUp" ? -1 : 1), 0, s.layers.length - 1) }));
@@ -2243,7 +2335,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [showHelp, setPresentFull]);
 
   const res = useMemo(() => computeResults(sim), [sim]);
   const sweep = useMemo(() => computeStackSweep(res.etas, res.ds, sim.freq), [res.etas, res.ds, sim.freq]);
@@ -2390,7 +2482,7 @@ export function App() {
           <button
             type="button"
             className={`om-presentbtn ${present ? "is-on" : ""}`}
-            onClick={() => setPresent((p) => !p)}
+            onClick={() => setPresentFull(!presentRef.current)}
             aria-pressed={present}
             title={present ? t.exitPresent : t.present}
           >
@@ -2884,6 +2976,46 @@ export function App() {
         <p>{t.model}</p>
         <p className="om-kbd">{t.shortcuts}</p>
       </footer>
+
+      {showHelp && (
+        <div className="om-help-backdrop" onClick={() => setShowHelp(false)}>
+          <div
+            className="om-help"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.helpTitle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="om-help-head">
+              <h2>{t.helpTitle}</h2>
+              <button type="button" className="om-scene-toggle" onClick={() => setShowHelp(false)} autoFocus>
+                {t.helpClose}
+              </button>
+            </div>
+            <ul>
+              {(
+                [
+                  ["Space", t.scPlay],
+                  ["← →", t.scAngle],
+                  ["↑ ↓", t.scLayer],
+                  ["V", t.scView],
+                  ["1 2 3", t.scDisplay],
+                  ["P", t.present],
+                  ["L", t.language],
+                  ["T", t.theme],
+                  ["?", t.scHelp],
+                  ["Esc", t.exitPresent],
+                ] as Array<[string, string]>
+              ).map(([key, label]) => (
+                <li key={key}>
+                  <kbd>{key}</kbd>
+                  <span>{label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
