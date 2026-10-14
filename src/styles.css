@@ -2041,3 +2041,19 @@ a:hover {
     min-height: 380px;
   }
 }
+
+/* ── Desktop 80%: viewport-unit compensation ─────────────────────────────
+   CSS `zoom` scales layout px but NOT vh/dvh units, while browser 80% zoom
+   scales the viewport itself (×1.25). Every vh/dvh length that survives into
+   the zoomed range is therefore ×1.25 here; px bounds and offsets stay as-is.
+   Without this the 100dvh app frame would paint only 80% tall: clipped
+   content with a void band below it. */
+@media (min-width: 1040px) {
+  .om { height: 125dvh; }
+  .om-scene { height: clamp(460px, 82.5vh, 820px); }
+  .om-scene:has(.om-scene-toolbar),
+  .om-scene:has(.om-scene-toolbar[data-view="wave"]) { height: clamp(460px, 82.5vh, 820px); }
+  .om-chart-body { height: clamp(240px, 37.5vh, 330px); }
+  .om[data-present="true"] .om-scene,
+  .om[data-present="true"] .om-scene:has(.om-scene-toolbar) { height: calc(125dvh - 236px); }
+}
