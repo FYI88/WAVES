@@ -12,6 +12,7 @@ import {
 } from "react";
 import { drawSpatialScene, type SceneOptions } from "./spatialScene";
 import { drawWaveRays } from "./waveRays";
+import { decodeShare, encodeShare, shareHashOf } from "./share";
 import {
   C0,
   CUSTOM_SWATCH,
@@ -205,6 +206,14 @@ const en = {
   pause: "Pause",
   present: "Present",
   exitPresent: "Exit",
+  share: "Share",
+  shareTitle: "Copy a link to this exact setup",
+  copied: "Copied ✓",
+  exportCsv: "CSV",
+  exportCsvTitle: "Download this chart's data as CSV",
+  brewsterJump: "θ → θB",
+  brewsterJumpTitle: "Set the angle to Brewster (TM only)",
+  brewsterNa: "Brewster exists in TM polarization only",
   reflected: "Reflected",
   transmitted: "Transmitted",
   absorbed: "Absorbed",
@@ -319,6 +328,14 @@ const fr: Dict = {
   pause: "Pause",
   present: "Présenter",
   exitPresent: "Quitter",
+  share: "Partager",
+  shareTitle: "Copier un lien vers ce réglage exact",
+  copied: "Copié ✓",
+  exportCsv: "CSV",
+  exportCsvTitle: "Télécharger les données du graphique en CSV",
+  brewsterJump: "θ → θB",
+  brewsterJumpTitle: "Régler l'angle sur Brewster (TM uniquement)",
+  brewsterNa: "Brewster n'existe qu'en polarisation TM",
   reflected: "Réfléchie",
   transmitted: "Transmise",
   absorbed: "Absorbée",
@@ -758,6 +775,41 @@ function cssZoom(): number {
   return z > 0 && Number.isFinite(z) ? z : 1;
 }
 
+/** Best-effort clipboard write with a legacy fallback (non-secure contexts). */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to the legacy path */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Download helper for generated files (PNG snapshots, CSV tables). */
+function downloadFile(href: string, filename: string): void {
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>): CanvasSize {
   const [size, setSize] = useState<CanvasSize>({ w: 0, h: 0, dpr: 1 });
   useEffect(() => {
@@ -1174,6 +1226,32 @@ function RayScene(props: {
       </>}
       <button type="button" className="om-scene-toggle" aria-pressed={annotations} onClick={() => setAnnotations(value => !value)}>{french ? "Repères" : "Labels"}</button>
       <button type="button" className="om-scene-toggle om-scene-speed" aria-label={french ? `Vitesse visuelle : ${speed} fois. Changer la vitesse.` : `Visual speed: ${speed} times. Change speed.`} onClick={() => setSpeed(value => value === 0.5 ? 1 : value === 1 ? 2 : 0.5)}>{props.fmtNum(speed, speed === 0.5 ? 1 : 0)}×</button>
+      <button
+        type="button"
+        className="om-scene-toggle"
+        title={french ? "Télécharger la scène en image PNG" : "Download the scene as a PNG image"}
+        aria-label={french ? "Télécharger la scène en image PNG" : "Download the scene as a PNG image"}
+        onClick={() => {
+          const canvas = ref.current;
+          if (!canvas || canvas.width < 2) return;
+          // the live canvas is transparent (stage colour comes from CSS):
+          // composite over the palette stage colour so the file looks like the app
+          const out = document.createElement("canvas");
+          out.width = canvas.width;
+          out.height = canvas.height;
+          const octx = out.getContext("2d");
+          if (!octx) return;
+          octx.fillStyle = props.pal.bg0;
+          octx.fillRect(0, 0, out.width, out.height);
+          octx.drawImage(canvas, 0, 0);
+          const a = document.createElement("a");
+          a.download = `waves-${props.params.freq}GHz-${props.params.theta}deg-${props.params.pol}-${view}.png`;
+          a.href = out.toDataURL("image/png");
+          a.click();
+        }}
+      >
+        PNG
+      </button>
     </div>
   </>;
 }
@@ -1804,12 +1882,48 @@ interface Persisted {
   theme: Theme;
 }
 
-function loadPersisted(): Persisted {
+function defaultPersisted(): Persisted {
   const sysTheme: Theme =
     typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
   const sysLang: Lang =
     typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("fr") ? "fr" : "en";
-  const fallback: Persisted = { sim: DEFAULT_STATE, lang: sysLang, theme: sysTheme };
+  return { sim: DEFAULT_STATE, lang: sysLang, theme: sysTheme };
+}
+
+/** Clamp/validate an untrusted payload (storage or share-link) into shape. */
+function sanitizePersisted(p: Partial<Persisted>, fallback: Persisted): Persisted {
+  const s = (p.sim ?? {}) as Partial<SimState>;
+  const num = (v: unknown, lo: number, hi: number, d: number) =>
+    typeof v === "number" && Number.isFinite(v) ? clamp(v, lo, hi) : d;
+  const layers = Array.isArray(s.layers)
+    ? s.layers
+        .slice(0, MAX_LAYERS)
+        .filter((l) => l && LAYER_MATS.includes(l.mat))
+        .map((l) => ({
+          id: typeof l.id === "string" && l.id ? l.id : newId(),
+          mat: l.mat,
+          thickness: num(l.thickness, 0.1, 100, 10),
+          eps: num(l.eps, 1, 30, 4),
+          sigma: num(l.sigma, 0.0001, 10, 0.05),
+          customMode: (l.customMode === "nk" ? "nk" : "eps") as CustomMode,
+        }))
+    : [];
+  const ls = layers.length ? layers : fallback.sim.layers;
+  return {
+    sim: {
+      layers: ls,
+      sel: Math.round(num(s.sel, 0, ls.length - 1, 0)),
+      freq: num(s.freq, 0.5, 40, fallback.sim.freq),
+      angle: num(s.angle, 0, 89, fallback.sim.angle),
+      pol: s.pol === "TE" || s.pol === "TM" || s.pol === "AVG" ? s.pol : fallback.sim.pol,
+    },
+    lang: p.lang === "fr" || p.lang === "en" ? p.lang : fallback.lang,
+    theme: p.theme === "dark" || p.theme === "light" ? p.theme : fallback.theme,
+  };
+}
+
+function loadPersisted(): Persisted {
+  const fallback = defaultPersisted();
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
@@ -1817,37 +1931,34 @@ function loadPersisted(): Persisted {
     // payloads stamped with an unknown future version are rejected outright —
     // silently mis-loading a newer shape would corrupt the simulation state
     if (typeof p.v === "number" && p.v !== STORAGE_VERSION) return fallback;
-    const s = (p.sim ?? {}) as Partial<SimState>;
-    const num = (v: unknown, lo: number, hi: number, d: number) =>
-      typeof v === "number" && Number.isFinite(v) ? clamp(v, lo, hi) : d;
-    const layers = Array.isArray(s.layers)
-      ? s.layers
-          .slice(0, MAX_LAYERS)
-          .filter((l) => l && LAYER_MATS.includes(l.mat))
-          .map((l) => ({
-            id: typeof l.id === "string" ? l.id : newId(),
-            mat: l.mat,
-            thickness: num(l.thickness, 0.1, 100, 10),
-            eps: num(l.eps, 1, 30, 4),
-            sigma: num(l.sigma, 0.0001, 10, 0.05),
-            customMode: (l.customMode === "nk" ? "nk" : "eps") as CustomMode,
-          }))
-      : [];
-    const ls = layers.length ? layers : DEFAULT_STATE.layers;
-    return {
-      sim: {
-        layers: ls,
-        sel: Math.round(num(s.sel, 0, ls.length - 1, 0)),
-        freq: num(s.freq, 0.5, 40, DEFAULT_STATE.freq),
-        angle: num(s.angle, 0, 89, DEFAULT_STATE.angle),
-        pol: s.pol === "TE" || s.pol === "TM" || s.pol === "AVG" ? s.pol : DEFAULT_STATE.pol,
-      },
-      lang: p.lang === "fr" || p.lang === "en" ? p.lang : sysLang,
-      theme: p.theme === "dark" || p.theme === "light" ? p.theme : sysTheme,
-    };
+    return sanitizePersisted(p, fallback);
   } catch {
     return fallback;
   }
+}
+
+/** Boot state: a `#s=` share-link wins over saved storage. */
+function loadInitial(): Persisted {
+  try {
+    const hash = shareHashOf(window.location.hash);
+    if (hash) {
+      const shared = decodeShare(hash);
+      if (shared) {
+        return sanitizePersisted(
+          {
+            v: shared.v,
+            sim: shared.sim as unknown as SimState,
+            lang: shared.lang as Lang,
+            theme: shared.theme as Theme,
+          },
+          defaultPersisted(),
+        );
+      }
+    }
+  } catch {
+    /* malformed hash — fall through to storage */
+  }
+  return loadPersisted();
 }
 
 function bandName(f: number): string {
@@ -1942,7 +2053,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, Boundar
 }
 
 export function App() {
-  const initial = useMemo(loadPersisted, []);
+  const initial = useMemo(loadInitial, []);
   const [sim, setSim] = useState<SimState>(initial.sim);
   const [lang, setLang] = useState<Lang>(initial.lang);
   const [theme, setTheme] = useState<Theme>(initial.theme);
@@ -1950,6 +2061,8 @@ export function App() {
   const [fieldScale, setFieldScale] = useState<"lin" | "db">("lin");
   const [flash, setFlash] = useState(0);
   const [present, setPresent] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef(0);
 
   const t = DICTS[lang];
   const fmt = useMemo(() => makeFmt(lang), [lang]);
@@ -2013,6 +2126,97 @@ export function App() {
       /* storage unavailable — state simply isn't persisted */
     }
   }, [sim, lang, theme]);
+
+  // keep the address bar shareable: the URL hash always encodes the current
+  // setup, so copying the URL (or the Share button) captures this exact state
+  useEffect(() => {
+    try {
+      window.history.replaceState(null, "", `#s=${encodeShare(sim, lang, theme)}`);
+    } catch {
+      /* sandboxed/file contexts — sharing still works via the copy button */
+    }
+  }, [sim, lang, theme]);
+
+  // apply share-links that arrive without a reload (pasted into this tab,
+  // back/forward between two shared URLs)
+  useEffect(() => {
+    const onHash = () => {
+      const h = shareHashOf(window.location.hash);
+      if (!h) return;
+      const shared = decodeShare(h);
+      if (!shared) return;
+      const next = sanitizePersisted(
+        {
+          v: shared.v,
+          sim: shared.sim as unknown as SimState,
+          lang: shared.lang as Lang,
+          theme: shared.theme as Theme,
+        },
+        defaultPersisted(),
+      );
+      setSim(next.sim);
+      setLang(next.lang);
+      setTheme(next.theme);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  const shareUrl = () =>
+    `${window.location.origin}${window.location.pathname}#s=${encodeShare(sim, lang, theme)}`;
+
+  const share = async () => {
+    setCopied(await copyText(shareUrl()));
+    window.clearTimeout(copyTimer.current);
+    copyTimer.current = window.setTimeout(() => setCopied(false), 1600);
+  };
+
+  const downloadBlob = (text: string, filename: string) => {
+    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+    downloadFile(url, filename);
+    window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  const downloadSweepCsv = () => {
+    const sep = lang === "fr" ? ";" : ",";
+    const head = ["angle_deg", "R_TE", "T_TE", "R_TM", "T_TM", "R_AVG", "T_AVG"].join(sep);
+    const lines = sweep.ang.map((a, i) =>
+      [
+        fmt.num(a, 1),
+        sweep.Rte[i],
+        sweep.Tte[i],
+        sweep.Rtm[i],
+        sweep.Ttm[i],
+        (sweep.Rte[i] + sweep.Rtm[i]) / 2,
+        (sweep.Tte[i] + sweep.Ttm[i]) / 2,
+      ]
+        .map((v, k) => (k === 0 ? v : fmt.num(v as number, 6)))
+        .join(sep),
+    );
+    downloadBlob([head, ...lines].join("\n"), `waves-sweep-${sim.freq}GHz-${sim.pol}.csv`);
+  };
+
+  const downloadFieldCsv = () => {
+    // same z-domain as FieldChart (air margins around the stack), n = 1000
+    const d = res.ds.reduce((a, b) => a + b, 0);
+    const lam = C0 / (sim.freq * 1e9);
+    const air = Math.max(0.5 * d, Math.min(1.5 * lam, 3 * d + 0.02));
+    const zMin = -air;
+    const zMax = d + air;
+    const n = 1000;
+    const f = stackFieldAbs(res.etas, res.ds, sim.freq, sim.angle * DEG, sim.pol);
+    const sep = lang === "fr" ? ";" : ",";
+    const head = ["z_cm", "E_lin", "E_dB"].join(sep);
+    const lines: string[] = [];
+    for (let i = 0; i <= n; i++) {
+      const z = zMin + ((zMax - zMin) * i) / n;
+      const v = f(z);
+      lines.push(
+        [fmt.num(z * 100, 4), fmt.num(v, 6), fmt.num(20 * Math.log10(Math.max(v, 1e-9)), 3)].join(sep),
+      );
+    }
+    downloadBlob([head, ...lines].join("\n"), `waves-field-${sim.freq}GHz-${sim.angle}deg-${sim.pol}.csv`);
+  };
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -2177,6 +2381,14 @@ export function App() {
           </button>
           <button
             type="button"
+            className={`om-presentbtn ${copied ? "is-on" : ""}`}
+            onClick={share}
+            title={t.shareTitle}
+          >
+            {copied ? t.copied : t.share}
+          </button>
+          <button
+            type="button"
             className={`om-presentbtn ${present ? "is-on" : ""}`}
             onClick={() => setPresent((p) => !p)}
             aria-pressed={present}
@@ -2295,6 +2507,20 @@ export function App() {
                     { v: 89, label: "89" },
                     ...(Number.isFinite(selR.brewster) ? [{ v: Math.round(selR.brewster * 2) / 2, label: "θB", tone: "acc" as const }] : []),
                   ]} />
+                {Number.isFinite(selR.brewster) && (
+                  <div className="om-presets" style={{ marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="om-preset"
+                      title={sim.pol === "TM" ? t.brewsterJumpTitle : t.brewsterNa}
+                      disabled={sim.pol !== "TM"}
+                      style={sim.pol !== "TM" ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
+                      onClick={() => update("angle", Math.round(selR.brewster * 2) / 2)}
+                    >
+                      {t.brewsterJump} · {fmt.num(Math.round(selR.brewster * 2) / 2, 1)}°
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="om-group">
                 <div className="om-label om-label-row">
@@ -2596,6 +2822,9 @@ export function App() {
                 <span className="om-leg"><i style={{ background: "var(--om-ref)" }} />R</span>
                 <span className="om-leg"><i style={{ background: "var(--om-tra)" }} />T</span>
                 <span className="om-leg om-leg-dash"><i />{sim.pol === "AVG" ? "TE / TM" : sim.pol === "TE" ? "TM" : "TE"}</span>
+                <button type="button" className="om-scene-toggle" title={t.exportCsvTitle} onClick={downloadSweepCsv}>
+                  {t.exportCsv}
+                </button>
               </div>
             </div>
             <div className="om-chart-body">
@@ -2617,16 +2846,21 @@ export function App() {
                 <h2>{t.chartField}</h2>
                 <p>{t.chartFieldHint} · {polLabel}</p>
               </div>
-              <Segmented<"lin" | "db">
-                size="sm"
-                ariaLabel="Scale"
-                value={fieldScale}
-                onChange={setFieldScale}
-                options={[
-                  { value: "lin", label: t.linear },
-                  { value: "db", label: t.db },
-                ]}
-              />
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <Segmented<"lin" | "db">
+                  size="sm"
+                  ariaLabel="Scale"
+                  value={fieldScale}
+                  onChange={setFieldScale}
+                  options={[
+                    { value: "lin", label: t.linear },
+                    { value: "db", label: t.db },
+                  ]}
+                />
+                <button type="button" className="om-scene-toggle" title={t.exportCsvTitle} onClick={downloadFieldCsv}>
+                  {t.exportCsv}
+                </button>
+              </div>
             </div>
             <div className="om-chart-body">
               <FieldChart
