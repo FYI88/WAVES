@@ -1661,13 +1661,6 @@ a:hover {
   .om-budget { grid-column: auto; }
 }
 @media (min-width: 1040px) and (max-width: 1279px) { .om-charts { grid-template-columns: minmax(0, 1fr); } }
-/* ── Desktop default scale ───────────────────────────────────────────────
-   The instrument reads best at 80% on laptops and lecture projectors;
-   at browser zoom 100% it feels oversized. Below 1040px the stacked
-   phone/tablet layout takes over and keeps its native 100% scale. */
-@media (min-width: 1040px) {
-  body { zoom: 0.8; }
-}
 @media (min-width: 1240px) { .om-hud-br { display: flex; } }
 @media (max-width: 1239px) { .om-hud-br { display: none; } }
 @media (min-width: 1680px) {
