@@ -2,6 +2,9 @@
   "name": "waves",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "vite",
     "start": "vite --open",
