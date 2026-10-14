@@ -25,7 +25,11 @@ One codebase, zero runtime dependencies — the same `dist/` serves the PWA, Tau
 
 ## App Preview
 
-> Pas de screenshot commité pour l'instant — lancez `npm run dev` → http://localhost:5173
+**Live demo : https://waves-pearl.vercel.app/**
+
+![QR code — live demo](public/qr-code.png)
+
+> Pas de screenshot commité pour l'instant — lancez `npm run dev` → https://waves-pearl.vercel.app/
 
 L'UI affiche 3 canvas :
 
@@ -46,7 +50,7 @@ L'UI affiche 3 canvas :
 git clone https://github.com/FYI88/ONDSIMETU.git
 cd ONDSIMETU
 npm install
-npm run dev      # → http://localhost:5173
+npm run dev      # → https://waves-pearl.vercel.app/
 ```
 
 ---
@@ -133,7 +137,7 @@ npm install
 
 ```bash
 npm run dev
-# → http://localhost:5173
+# → https://waves-pearl.vercel.app/
 ```
 
 ### 3. Physics Checks
