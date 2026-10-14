@@ -1,6 +1,7 @@
 import { StrictMode, type ComponentType } from "react";
 import { createRoot } from "react-dom/client";
 import * as AppModule from "./App";
+import { AppErrorBoundary } from "./App";
 import "./styles.css";
 
 const rootElement = document.getElementById("root");
@@ -11,6 +12,8 @@ if (!App) throw new Error("App.tsx must export an App component");
 
 createRoot(rootElement).render(
   <StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </StrictMode>,
 );

@@ -1,4 +1,5 @@
 import {
+  Component,
   useCallback,
   useEffect,
   useMemo,
@@ -1793,8 +1794,11 @@ const DEFAULT_STATE: SimState = {
 };
 
 const STORAGE_KEY = "onde-mur:v2";
+const STORAGE_VERSION = 1;
 
 interface Persisted {
+  /** payload version; absent on payloads saved before versioning (treated as v1) */
+  v?: number;
   sim: SimState;
   lang: Lang;
   theme: Theme;
@@ -1810,6 +1814,9 @@ function loadPersisted(): Persisted {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
     const p = JSON.parse(raw) as Partial<Persisted>;
+    // payloads stamped with an unknown future version are rejected outright —
+    // silently mis-loading a newer shape would corrupt the simulation state
+    if (typeof p.v === "number" && p.v !== STORAGE_VERSION) return fallback;
     const s = (p.sim ?? {}) as Partial<SimState>;
     const num = (v: unknown, lo: number, hi: number, d: number) =>
       typeof v === "number" && Number.isFinite(v) ? clamp(v, lo, hi) : d;
@@ -1852,6 +1859,86 @@ function bandName(f: number): string {
   if (f < 18) return "Ku";
   if (f < 27) return "K";
   return "Ka";
+}
+
+/* ── Crash guard: a render error must never leave a blank page ──────────
+   Catches anything thrown below it (broken persisted state shapes, canvas
+   failures, …) and offers reload + saved-state reset. Self-styled inline so
+   it paints even if styles.css failed to load. */
+interface BoundaryState {
+  error: Error | null;
+}
+
+export class AppErrorBoundary extends Component<{ children: ReactNode }, BoundaryState> {
+  state: BoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): BoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: Error): void {
+    console.error("[WaveS] render crash captured:", error);
+  }
+
+  render(): ReactNode {
+    if (!this.state.error) return this.props.children;
+    const fr = typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("fr");
+    const reload = () => window.location.reload();
+    const reset = () => {
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        /* ignore */
+      }
+      window.location.reload();
+    };
+    const box: CSSProperties = {
+      position: "fixed",
+      inset: 0,
+      zIndex: 10000,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 12,
+      padding: 24,
+      textAlign: "center",
+      background: "#080e17",
+      color: "#edf4fc",
+      fontFamily: "ui-sans-serif, system-ui, 'Segoe UI', Roboto, Arial, sans-serif",
+    };
+    const btn: CSSProperties = {
+      padding: "10px 18px",
+      borderRadius: 10,
+      border: "1px solid #41536a",
+      background: "#142131",
+      color: "#edf4fc",
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: "pointer",
+    };
+    return (
+      <div style={box} role="alert">
+        <div style={{ fontSize: 12, letterSpacing: ".3em", color: "#94a6bc" }}>WAVES</div>
+        <div style={{ fontSize: 22, fontWeight: 800 }}>
+          {fr ? "L'application a rencontré un problème" : "The app ran into a problem"}
+        </div>
+        <div style={{ fontSize: 13, color: "#b4c3d5", maxWidth: 440 }}>
+          {fr
+            ? "Vos réglages sauvegardés sont peut-être en cause : réinitialisez-les ou rechargez simplement la page."
+            : "Your saved settings may be at fault: reset them or just reload the page."}
+        </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <button type="button" style={btn} onClick={reload}>
+            {fr ? "Recharger" : "Reload"}
+          </button>
+          <button type="button" style={{ ...btn, borderColor: "#55dbf5", color: "#55dbf5" }} onClick={reset}>
+            {fr ? "Réinitialiser mes réglages" : "Reset my settings"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 }
 
 export function App() {
@@ -1921,7 +2008,7 @@ export function App() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ sim, lang, theme }));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: STORAGE_VERSION, sim, lang, theme }));
     } catch {
       /* storage unavailable — state simply isn't persisted */
     }
