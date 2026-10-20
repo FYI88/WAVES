@@ -8,3 +8,4 @@ dist-web/
 .DS_Store
 Thumbs.db
 .freebuff/
+.vercel

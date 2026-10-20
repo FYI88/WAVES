@@ -31,7 +31,7 @@ Réalisé par **CHETAINE YOUNES** · ENSA GSR1
 git clone https://github.com/FYI88/WAVES.git
 cd WAVES
 npm install
-npm run dev      # → http://localhost:5174
+npm run dev      # → http://localhost:5173
 ```
 
 | Script          | Action                                              |
@@ -51,8 +51,8 @@ npm run dev      # → http://localhost:5174
 - **Live views** — cross-section scene (field, crests, or both, with internal reflections and labels), R/T-vs-angle chart with Brewster marker, |E(z)| field profile (Lin/dB), energy budget bar (R + T + A = 100 %).
 - **Scenarios** — one-click presets: Wi-Fi 2.4 GHz cavity brick, Wi-Fi 5 GHz stud partition, 5G 3.5 GHz plastered concrete, 5G 28 GHz double glazing, Brewster glass TM.
 - **Share & export** — PNG snapshot of the scene, CSV export of both charts (Excel-ready, `;`-separated in FR), copy-link sharing (`#s=` URL encodes the exact setup), θ → θB Brewster jump (TM).
-- **Present mode** — decluttered projector view with its own control bar (Esc to exit).
-- **Comfort** — FR/EN toggle (L), dark/light theme (T), Space play/pause, ↑↓ layer select, persistent state (localStorage), responsive layout (3-column desktop at 80 % default scale, stacked phone/tablet untouched).
+- **Present mode** — decluttered projector view with its own control bar, auto fullscreen (P to enter, Esc to exit).
+- **Comfort** — FR/EN toggle (L), dark/light theme (T), Space play/pause, ←→ incidence angle, ↑↓ layer select, V section/spatial view, 1/2/3 curves/crests/both, P present, `?` shortcuts overlay, persistent state (localStorage), responsive layout (3-column desktop at 80 % default scale, stacked phone/tablet untouched).
 
 ---
 
@@ -94,6 +94,7 @@ npm run dev      # → http://localhost:5174
 │   ├── share.test.ts     # codec round-trip + rejection tests
 │   ├── waveRays.ts       # cross-section canvas renderer
 │   ├── spatialScene.ts   # spatial-view canvas renderer
+│   ├── materialSurfaces.ts # procedural wall textures shared by both renderers
 │   └── styles.css        # theming + responsive (desktop ≥1040px, stacked ≤1039px)
 ├── public/
 │   ├── logo.png          # app icon / favicon
@@ -107,7 +108,7 @@ Local physics references (parent folder, outside git): `chapitre-1-.pdf` (Snell,
 
 ## Roadmap
 
-- **Phase 2** — shortcuts overlay + extra keys, fullscreen present mode.
+- **Phase 2 — done** — shortcuts overlay (`?`) with the full key map, angle/view/display/present keys, fullscreen present mode.
 - **Phase 3** — PWA manifest/icons/offline, bundled fonts (Inter Tight + JetBrains Mono), Tauri `.exe`, Capacitor APK.
 - **V3** — Chapitre 2 dispersive plasma, k² = (ω² − ωp²)/c² (not implemented).
 

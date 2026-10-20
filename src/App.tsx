@@ -263,6 +263,19 @@ const en = {
   shortcuts: "Space play/pause · ←/→ angle · ↑↓ layer · V view · 1/2/3 display · P present · L language · T theme · ? shortcuts",
   theme: "Toggle theme",
   language: "Language",
+  about: "About",
+  aboutTitle: "About WaveS",
+  repo: "Source code on GitHub",
+  repoTitle: "Open the GitHub repository in a new tab",
+  contactTitle: "Send an email",
+  authorLabel: "Author",
+  schoolLabel: "School",
+  contactLabel: "Contact",
+  modelLabel: "Model",
+  emailSchool: "Institutional",
+  emailPersonal: "Personal",
+  modelNote:
+    "Stack of homogeneous layers in free space, solved with a stable transfer recursion. Complex permittivity, Snell’s law and complex Fresnel coefficients with multiple internal reflections.",
   linear: "Lin",
   db: "dB",
   angleShort: "θ",
@@ -393,6 +406,19 @@ const fr: Dict = {
   shortcuts: "Espace lecture/pause · ←/→ angle · ↑↓ couche · V vue · 1/2/3 affichage · P présentation · L langue · T thème · ? raccourcis",
   theme: "Changer de thème",
   language: "Langue",
+  about: "À propos",
+  aboutTitle: "À propos de WaveS",
+  repo: "Code source sur GitHub",
+  repoTitle: "Ouvrir le dépôt GitHub dans un nouvel onglet",
+  contactTitle: "Envoyer un email",
+  authorLabel: "Auteur",
+  schoolLabel: "École",
+  contactLabel: "Contact",
+  modelLabel: "Modèle",
+  emailSchool: "Institutionnel",
+  emailPersonal: "Personnel",
+  modelNote:
+    "Empilement de couches homogènes dans l’air, résolu par une récursion de transfert stable. Permittivité complexe, loi de Snell et coefficients de Fresnel complexes avec réflexions internes multiples.",
   linear: "Lin",
   db: "dB",
   angleShort: "θ",
@@ -445,6 +471,12 @@ const fr: Dict = {
 };
 
 const DICTS: Record<Lang, Dict> = { fr, en };
+
+const REPO_URL = "https://github.com/FYI88/WAVES";
+const CONTACT_EMAILS = [
+  { labelKey: "emailSchool", address: "chetaine.younes@etu.uae.ac.ma" },
+  { labelKey: "emailPersonal", address: "youneschetaine@gmail.com" },
+] as const;
 
 const tpl = (s: string, vars: Record<string, string>) =>
   s.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? "");
@@ -1877,10 +1909,35 @@ const Icon = {
   info: (
     <svg viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
   ),
+  github: (
+    <svg viewBox="0 0 24 24" aria-hidden><path fill="currentColor" d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.1 3.29 9.42 7.86 10.95.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.04-.72.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.76 2.7 1.25 3.35.95.1-.75.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.15 1.18a10.9 10.9 0 0 1 2.87-.39c.97 0 1.95.13 2.87.39 2.19-1.49 3.15-1.18 3.15-1.18.62 1.59.23 2.76.11 3.05.73.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14 0 1.55-.01 2.79-.01 3.17 0 .31.21.67.8.56A11.53 11.53 0 0 0 23.5 12C23.5 5.74 18.27.5 12 .5Z" /></svg>
+  ),
+  mail: (
+    <svg viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="m4.5 7.5 7.5 5.5 7.5-5.5" /></svg>
+  ),
   warn: (
     <svg viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4M12 17h.01" strokeLinecap="round" /></svg>
   ),
 };
+
+function Eq({ tex }: { tex: string }) {
+  const [html, setHtml] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void import("katex/dist/katex.min.css");
+    import("katex").then(({ default: katex }) => {
+      if (!alive) return;
+      setHtml(katex.renderToString(tex, { throwOnError: false, displayMode: true }));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [tex]);
+
+  if (!html) return <div className="om-eq om-eq-pending" aria-hidden />;
+  return <div className="om-eq" dangerouslySetInnerHTML={{ __html: html }} />;
+}
 
 function Stat(props: { label: string; value: string; unit?: string; sub?: string; tone?: string; delay: number }) {
   return (
@@ -2099,6 +2156,7 @@ export function App() {
   const [present, setPresent] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const copyTimer = useRef(0);
   const presentRef = useRef(present);
   presentRef.current = present;
@@ -2301,7 +2359,8 @@ export function App() {
       // Escape always works, even when a button is focused (it never
       // activates controls natively, unlike Space/arrows which do)
       if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key === "Escape") {
-        if (showHelp) setShowHelp(false);
+        if (showAbout) setShowAbout(false);
+        else if (showHelp) setShowHelp(false);
         else setPresentFull(false);
         return;
       }
@@ -2335,7 +2394,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [showHelp, setPresentFull]);
+  }, [showHelp, showAbout, setPresentFull]);
 
   const res = useMemo(() => computeResults(sim), [sim]);
   const sweep = useMemo(() => computeStackSweep(res.etas, res.ds, sim.freq), [res.etas, res.ds, sim.freq]);
@@ -2459,6 +2518,25 @@ export function App() {
               { value: "en", label: "EN" },
             ]}
           />
+          <a
+            className="om-icon-btn om-icon-link"
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t.repo}
+            title={t.repoTitle}
+          >
+            {Icon.github}
+          </a>
+          <button
+            type="button"
+            className="om-icon-btn"
+            aria-label={t.about}
+            title={t.about}
+            onClick={() => setShowAbout(true)}
+          >
+            {Icon.info}
+          </button>
           <button
             type="button"
             className="om-icon-btn"
@@ -3013,6 +3091,86 @@ export function App() {
                 </li>
               ))}
             </ul>
+          </div>
+        </div>
+      )}
+
+      {showAbout && (
+        <div className="om-help-backdrop" onClick={() => setShowAbout(false)}>
+          <div
+            className="om-about"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.aboutTitle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="om-about-hero">
+              <svg className="om-about-waves" viewBox="0 0 320 90" aria-hidden preserveAspectRatio="none">
+                <path d="M-10 62 C 20 26 55 26 85 52 S 145 82 175 56 S 235 22 265 48 S 315 74 335 54" />
+                <path d="M-10 74 C 20 38 55 38 85 64 S 145 94 175 68 S 235 34 265 60 S 315 86 335 66" />
+                <path d="M-10 86 C 20 50 55 50 85 76 S 145 106 175 80 S 235 46 265 72 S 315 98 335 78" />
+              </svg>
+              <span className="om-about-badge">
+                <Logo />
+              </span>
+              <div className="om-about-id">
+                <span className="om-about-kicker">{t.school}</span>
+                <h2>WaveS</h2>
+                <p>{t.tagline}</p>
+              </div>
+              <button
+                type="button"
+                className="om-about-close"
+                aria-label={t.helpClose}
+                title={t.helpClose}
+                onClick={() => setShowAbout(false)}
+                autoFocus
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="om-about-body">
+              <div className="om-about-grid">
+                <div className="om-about-cell">
+                  <span className="om-about-label">{t.authorLabel}</span>
+                  <strong>{t.author}</strong>
+                </div>
+                <div className="om-about-cell">
+                  <span className="om-about-label">{t.schoolLabel}</span>
+                  <strong>{t.school}</strong>
+                </div>
+              </div>
+
+              <div className="om-about-block">
+                <span className="om-about-label">{t.contactLabel}</span>
+                <div className="om-mails">
+                  {CONTACT_EMAILS.map((c) => (
+                    <a key={c.address} className="om-mail" href={`mailto:${c.address}`} title={t.contactTitle}>
+                      <span className="om-mail-icon">{Icon.mail}</span>
+                      <span className="om-mail-addr">{c.address}</span>
+                      <span className="om-mail-tag">{t[c.labelKey]}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+
+              <div className="om-model">
+                <div className="om-model-head">
+                  <span className="om-about-label">{t.modelLabel}</span>
+                  <span className="om-model-ref">ITU-R P.2040 § 3</span>
+                </div>
+                <Eq tex={String.raw`\eta = \varepsilon' - j\,\frac{17.98\,\sigma}{f}`} />
+                <Eq tex={String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`} />
+                <Eq tex={String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`} />
+                <p className="om-model-note">{t.modelNote}</p>
+              </div>
+
+              <a className="om-about-repo" href={REPO_URL} target="_blank" rel="noopener noreferrer" title={t.repoTitle}>
+                {Icon.github}
+                <span>{t.repo}</span>
+              </a>
+            </div>
           </div>
         </div>
       )}
