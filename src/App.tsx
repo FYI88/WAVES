@@ -3104,13 +3104,8 @@ export function App() {
             aria-label={t.aboutTitle}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="om-about-hero">
-              <svg className="om-about-waves" viewBox="0 0 320 90" aria-hidden preserveAspectRatio="none">
-                <path d="M-10 62 C 20 26 55 26 85 52 S 145 82 175 56 S 235 22 265 48 S 315 74 335 54" />
-                <path d="M-10 74 C 20 38 55 38 85 64 S 145 94 175 68 S 235 34 265 60 S 315 86 335 66" />
-                <path d="M-10 86 C 20 50 55 50 85 76 S 145 106 175 80 S 235 46 265 72 S 315 98 335 78" />
-              </svg>
-              <span className="om-about-badge">
+            <div className="om-about-head">
+              <span className="om-about-mark">
                 <Logo />
               </span>
               <div className="om-about-id">
