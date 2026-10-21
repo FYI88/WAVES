@@ -2351,7 +2351,7 @@ export function App() {
 
   useEffect(() => {
     document.documentElement.lang = lang;
-    document.title = lang === "fr" ? "WaveS — Simulateur onde & paroi" : "WaveS — Wave & Wall Simulator";
+    document.title = "WaveS";
   }, [lang]);
 
   useEffect(() => {
