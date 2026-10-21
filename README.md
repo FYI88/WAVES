@@ -1,6 +1,6 @@
 <div align="center">
 
-# WaveS — Simulateur Onde & Paroi
+# WaveS 
 ## Wave & Wall Simulator
 
 **Propagation, réflexion et transmission des ondes EM à travers des parois multicouches.**
