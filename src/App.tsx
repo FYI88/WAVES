@@ -13,6 +13,8 @@ import {
 import { drawSpatialScene, type SceneOptions } from "./spatialScene";
 import { drawWaveRays } from "./waveRays";
 import { decodeShare, encodeShare, shareHashOf } from "./share";
+import { recordFrame } from "./perf";
+import { PerfHud } from "./PerfHud";
 import {
   C0,
   CUSTOM_SWATCH,
@@ -1187,7 +1189,8 @@ function RayScene(props: {
     if (introStart.current === null) introStart.current = last;
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const elapsed = now - last;
+      const dt = Math.min(0.05, elapsed / 1000);
       last = now;
       if (document.hidden) return;
       const cur = live.current;
@@ -1208,6 +1211,7 @@ function RayScene(props: {
       layout.current = cur.view === "spatial"
         ? drawSpatialScene(ctx, size.w, size.h, clock.current, intro, parameters, cur.pal, pats, cur.fmtNum, { display: cur.display, annotations: cur.annotations, az: cur.orbit.az, el: cur.orbit.el, lang: cur.lang })
         : drawWaveRays(ctx, size.w, size.h, clock.current, parameters, cur.pal, cur.fmtNum, { display: cur.display, reflections: cur.reflections, annotations: cur.annotations, lang: cur.lang });
+      recordFrame(elapsed, { dpr: size.dpr, width: canvas.width, height: canvas.height });
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
@@ -2157,9 +2161,24 @@ export function App() {
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [perfOn, setPerfOn] = useState(() => {
+    try {
+      return localStorage.getItem("waves:perf") === "1" || new URLSearchParams(window.location.search).get("perf") === "1";
+    } catch {
+      return false;
+    }
+  });
   const copyTimer = useRef(0);
+  const buildTaps = useRef({ count: 0, at: 0 });
   const presentRef = useRef(present);
   presentRef.current = present;
+  const buildInfo = useMemo(() => {
+    const ua = navigator.userAgent;
+    const android = /Android\s+([\d.]+)/.exec(ua)?.[1];
+    const chromium = /(?:Chrome|CriOS)\/(\d+)/.exec(ua)?.[1];
+    const engine = chromium ? `${/;\s*wv\)/.test(ua) ? "WebView" : "Chrome"} ${chromium}` : "Web";
+    return [`v${__APP_VERSION__}`, android ? `Android ${android}` : null, engine].filter(Boolean).join(" · ");
+  }, []);
   // true only when entering present mode requested fullscreen itself, so
   // leaving never kicks the user out of a pre-existing (F11) fullscreen
   const fsByUs = useRef(false);
@@ -2182,6 +2201,25 @@ export function App() {
       /* fullscreen unavailable — present mode still works windowed */
     }
   }, []);
+
+  const onBuildTap = () => {
+    const now = performance.now();
+    const taps = buildTaps.current;
+    if (now - taps.at > 900) taps.count = 0;
+    taps.at = now;
+    taps.count += 1;
+    if (taps.count < 5) return;
+    taps.count = 0;
+    setPerfOn((value) => {
+      const next = !value;
+      try {
+        localStorage.setItem("waves:perf", next ? "1" : "0");
+      } catch {
+        /* storage unavailable: keep the session toggle */
+      }
+      return next;
+    });
+  };
 
   // the browser eats Esc to leave fullscreen first: sync present mode with it
   useEffect(() => {
@@ -3165,10 +3203,14 @@ export function App() {
                 {Icon.github}
                 <span>{t.repo}</span>
               </a>
+              <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
+                {buildInfo}
+              </button>
             </div>
           </div>
         </div>
       )}
+      <PerfHud enabled={perfOn} />
     </div>
   );
 }
