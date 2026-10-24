@@ -1,6 +1,7 @@
-import { type PolMode } from "../physics";
+import { type Cx, type PolMode } from "../physics";
 import { type ProfileParams } from "./profiles";
 import { surfaceEta, type SurfaceMaterialId } from "./materials";
+import { mixedEta, type Inclusions } from "../media/mixing";
 import {
   rcwaAngleSweep,
   rcwaFreqSweep,
@@ -21,13 +22,18 @@ export interface WallSpec {
   customEps: number;
   customSigma: number;
   below: { material: SurfaceMaterialId; cm: number; customEps: number; customSigma: number }[];
+  /** optional bubbles, mixed into the profile (target −1) or a flat layer (target index) */
+  inclusions?: Inclusions;
+  inclusionTarget?: number;
 }
 
 export function wallAt(spec: WallSpec, fGHz: number): ProfiledWall {
+  const mix = (eta: Cx, index: number) =>
+    spec.inclusions && spec.inclusionTarget === index ? mixedEta(eta, spec.inclusions, fGHz) : eta;
   return {
     profile: spec.profile,
-    eta: surfaceEta(spec.material, fGHz, spec.customEps, spec.customSigma),
-    below: spec.below.map((l) => ({ cm: l.cm, eta: surfaceEta(l.material, fGHz, l.customEps, l.customSigma) })),
+    eta: mix(surfaceEta(spec.material, fGHz, spec.customEps, spec.customSigma), -1),
+    below: spec.below.map((l, i) => ({ cm: l.cm, eta: mix(surfaceEta(l.material, fGHz, l.customEps, l.customSigma), i) })),
   };
 }
 
