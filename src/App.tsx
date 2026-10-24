@@ -1209,8 +1209,12 @@ function RayScene(props: {
   onSelect: (i: number) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const backdropRef = useRef<HTMLCanvasElement>(null);
   const dprCap = useAdaptiveDprCap();
   const size = useCanvasSize(ref, dprCap);
+  // the scenery never changes between frames, so it is painted once at panel
+  // resolution instead of every frame at the reduced animation resolution
+  const staticSize = useCanvasSize(backdropRef, 2.5);
   const [hover, setHover] = useState(-1);
   const [view, setView] = useState<"wave" | "spatial">("wave");
   const [display, setDisplay] = useState<SceneOptions["display"]>("both");
@@ -1278,12 +1282,35 @@ function RayScene(props: {
       const parameters = { ...cur.params, hover: cur.hover };
       layout.current = cur.view === "spatial"
         ? drawSpatialScene(ctx, size.w, size.h, clock.current, intro, parameters, cur.pal, pats, cur.fmtNum, { display: cur.display, annotations: cur.annotations, az: cur.orbit.az, el: cur.orbit.el, lang: cur.lang, shadows: !COARSE_POINTER })
-        : drawWaveRays(ctx, size.w, size.h, clock.current, parameters, cur.pal, cur.fmtNum, { display: cur.display, reflections: cur.reflections, annotations: cur.annotations, lang: cur.lang, lowPower: COARSE_POINTER, shadows: !COARSE_POINTER });
+        : drawWaveRays(ctx, size.w, size.h, clock.current, parameters, cur.pal, cur.fmtNum, { display: cur.display, reflections: cur.reflections, annotations: cur.annotations, lang: cur.lang, lowPower: COARSE_POINTER, shadows: !COARSE_POINTER, layer: "animated" });
       recordFrame(elapsed, { dpr: size.dpr, width: canvas.width, height: canvas.height });
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
   }, [size]);
+
+  // Scenery pass: grid, slabs, tiles, labels and the ruler. Repainted only
+  // when the setup, the theme or the hover/selection changes, at up to 2.5x
+  // device pixels so the small type stays crisp on a 1080p panel.
+  useEffect(() => {
+    const canvas = backdropRef.current;
+    if (!canvas || staticSize.w === 0) return;
+    const ctx = prepCanvas(canvas, staticSize);
+    if (!ctx) return;
+    if (view !== "wave") {
+      ctx.clearRect(0, 0, staticSize.w, staticSize.h);
+      return;
+    }
+    drawWaveRays(ctx, staticSize.w, staticSize.h, 0, { ...props.params, hover }, props.pal, props.fmtNum, {
+      display,
+      reflections,
+      annotations,
+      lang: props.lang,
+      lowPower: COARSE_POINTER,
+      shadows: !COARSE_POINTER,
+      layer: "static",
+    });
+  }, [staticSize, view, props.params, props.pal, props.lang, props.fmtNum, annotations, hover, display, reflections]);
 
   const hit = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -1309,6 +1336,7 @@ function RayScene(props: {
   };
 
   return <>
+    <canvas ref={backdropRef} className="om-canvas om-canvas-backdrop" aria-hidden="true" />
     <canvas
       ref={ref}
       className={`om-canvas ${hover >= 0 ? "is-pointer" : ""}`}
@@ -1374,16 +1402,19 @@ function RayScene(props: {
         onClick={() => {
           const canvas = ref.current;
           if (!canvas || canvas.width < 2) return;
-          // the live canvas is transparent (stage colour comes from CSS):
-          // composite over the palette stage colour so the file looks like the app
+          // the live canvases are transparent (stage colour comes from CSS):
+          // composite scenery + waves over the stage colour so the file looks
+          // like the app, and take the size from the sharper scenery layer
+          const scenery = backdropRef.current;
           const out = document.createElement("canvas");
-          out.width = canvas.width;
-          out.height = canvas.height;
+          out.width = Math.max(canvas.width, scenery?.width ?? 0);
+          out.height = Math.max(canvas.height, scenery?.height ?? 0);
           const octx = out.getContext("2d");
           if (!octx) return;
           octx.fillStyle = props.pal.bg0;
           octx.fillRect(0, 0, out.width, out.height);
-          octx.drawImage(canvas, 0, 0);
+          if (scenery && view === "wave") octx.drawImage(scenery, 0, 0, out.width, out.height);
+          octx.drawImage(canvas, 0, 0, out.width, out.height);
           const a = document.createElement("a");
           a.download = `waves-${props.params.freq}GHz-${props.params.theta}deg-${props.params.pol}-${view}.png`;
           a.href = out.toDataURL("image/png");
@@ -2245,7 +2276,7 @@ export function App() {
     const android = /Android\s+([\d.]+)/.exec(ua)?.[1];
     const chromium = /(?:Chrome|CriOS)\/(\d+)/.exec(ua)?.[1];
     const engine = chromium ? `${/;\s*wv\)/.test(ua) ? "WebView" : "Chrome"} ${chromium}` : "Web";
-    return [`v${__APP_VERSION__}`, android ? `Android ${android}` : null, engine].filter(Boolean).join(" · ");
+    return [`v${__APP_VERSION__}`, __BUILD_SHA__, android ? `Android ${android}` : null, engine].filter(Boolean).join(" · ");
   }, []);
   // true only when entering present mode requested fullscreen itself, so
   // leaving never kicks the user out of a pre-existing (F11) fullscreen

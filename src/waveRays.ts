@@ -14,6 +14,11 @@ export interface RayOptions {
   lowPower?: boolean;
   /** canvas shadowBlur is very expensive on Mali GPUs; disable it on phones */
   shadows?: boolean;
+  /**
+   * Render only one pass so the caller can stack two canvases: "static"
+   * (scenery) at full resolution and "animated" (waves) at a lower one.
+   */
+  layer?: "static" | "animated";
 }
 
 const TAU = Math.PI * 2;
@@ -21,9 +26,19 @@ const DEG = Math.PI / 180;
 const MONO = '"JetBrains Mono", ui-monospace, monospace';
 const SANS = '"Inter Tight", system-ui, sans-serif';
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+// Hundreds of rgba() calls per frame would otherwise allocate a new string
+// every time; alpha is quantised to 1/1000, far below 8-bit colour precision.
+const rgbaCache = new Map<string, string>();
 const rgba = (hex: string, opacity: number) => {
+  const alpha = Math.round(clamp(opacity, 0, 1) * 1000) / 1000;
+  const key = `${hex}|${alpha}`;
+  const hit = rgbaCache.get(key);
+  if (hit !== undefined) return hit;
+  if (rgbaCache.size > 4000) rgbaCache.clear();
   const value = parseInt(hex.slice(1), 16);
-  return `rgba(${value >> 16},${(value >> 8) & 255},${value & 255},${clamp(opacity, 0, 1)})`;
+  const out = `rgba(${value >> 16},${(value >> 8) & 255},${value & 255},${alpha})`;
+  rgbaCache.set(key, out);
+  return out;
 };
 const mix = (a: string, b: string, t: number) => {
   const x = parseInt(a.slice(1), 16);
@@ -32,22 +47,42 @@ const mix = (a: string, b: string, t: number) => {
 };
 const tintOf = (material: Layer["mat"]) => material === "air" ? "#83c6dd" : material === "custom" ? CUSTOM_TINT : MATERIALS[material].tint;
 
-export function drawWaveRays(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  time: number,
-  params: Parameters,
-  palette: Palette,
-  format: (value: number, decimals?: number) => string,
-  options: RayOptions,
-) {
+interface RayGeometry {
+  width: number;
+  height: number;
+  compact: boolean;
+  titleY: number;
+  tileY: number;
+  tileH: number;
+  top: number;
+  bottom: number;
+  middle: number;
+  total: number;
+  stackWidth: number;
+  bx: number[];
+  left: number;
+  right: number;
+  depth: { x: number; y: number };
+  theta: number;
+  entry: Point;
+  ys: number[];
+  exit: Point;
+  source: Point;
+  receiver: Point;
+  refOffset: number;
+  refStart: Point;
+  refEnd: Point;
+  count: number;
+  rects: { x0: number; x1: number; y0: number; y1: number }[];
+  tiles: { x0: number; x1: number; y0: number; y1: number; index: number }[];
+}
+
+/**
+ * Shared geometry. The scenery pass and the animated pass both derive every
+ * coordinate from here, which keeps the two stacked canvases pixel-aligned.
+ */
+function rayGeometry(width: number, height: number, params: Parameters): RayGeometry {
   const compact = width < 640;
-  const french = options.lang === "fr";
-  const dark = palette.dark;
-  const lowPower = options.lowPower === true;
-  const shadows = options.shadows !== false;
-  const absColor = palette.abs ?? (dark ? "#edc17f" : "#8d5b13");
   const count = params.layers.length;
 
   /* ── Geometry ─────────────────────────────────────────────────────── */
@@ -84,70 +119,152 @@ export function drawWaveRays(
   const refStart = { x: left, y: middle + refOffset };
   const refLength = Math.max(16, Math.min((left - margin) / Math.max(cos, 1e-4), (bottom - refStart.y - 16) / Math.max(sin, 1e-4)));
   const refEnd = { x: left - refLength * cos, y: refStart.y + refLength * sin };
-  const rects: { x0: number; x1: number; y0: number; y1: number }[] = [];
-  const tiles: { x0: number; x1: number; y0: number; y1: number; index: number }[] = [];
+  return {
+    width,
+    height,
+    compact,
+    titleY,
+    tileY,
+    tileH,
+    top,
+    bottom,
+    middle,
+    total,
+    stackWidth,
+    bx,
+    left,
+    right,
+    depth,
+    theta,
+    entry,
+    ys,
+    exit,
+    source,
+    receiver,
+    refOffset,
+    refStart,
+    refEnd,
+    count,
+    rects: [] as RayGeometry["rects"],
+    tiles: [] as RayGeometry["tiles"],
+  };
+}
 
-  /* ── Helpers ──────────────────────────────────────────────────────── */
-  const path = (points: Point[], close = false) => {
-    ctx.beginPath();
-    points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
-    if (close) ctx.closePath();
-  };
-  const glow = (x: number, y: number, radius: number, color: string, opacity: number) => {
-    if (opacity <= 0.003 || radius <= 0) return;
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, rgba(color, opacity));
-    gradient.addColorStop(0.35, rgba(color, opacity * 0.35));
-    gradient.addColorStop(1, rgba(color, 0));
-    ctx.fillStyle = gradient;
-    ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
-  };
-  const metal = (y0: number, y1: number) => {
-    const gradient = ctx.createLinearGradient(0, y0, 0, y1);
-    gradient.addColorStop(0, dark ? "#8ea6b8" : "#ffffff");
-    gradient.addColorStop(0.45, dark ? "#2c4152" : "#c3d3de");
-    gradient.addColorStop(1, dark ? "#0b141d" : "#7c95a6");
-    return gradient;
-  };
-  const pill = (text: string, at: Point, color: string, sub?: string) => {
-    ctx.save();
-    const size = compact ? 9.5 : 11;
-    ctx.font = `600 ${size}px ${MONO}`;
-    const textWidth = ctx.measureText(text).width;
+/* ── Helpers ──────────────────────────────────────────────────────── */
+const pathOn = (ctx: CanvasRenderingContext2D, points: Point[], close = false) => {
+  ctx.beginPath();
+  points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+  if (close) ctx.closePath();
+};
+const glowOn = (ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, color: string, opacity: number) => {
+  if (opacity <= 0.003 || radius <= 0) return;
+  const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+  gradient.addColorStop(0, rgba(color, opacity));
+  gradient.addColorStop(0.35, rgba(color, opacity * 0.35));
+  gradient.addColorStop(1, rgba(color, 0));
+  ctx.fillStyle = gradient;
+  ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+};
+const metalOn = (ctx: CanvasRenderingContext2D, y0: number, y1: number, dark: boolean) => {
+  const gradient = ctx.createLinearGradient(0, y0, 0, y1);
+  gradient.addColorStop(0, dark ? "#8ea6b8" : "#ffffff");
+  gradient.addColorStop(0.45, dark ? "#2c4152" : "#c3d3de");
+  gradient.addColorStop(1, dark ? "#0b141d" : "#7c95a6");
+  return gradient;
+};
+/**
+ * Gradient objects are shader setup on every `create*` call, which is costly
+ * on mobile GPUs. Wave gradients depend only on geometry and power, both of
+ * which are constant while the clock runs, so they are cached per context.
+ */
+const gradientCache = new WeakMap<CanvasRenderingContext2D, Map<string, CanvasGradient>>();
+const linearOn = (
+  ctx: CanvasRenderingContext2D,
+  key: string,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  stops: [number, string][],
+) => {
+  let cache = gradientCache.get(ctx);
+  if (!cache) {
+    cache = new Map();
+    gradientCache.set(ctx, cache);
+  }
+  const hit = cache.get(key);
+  if (hit) return hit;
+  if (cache.size > 600) cache.clear();
+  const gradient = ctx.createLinearGradient(x0, y0, x1, y1);
+  stops.forEach(([at, color]) => gradient.addColorStop(at, color));
+  cache.set(key, gradient);
+  return gradient;
+};
+
+const pillOn = (
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  at: Point,
+  color: string,
+  sub: string | undefined,
+  look: { compact: boolean; dark: boolean; width: number; height: number; shadows: boolean; ink: string },
+) => {
+  const { compact, dark, width, height, shadows, ink } = look;
+  ctx.save();
+  const size = compact ? 9.5 : 11;
+  ctx.font = `600 ${size}px ${MONO}`;
+  const textWidth = ctx.measureText(text).width;
+  ctx.font = `500 ${size}px ${MONO}`;
+  const subWidth = sub ? ctx.measureText(sub).width + 8 : 0;
+  const w = textWidth + subWidth + 32;
+  const h = compact ? 22 : 26;
+  const x = clamp(at.x - w / 2, 8, width - w - 8);
+  const y = clamp(at.y, h / 2 + 4, height - h / 2 - 4);
+  ctx.shadowColor = dark ? "rgba(0,0,0,.5)" : "rgba(30,60,80,.16)";
+  ctx.shadowBlur = shadows ? 6 : 0;
+  ctx.shadowOffsetY = shadows ? 5 : 0;
+  ctx.beginPath();
+  ctx.roundRect(x, y - h / 2, w, h, h / 2);
+  ctx.fillStyle = dark ? "rgba(8,14,24,.88)" : "rgba(255,255,255,.94)";
+  ctx.fill();
+  ctx.shadowColor = "transparent";
+  ctx.strokeStyle = rgba(color, dark ? 0.42 : 0.32);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  glowOn(ctx, x + 13, y, 10, color, dark ? 0.55 : 0.22);
+  ctx.beginPath();
+  ctx.arc(x + 13, y, 3.2, 0, TAU);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  ctx.font = `600 ${size}px ${MONO}`;
+  ctx.fillStyle = dark ? ink : mix(color, "#000000", 0.2);
+  ctx.fillText(text, x + 22, y + 0.5);
+  if (sub) {
     ctx.font = `500 ${size}px ${MONO}`;
-    const subWidth = sub ? ctx.measureText(sub).width + 8 : 0;
-    const w = textWidth + subWidth + 32;
-    const h = compact ? 22 : 26;
-    const x = clamp(at.x - w / 2, 8, width - w - 8);
-    const y = clamp(at.y, h / 2 + 4, height - h / 2 - 4);
-    ctx.shadowColor = dark ? "rgba(0,0,0,.5)" : "rgba(30,60,80,.16)";
-    ctx.shadowBlur = shadows ? 6 : 0;
-    ctx.shadowOffsetY = shadows ? 5 : 0;
-    ctx.beginPath();
-    ctx.roundRect(x, y - h / 2, w, h, h / 2);
-    ctx.fillStyle = dark ? "rgba(8,14,24,.88)" : "rgba(255,255,255,.94)";
-    ctx.fill();
-    ctx.shadowColor = "transparent";
-    ctx.strokeStyle = rgba(color, dark ? 0.42 : 0.32);
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    glow(x + 13, y, 10, color, dark ? 0.55 : 0.22);
-    ctx.beginPath();
-    ctx.arc(x + 13, y, 3.2, 0, TAU);
     ctx.fillStyle = color;
-    ctx.fill();
-    ctx.textBaseline = "middle";
-    ctx.textAlign = "left";
-    ctx.font = `600 ${size}px ${MONO}`;
-    ctx.fillStyle = dark ? palette.ink : mix(color, "#000000", 0.2);
-    ctx.fillText(text, x + 22, y + 0.5);
-    if (sub) {
-      ctx.font = `500 ${size}px ${MONO}`;
-      ctx.fillStyle = color;
-      ctx.fillText(sub, x + 22 + textWidth + 8, y + 0.5);
-    }
-    ctx.restore();
-  };
+    ctx.fillText(sub, x + 22 + textWidth + 8, y + 0.5);
+  }
+  ctx.restore();
+};
+
+/** Scenery: grid, slabs, tiles, annotations and the ruler. No per-frame state. */
+function drawRayBackdrop(
+  ctx: CanvasRenderingContext2D,
+  g: RayGeometry,
+  params: Parameters,
+  palette: Palette,
+  format: (value: number, decimals?: number) => string,
+  options: RayOptions,
+) {
+  const { width, height, compact, titleY, tileY, tileH, top, bottom, middle, stackWidth, bx, left, right, depth, theta, ys, count, rects, tiles } = g;
+  const french = options.lang === "fr";
+  const dark = palette.dark;
+  const shadows = options.shadows !== false;
+  const path = (points: Point[], close = false) => pathOn(ctx, points, close);
+  const glow = (x: number, y: number, radius: number, color: string, opacity: number) => glowOn(ctx, x, y, radius, color, opacity);
+  const metal = (y0: number, y1: number) => metalOn(ctx, y0, y1, dark);
 
   /* ── Backdrop: flat, the stage colour is painted by .om-scene in CSS ── */
   ctx.clearRect(0, 0, width, height);
@@ -279,12 +396,6 @@ export function drawWaveRays(
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.setLineDash([]);
-      for (let k = 0; k < 7; k++) {
-        const py = top + ((k * 97 + time * 14) % (bottom - top));
-        const px = x0 + ((k * 37) % Math.max(4, x1 - x0 - 4)) + 2;
-        ctx.fillStyle = rgba(tint, 0.35);
-        ctx.fillRect(px, py, 1.4, 1.4);
-      }
     } else {
       path([{ x: x0 + 0.5, y: top }, { x: x0 + 0.5, y: bottom }]);
       ctx.strokeStyle = dark ? "rgba(255,255,255,.22)" : "rgba(255,255,255,.75)";
@@ -301,16 +412,6 @@ export function drawWaveRays(
     ctx.strokeStyle = rgba(mix(tint, "#ffffff", 0.6), air ? 0.3 : 0.5);
     ctx.lineWidth = 0.7;
     ctx.stroke();
-    const absorbed = layer.absorbed ?? 0;
-    if (absorbed > 0.004) {
-      ctx.save();
-      path(corners, true);
-      ctx.clip();
-      const cy = (ys[index] + ys[index + 1]) / 2;
-      const pulse = 0.9 + 0.1 * Math.sin(time * 3 + index);
-      glow((x0 + x1) / 2, cy, (24 + Math.sqrt(absorbed) * 90) * pulse, absColor, Math.min(0.6, 0.14 + absorbed * 0.9));
-      ctx.restore();
-    }
     rects.push({ x0, x1, y0: top + depth.y, y1: bottom });
   });
   {
@@ -392,6 +493,51 @@ export function drawWaveRays(
     }
     ctx.restore();
   }
+}
+
+/** Animated pass: waves, flares, dust and the source rings. Redrawn every frame. */
+function drawRayWaves(
+  ctx: CanvasRenderingContext2D,
+  g: RayGeometry,
+  time: number,
+  params: Parameters,
+  palette: Palette,
+  options: RayOptions,
+) {
+  const { compact, top, bottom, middle, bx, left, right, depth, theta, entry, ys, exit, source, receiver, refOffset, refStart, refEnd, count } = g;
+  const dark = palette.dark;
+  const lowPower = options.lowPower === true;
+  const shadows = options.shadows !== false;
+  const absColor = palette.abs ?? (dark ? "#edc17f" : "#8d5b13");
+  const path = (points: Point[], close = false) => pathOn(ctx, points, close);
+  const glow = (x: number, y: number, radius: number, color: string, opacity: number) => glowOn(ctx, x, y, radius, color, opacity);
+
+  /* Dust suspended in air gaps and the absorbed-energy bloom inside a slab.
+     Both live on the animated layer because they move with the clock. */
+  params.layers.forEach((layer, index) => {
+    const x0 = bx[index];
+    const x1 = bx[index + 1];
+    const tint = tintOf(layer.mat);
+    if (layer.mat === "air") {
+      ctx.fillStyle = rgba(tint, 0.35);
+      for (let k = 0; k < 7; k++) {
+        const py = top + ((k * 97 + time * 14) % (bottom - top));
+        const px = x0 + ((k * 37) % Math.max(4, x1 - x0 - 4)) + 2;
+        ctx.fillRect(px, py, 1.4, 1.4);
+      }
+    }
+    const absorbed = layer.absorbed ?? 0;
+    if (absorbed > 0.004) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x0, top, x1 - x0, bottom - top);
+      ctx.clip();
+      const cy = (ys[index] + ys[index + 1]) / 2;
+      const pulse = 0.9 + 0.1 * Math.sin(time * 3 + index);
+      glow((x0 + x1) / 2, cy, (24 + Math.sqrt(absorbed) * 90) * pulse, absColor, Math.min(0.6, 0.14 + absorbed * 0.9));
+      ctx.restore();
+    }
+  });
 
   /* ── Waves ────────────────────────────────────────────────────────── */
   const lambdaPx = clamp(70 * Math.pow(2.4 / params.freq, 0.2), 32, 96) * (compact ? 0.7 : 1);
@@ -419,12 +565,15 @@ export function drawWaveRays(
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     if (dark) ctx.globalCompositeOperation = "lighter";
-    const halo = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
-    halo.addColorStop(0, rgba(color, alphaAt(0) * (dark ? 0.09 : 0.08)));
-    halo.addColorStop(1, rgba(color, alphaAt(1) * (dark ? 0.09 : 0.08)));
+    // one cache key per segment: geometry and power taper never change with time
+    const gradKey = `${from.x.toFixed(1)},${from.y.toFixed(1)},${to.x.toFixed(1)},${to.y.toFixed(1)},${color},${alphaAt(0).toFixed(3)},${alphaAt(1).toFixed(3)},${dark ? 1 : 0}`;
+    const halo = linearOn(ctx, "h" + gradKey, from.x, from.y, to.x, to.y, [
+      [0, rgba(color, alphaAt(0) * (dark ? 0.09 : 0.08))],
+      [1, rgba(color, alphaAt(1) * (dark ? 0.09 : 0.08))],
+    ]);
     path([from, to]);
     ctx.strokeStyle = halo;
-    ctx.lineWidth = amplitude * 2.7 * Math.max(0.35, Math.min(1, Math.sqrt(peak)));
+    ctx.lineWidth = amplitude * 2.2 * Math.max(0.35, Math.min(1, Math.sqrt(peak)));
     ctx.stroke();
     path([from, to]);
     ctx.setLineDash([2, 5]);
@@ -433,9 +582,9 @@ export function drawWaveRays(
     ctx.stroke();
     ctx.setLineDash([]);
     if (options.display !== "fronts") {
+      const steps = Math.max(2, Math.ceil(distance / (lowPower ? 4 : 1.5)));
       const crest: Point[] = [];
       const base: Point[] = [];
-      const steps = Math.max(2, Math.ceil(distance / (lowPower ? 3.2 : 1.5)));
       for (let step = 0; step <= steps; step++) {
         const along = distance * step / steps;
         const offset = Math.sin(phase + k * along - omega) * amplitude * power(along / distance);
@@ -444,15 +593,20 @@ export function drawWaveRays(
         crest.push({ x: x + nor.x * offset, y: y + nor.y * offset });
         base.push({ x, y });
       }
-      const ribbon = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
-      ribbon.addColorStop(0, rgba(color, alphaAt(0) * (dark ? 0.16 : 0.12)));
-      ribbon.addColorStop(1, rgba(color, alphaAt(1) * (dark ? 0.16 : 0.12)));
-      path([...crest, ...base.reverse()], true);
+      const ribbon = linearOn(ctx, "r" + gradKey, from.x, from.y, to.x, to.y, [
+        [0, rgba(color, alphaAt(0) * (dark ? 0.16 : 0.12))],
+        [1, rgba(color, alphaAt(1) * (dark ? 0.16 : 0.12))],
+      ]);
+      ctx.beginPath();
+      crest.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+      for (let index = base.length - 1; index >= 0; index--) ctx.lineTo(base[index].x, base[index].y);
+      ctx.closePath();
       ctx.fillStyle = ribbon;
       ctx.fill();
-      const stroke = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
-      stroke.addColorStop(0, rgba(color, alphaAt(0)));
-      stroke.addColorStop(1, rgba(color, alphaAt(1)));
+      const stroke = linearOn(ctx, "s" + gradKey, from.x, from.y, to.x, to.y, [
+        [0, rgba(color, alphaAt(0))],
+        [1, rgba(color, alphaAt(1))],
+      ]);
       path(crest);
       if (!dark) {
         ctx.strokeStyle = "rgba(255,255,255,.7)";
@@ -460,7 +614,7 @@ export function drawWaveRays(
         ctx.stroke();
       }
       ctx.strokeStyle = stroke;
-      ctx.globalAlpha = dark ? 0.22 : 0.14;
+      ctx.globalAlpha = dark ? 0.2 : 0.14;
       ctx.lineWidth = compact ? 5 : 7;
       ctx.stroke();
       ctx.globalAlpha = 1;
@@ -480,15 +634,14 @@ export function drawWaveRays(
         const center = { x: from.x + dir.x * along, y: from.y + dir.y * along };
         const a = { x: center.x - nor.x * extent, y: center.y - nor.y * extent };
         const b = { x: center.x + nor.x * extent, y: center.y + nor.y * extent };
-        const front = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-        front.addColorStop(0, rgba(color, 0));
-        front.addColorStop(0.5, rgba(color, alphaAt(f) * 0.8));
-        front.addColorStop(1, rgba(color, 0));
+        // a solid stroke instead of a per-front gradient: the soft ends of the
+        // front are barely visible at phone size, and the gradient shader is
+        // the single most expensive thing this loop can create
         ctx.beginPath();
         ctx.moveTo(a.x - dir.x * 3, a.y - dir.y * 3);
         ctx.quadraticCurveTo(center.x + dir.x * 5, center.y + dir.y * 5, b.x - dir.x * 3, b.y - dir.y * 3);
-        ctx.strokeStyle = front;
-        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = rgba(color, alphaAt(f) * 0.5);
+        ctx.lineWidth = 1.5;
         ctx.stroke();
         if (params.pol === "TE" && index === 1) {
           ctx.beginPath();
@@ -511,11 +664,8 @@ export function drawWaveRays(
       const x = from.x + dir.x * along;
       const y = from.y + dir.y * along;
       const tail = Math.min(along, 30 / Math.max(1, index) + 10);
-      const trail = ctx.createLinearGradient(x - dir.x * tail, y - dir.y * tail, x, y);
-      trail.addColorStop(0, rgba(color, 0));
-      trail.addColorStop(1, rgba(color, 0.9 * strength));
       path([{ x: x - dir.x * tail, y: y - dir.y * tail }, { x, y }]);
-      ctx.strokeStyle = trail;
+      ctx.strokeStyle = rgba(color, 0.5 * strength);
       ctx.lineWidth = 2.2;
       ctx.stroke();
       if (!lowPower) glow(x, y, 11, color, 0.5 * strength);
@@ -574,6 +724,44 @@ export function drawWaveRays(
     ctx.restore();
   }
 
+  /* ── Source rings ─────────────────────────────────────────────────── */
+  {
+    const scale = compact ? 0.72 : 1;
+    ctx.save();
+    ctx.translate(source.x, source.y);
+    ctx.rotate(theta);
+    ctx.scale(scale, scale);
+    for (let ring = 0; ring < 3; ring++) {
+      const progress = (time * 0.9 + ring / 3) % 1;
+      ctx.beginPath();
+      ctx.arc(4, 0, 12 + progress * 36, -0.55, 0.55);
+      ctx.strokeStyle = rgba(palette.inc, (1 - progress) * 0.6);
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+/** Foreground: emitter, dishes, meters, pills and the ruler. Static. */
+function drawRayForeground(
+  ctx: CanvasRenderingContext2D,
+  g: RayGeometry,
+  params: Parameters,
+  palette: Palette,
+  format: (value: number, decimals?: number) => string,
+  options: RayOptions,
+) {
+  const { width, height, compact, bottom, bx, left, right, theta, source, receiver, refStart, refEnd, count, total } = g;
+  const french = options.lang === "fr";
+  const dark = palette.dark;
+  const shadows = options.shadows !== false;
+  const path = (points: Point[], close = false) => pathOn(ctx, points, close);
+  const glow = (x: number, y: number, radius: number, color: string, opacity: number) => glowOn(ctx, x, y, radius, color, opacity);
+  const metal = (y0: number, y1: number) => metalOn(ctx, y0, y1, dark);
+  const pill = (text: string, at: Point, color: string, sub?: string) =>
+    pillOn(ctx, text, at, color, sub, { compact, dark, width, height, shadows, ink: palette.ink });
+
   /* ── Instruments ──────────────────────────────────────────────────── */
   const scale = compact ? 0.72 : 1;
   const meter = (x: number, y: number, power: number, color: string) => {
@@ -592,14 +780,6 @@ export function drawWaveRays(
     ctx.translate(source.x, source.y);
     ctx.rotate(theta);
     ctx.scale(scale, scale);
-    for (let ring = 0; ring < 3; ring++) {
-      const progress = (time * 0.9 + ring / 3) % 1;
-      ctx.beginPath();
-      ctx.arc(4, 0, 12 + progress * 36, -0.55, 0.55);
-      ctx.strokeStyle = rgba(palette.inc, (1 - progress) * 0.6);
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
-    }
     ctx.shadowColor = "rgba(0,0,0,.4)";
     ctx.shadowBlur = shadows ? 12 : 0;
     ctx.shadowOffsetY = shadows ? 4 : 0;
@@ -689,6 +869,39 @@ export function drawWaveRays(
   ctx.fillStyle = palette.muted;
   ctx.fillText(`${format(total, total < 10 ? 2 : 1)} cm${count > 1 ? ` · ${count} ${french ? "milieux" : "media"}` : ""}`, width / 2, ruler + 8);
   ctx.restore();
+}
 
-  return { rects, tiles };
+/**
+ * Draws the section view.
+ *
+ * `options.layer` lets the caller split the scene across two stacked canvases:
+ * "static" paints the scenery (grid, slabs, labels, ruler) and "animated"
+ * paints only the moving waves. The static canvas can then run at the full
+ * panel resolution and repaint only when a parameter changes, while the
+ * animated canvas stays cheap. Omitting `layer` paints everything in order
+ * into one canvas, which is what the web fallback and the tests use.
+ */
+export function drawWaveRays(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  time: number,
+  params: Parameters,
+  palette: Palette,
+  format: (value: number, decimals?: number) => string,
+  options: RayOptions,
+) {
+  const g = rayGeometry(width, height, params);
+  ctx.clearRect(0, 0, width, height);
+  if (options.layer === "animated") {
+    drawRayWaves(ctx, g, time, params, palette, options);
+  } else if (options.layer === "static") {
+    drawRayBackdrop(ctx, g, params, palette, format, options);
+    drawRayForeground(ctx, g, params, palette, format, options);
+  } else {
+    drawRayBackdrop(ctx, g, params, palette, format, options);
+    drawRayWaves(ctx, g, time, params, palette, options);
+    drawRayForeground(ctx, g, params, palette, format, options);
+  }
+  return { rects: g.rects, tiles: g.tiles };
 }
