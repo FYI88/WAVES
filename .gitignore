@@ -9,3 +9,14 @@ dist-web/
 Thumbs.db
 .freebuff/
 .vercel
+
+# Android build outputs (android/.gitignore covers most; these are belt and braces)
+android/.gradle/
+android/app/build/
+android/build/
+android/capacitor-cordova-android-plugins/build/
+
+# Signing material — never commit keystores or their passwords
+*.jks
+*.keystore
+android/keystore.properties

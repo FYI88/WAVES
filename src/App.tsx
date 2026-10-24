@@ -2278,17 +2278,6 @@ export function App() {
   };
 
   useEffect(() => {
-    const id = "om-fonts";
-    if (document.getElementById(id)) return;
-    const link = document.createElement("link");
-    link.id = id;
-    link.rel = "stylesheet";
-    link.href =
-      "https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap";
-    document.head.appendChild(link);
-  }, []);
-
-  useEffect(() => {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ v: STORAGE_VERSION, sim, lang, theme }));
     } catch {

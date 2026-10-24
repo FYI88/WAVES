@@ -1,9 +1,10 @@
 # WaveS - Android packaging handoff
 
-Last updated: 2026-10-22
-Repository: `C:\Users\HP\Documents\ONDE APP SCHOOL\astra Onde_Mur_Wave_Wall_Simulator (2)`
+Last updated: 2026-10-24
+Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
+Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
-Head at handoff: `0946a9d` - `Set browser tab title to just WaveS`
+Head at handoff: `e47c85c` - `Fix header text clipping on tablet viewports (561px-900px)`
 
 ## 1. Mission
 
@@ -48,7 +49,7 @@ Measured on the release APK, on the Galaxy M20, offline, with the perf HUD enabl
 | APK size | At most 10 MB |
 | Offline | Same numbers as online |
 
-Current `dist` baseline: 2.6 MB, 66 files. The web Canvas is roughly 0.5 to 1.1 megapixels at DPR 2 on this phone, so 60 fps is realistic but not guaranteed on the Mali-G71 MP2.
+Current `dist` baseline after bundling fonts: 3.1 MB, 96 files (was 2.6 MB, 66 files). The extra weight is the Latin + Greek WOFF/WOFF2 subsets of Inter Tight and JetBrains Mono. The web Canvas is roughly 0.5 to 1.1 megapixels at DPR 2 on this phone, so 60 fps is realistic but not guaranteed on the Mali-G71 MP2.
 
 ### Perf HUD
 
@@ -77,19 +78,19 @@ Do not change the physics or the chart semantics.
 
 ### Repository
 
-- Head: `0946a9d`.
-- Recent commits: `b22fd91` title/English description, `197d8f9` About card redesign, `409ed37` About panel.
-- Before Phase 0, the only uncommitted file was `src/styles.css` (About-card refinement).
-- Phase 0 is now implemented in the working tree but not committed.
-- `HANDOFF.md` is new.
+- Head: `e47c85c`.
+- Recent commits: `e47c85c` header clipping, `d3614b6` Phase 0 hardening, `0946a9d` tab title.
+- The working tree is now on a fresh clone of `main`; Phase 0 is committed upstream.
+- Phase 1 is implemented in the working tree but not committed yet.
+- `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
 ### Test and build status
 
 - `npm test`: 16/16 passing.
 - `npm run build`: green (`tsc --noEmit && vite build`).
-- Production output: approximately 2.6 MB across 66 files, including KaTeX fonts.
+- Production output: approximately 3.1 MB across 96 files, including KaTeX fonts and the bundled Inter Tight / JetBrains Mono subsets.
 
-### Phase 0 changes in the working tree
+### Phase 0 changes (committed as `d3614b6`)
 
 - Added `vh` fallbacks before every `dvh` declaration, including the app frame, controls, present scene, help sheet and About sheet.
 - Moved safe-area insets out of the phone-only block into the base `.om-top` and `.om-layout` rules, so notched phones work in both orientations. Phone bottom padding remains `max(24px, env(safe-area-inset-bottom))`.
@@ -102,18 +103,29 @@ Do not change the physics or the chart semantics.
 - Added `version: 1.0.0` to `package.json` and `__APP_VERSION__` to the Vite config.
 - Added `.om-perf` and `.om-about-build` styles.
 
-### What Phase 0 does not include
+### Phase 1 changes in the working tree
 
-- No Capacitor install, no `android/` directory, no CI workflow yet.
-- No Fontsource imports yet.
-- No native file/share/status-bar/back-button integration yet.
+- Installed `@capacitor/core`, `@capacitor/android` `8.5.3` and `@capacitor/cli` `8.5.3` (dev).
+- Installed `@fontsource/inter-tight` and `@fontsource/jetbrains-mono` `5.3.0`.
+- Added `capacitor.config.ts` with `appId: io.github.fyi88.waves`, `appName: WaveS`, `webDir: dist`, `server.androidScheme: https`.
+- `src/main.tsx` now imports the bundled font subsets (Latin + Greek) instead of relying on a network font.
+- Removed the `om-fonts` effect in `src/App.tsx` that injected the Google Fonts `<link>` at runtime.
+- Ran `npx cap add android`, then `npx cap sync android`; generated `android/` is committed-ready, with `gradle-wrapper.jar` tracked and copied web assets ignored.
+- Set `versionName "1.0.0"` in `android/app/build.gradle` to match `package.json` (versionCode stays `1`).
+- Root `.gitignore` now also ignores keystores and Android build folders as belt-and-braces.
+
+### What Phase 1 does not include
+
+- No CI workflow yet (Phase 2).
+- No native file/share/status-bar/back-button integration yet (Phase 3).
 - No adaptive DPR yet.
+- No local Gradle build: this machine has no JDK 21 and no Android SDK.
 
 ## 5. Roadmap
 
 ### Phase 0 - Web baseline and mobile hardening
 
-Status: implemented locally, awaiting commit and real-device check.
+Status: committed (`d3614b6`), awaiting real-device check.
 
 - [x] vh fallbacks for dvh.
 - [x] Safe-area insets ungated from the phone-only media query.
@@ -122,20 +134,20 @@ Status: implemented locally, awaiting commit and real-device check.
 - [x] Hidden perf HUD and build info.
 - [x] App version define.
 - [x] Tests and production build green.
-- [ ] Commit Phase 0, including the About CSS refinement and this handoff file.
+- [x] Commit Phase 0, including the About CSS refinement and this handoff file.
 - [ ] Verify on the M20: layout, HUD, WebView version, baseline FPS.
 
 ### Phase 1 - Capacitor wrap
 
-Status: not started.
+Status: implemented locally, awaiting commit and push.
 
-- Install Capacitor 8 packages.
-- Create `capacitor.config.ts`.
-- Bundle fonts with Fontsource and remove the Google Fonts effect.
-- Run `npx cap add android`.
-- Commit `android/`.
-- Sync and confirm the web app still passes `npm test` and `npm run build`.
-- Add adaptive DPR only if the Phase 0 baseline demands it.
+- [x] Install Capacitor 8 packages.
+- [x] Create `capacitor.config.ts`.
+- [x] Bundle fonts with Fontsource and remove the Google Fonts effect.
+- [x] Run `npx cap add android`.
+- [ ] Commit `android/`.
+- [x] Sync and confirm the web app still passes `npm test` and `npm run build`.
+- [ ] Add adaptive DPR only if the Phase 0 baseline demands it.
 
 ### Phase 2 - Debug CI
 
@@ -223,10 +235,12 @@ The release workflow mirrors this with `assembleRelease`, `apksigner verify` and
 ## 7. Environment
 
 - OS: Windows, PowerShell 5.1.
-- Node: v24.11.0. `package.json` asks for `22.x`, so npm prints an engine warning. CI must use 22.
-- Java: 8 only. Capacitor 8 needs 21. Local Android builds are therefore unavailable.
+- Working copy: `C:\Users\WDAGUtilityAccount\Documents\Default Project`, a fresh `git clone` of `main`.
+- Node: not preinstalled. Portable **Node v22.23.4** was installed at `%LOCALAPPDATA%\tools\node-v22.23.4-win-x64`; prepend it to `PATH` (`$env:PATH = "$env:LOCALAPPDATA\tools\node-v22.23.4-win-x64;$env:PATH"`) and call `npm.cmd`/`npx.cmd`, because the PowerShell execution policy blocks `npm.ps1`.
+- Git: not preinstalled. **MinGit 2.56.0** is at `%LOCALAPPDATA%\tools\mingit\cmd\git.exe`; prepend that `cmd` folder to `PATH`. The repo uses `core.autocrlf=false` so the LF working tree matches upstream.
+- Java: none. JDK 21 is still missing, so local Gradle/Android builds are impossible.
 - Android SDK, `adb`, `ANDROID_HOME`: not installed.
-- GitHub CLI: installed but not authenticated.
+- GitHub CLI: not installed. Pushing needs a PAT or a configured credential helper.
 - Phone: Samsung Galaxy M20, Android 10 / One UI 2.0, Exynos 7904, Mali-G71 MP2, 3 GB RAM, 60 Hz 1080x2340.
 - The user reports the phone is up to date, sideloading is open and performance is fine. Do not block on a WebView gate; record the version instead.
 
@@ -292,24 +306,37 @@ Select-String -Path src\styles.css -Pattern "dvh"
 - `src/spatialScene.ts`: spatial renderer.
 - `src/materialSurfaces.ts`: procedural material textures.
 - `src/share.ts`: URL state encoding/decoding.
-- `src/main.tsx`: React entry point. Fontsource imports go here in Phase 1.
+- `src/main.tsx`: React entry point. Imports the bundled Inter Tight / JetBrains Mono subsets.
 - `vite.config.ts`: relative base and version define.
+- `capacitor.config.ts`: Capacitor app id, name, web dir, Android scheme.
 - `package.json`: scripts, dependencies, version.
 - `index.html`: viewport, theme colour, splash styling.
 - `public/logo.png`: 1254x1254 source for icons and splash.
+- `android/`: generated Capacitor Android project. `gradle-wrapper.jar` is tracked; copied web assets and `capacitor.config.json` are ignored.
 - `dist/`: production output, regenerated by `npm run build`.
 - `.gitignore`: must ignore Android build outputs and keystores while tracking `gradle-wrapper.jar`.
 - `HANDOFF.md`: this file.
 
 Planned:
 
-- `capacitor.config.ts`
-- `android/`
 - `.github/workflows/android-debug.yml`
 - `.github/workflows/android-release.yml`
 - `THIRD_PARTY_NOTICES.md`
 
 ## 13. Journal
+
+### 2026-10-24
+
+- Cloned `FYI88/WAVES` at `e47c85c` into the current sandbox (the 2026-10-22 working copy is gone).
+- Installed portable Node v22.23.4 and MinGit 2.56.0 under `%LOCALAPPDATA%\tools`; no system installs available.
+- `npm ci` then `npm test`: 16/16. `npm run build`: green.
+- Phase 1: installed Capacitor 8.5.3 (core/android/cli) and Fontsource 5.3.0.
+- Added `capacitor.config.ts`; replaced the runtime Google Fonts `<link>` with Latin + Greek Fontsource imports in `src/main.tsx` and deleted the `om-fonts` effect from `src/App.tsx`.
+- `npx cap add android` + `npx cap sync android`: `android/` generated, 53 trackable files including the Gradle wrapper jar.
+- Set `versionName "1.0.0"`; added keystore/Android build rules to `.gitignore`.
+- Production output grew to 3.1 MB / 96 files, still under the 10 MB APK budget.
+- `npm test` 16/16 and `npm run build` green after the changes. No local Gradle build (no JDK 21 / Android SDK).
+- No real-device measurement yet.
 
 ### 2026-10-22
 
@@ -324,7 +351,7 @@ Planned:
 
 ## 14. Next actions
 
-1. Commit Phase 0, including the About-card CSS refinement and this handoff file.
-2. Verify Phase 0 on the M20 and record the WebView version and baseline FPS.
-3. Start Phase 1: Capacitor install, config, Fontsource, `android/`.
-4. Add the debug CI workflow and get the first APK artifact.
+1. Commit and push Phase 1 (`android/`, `capacitor.config.ts`, Fontsource, handoff).
+2. Add the Phase 2 debug CI workflow and get the first APK artifact from GitHub Actions.
+3. Verify Phase 0/1 on the M20 and record the WebView version and baseline FPS.
+4. Start Phase 3 native integration once an APK exists to test.
