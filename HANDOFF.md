@@ -4,7 +4,7 @@ Last updated: 2026-10-24
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
-Head at handoff: `66b766c` (docs) - release tag `v1.0.0-debug.2` points at `51b238f`
+Head at handoff: `8ac3fe8` (Phase 2.2) - release tag `v1.0.0-debug.2` points at `51b238f`
 
 ## 1. Mission
 
@@ -67,8 +67,9 @@ The About card version line shows the app version plus the Android and Chrome/We
 
 1. Adaptive DPR (done in `51b238f`): 2 -> 1.75 -> 1.5 -> 1.25 -> 1 after a 3 s warm-up when p95 is above 22 ms. Coarse pointers start at 1.5; the choice is persisted in `localStorage["waves:dprCap"]`.
 2. Mobile shadow tier (done in `51b238f`): canvas `shadowBlur` is off on coarse pointers, and CSS `backdrop-filter` is disabled there too.
-3. Static-layer cache: render the wall/scene background to an offscreen canvas and redraw only when parameters change. Not done yet.
-4. Reduce spatial detail (grid density, sample counts) without changing physics. Partly done: coarser crest sampling, every second wavefront and no particle halos in the 2D low-power tier.
+3. Scenery layer (done in `8ac3fe8`): the section view is split across two stacked canvases. The scenery (grid, slabs, tiles, labels, ruler, dishes, pills) is painted once per parameter change at up to 2.5x device pixels; the animated layer (waves, flares, dust, source rings) repaints every frame at the adaptive DPR. This is what made the text crisp again after the DPR ladder bottomed out at 1.0.
+4. Cheaper animated pass (done in `8ac3fe8`): wave gradients are cached per segment instead of recreated every frame, wavefronts and particle trails use solid strokes instead of per-item gradients, `rgba()` strings are memoised, and the crest polygon no longer copies/reverses an array per frame.
+5. Reduce spatial detail without changing physics. Partly done: coarser crest sampling (4 px), every second wavefront and no particle halos in the 2D low-power tier. Next candidates: draw the internal-reflection waves with fewer fronts, or drop their fronts entirely on coarse pointers.
 
 Do not change the physics or the chart semantics.
 
@@ -76,9 +77,9 @@ Do not change the physics or the chart semantics.
 
 ### Repository
 
-- Head: `66b766c` (docs after Phase 2.1).
-- Recent commits: `66b766c` debug.2 handoff, `51b238f` adaptive DPR/mobile tier/immersive, `1dc1b52` debug.1 release docs, `3f7a656` Phase 2 (debug CI).
-- Phases 0–2.1 are committed, pushed and CI-verified. The debug APK is published as pre-release `v1.0.0-debug.2`.
+- Head: `8ac3fe8` (Phase 2.2, two-layer scene).
+- Recent commits: `8ac3fe8` two-layer scenery/wave split, `773e157` debug.2 device-report docs, `66b766c` debug.2 handoff, `51b238f` adaptive DPR/mobile tier/immersive.
+- Phases 0–2.2 are committed and pushed. The current debug APK is pre-release `v1.0.0-debug.3`.
 - `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
 ### Test and build status
@@ -87,14 +88,16 @@ Do not change the physics or the chart semantics.
 - `npm run build`: green (`tsc --noEmit && vite build`).
 - GitHub Actions `Android debug APK`: green on `3f7a656` (run `40091642446`, 2.1 min, 5.98 MB artifact).
 - GitHub Actions `Android debug APK`: green on `51b238f` (run `40098152879`, 5.98 MB artifact); this run also compiled the immersive `MainActivity` and the new theme items.
+- GitHub Actions `Android debug APK`: green on `8ac3fe8` (run [`40107959365`](https://github.com/FYI88/WAVES/actions/runs/40107959365), artifact `waves-debug-apk` 6,272,620 bytes zipped / 6,761,946 bytes APK).
 - Production output: approximately 3.1 MB across 96 files, including KaTeX fonts and the bundled Inter Tight / JetBrains Mono subsets.
 
 ### Releases
 
 - **`v1.0.0-debug.1`** (pre-release, tag on `3f7a656`) — asset `WaveS-1.0.0-debug.apk`, 6.4 MB. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.1>
 - **`v1.0.0-debug.2`** (pre-release, tag on `51b238f`) — asset `WaveS-1.0.0-debug.2.apk`, 6.4 MB. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.2>
+- **`v1.0.0-debug.3`** (pre-release, tag on `8ac3fe8`) — asset `WaveS-1.0.0-debug.3.apk`, 6,761,946 bytes. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.3>
 - Debug-signed. Uninstall a previous debug build before installing this one; each CI run uses a different debug key.
-- Verified the asset is publicly downloadable without authentication.
+- Verified each asset is publicly downloadable without authentication (debug.3: HTTP 206 on a range GET, HEAD 200 with the right `Content-Length`).
 
 ### Phase 0 changes (committed as `d3614b6`)
 
@@ -142,11 +145,29 @@ The first installed APK reported Android 10 / WebView 155, roughly 12–15 fps, 
 - Immersive fullscreen: `MainActivity.java` now calls `WindowCompat.setDecorFitsSystemWindows(false)`, hides the system bars with `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`, uses `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`, and re-applies on window focus. `styles.xml` sets the status/navigation bar and window background to `#061018`.
 - Discoverability: the About card now has a visible **Performance HUD** checkbox. The five-tap gesture on the build line still works.
 
+### Phase 2.2 changes (device feedback, committed as `8ac3fe8`)
+
+debug.2 on the M20 reported 29–34 fps, p95 33.4 ms, DPR bottomed out at 1.00 with a 450x499 buffer on a 1080 px panel, and the user said text and graphics looked soft. That ruled out fill rate as the bottleneck: the per-frame cost was JS and canvas path work, so lowering resolution further could only make it blurrier without reaching 60 fps.
+
+- The section view is now two stacked canvases in `src/App.tsx`: `om-canvas-backdrop` paints the scenery once per parameter/theme/selection change at up to 2.5x device pixels (`useCanvasSize(backdropRef, 2.5)`), while the interactive canvas paints only the moving parts every frame at the adaptive DPR.
+- `src/waveRays.ts` was split into `rayGeometry`, `drawRayBackdrop`, `drawRayWaves`, `drawRayForeground` and a public `drawWaveRays` wrapper. `RayOptions.layer: "static" | "animated"` selects a pass; omitting it still paints everything in order, so the web fallback and the tests are unchanged. Both passes derive every coordinate from the same `rayGeometry`, so the layers stay pixel-aligned.
+- Dust motes and the absorbed-energy bloom moved to the animated pass (they follow the clock); the slab fills, tiles, grid, labels, ruler, dishes, meters and pills stay static.
+- Animated-pass micro-optimisations: per-segment wave gradients are cached per context (`linearOn`), wavefronts and particle trails use solid strokes instead of one gradient per item, `rgba()` strings are memoised, and the crest ribbon is built without copying and reversing an array every frame.
+- Crest sampling in low-power went from 3.2 px to 4 px; the source rings moved to the animated layer so they no longer force a scenery repaint.
+- PNG export now composites scenery over waves, taking the sharper scenery canvas as the output size.
+- The About build line now includes a `__BUILD_SHA__` commit stamp (from `git rev-parse --short HEAD` in `vite.config.ts`, `"dev"` outside a checkout), so the installed build can be identified on the phone.
+
+Desktop benchmark at 450x499, low-power, shadows off: full scene at 1.0x 5.4 ms -> animated pass at 1.0x 3.9 ms, 1.25x 4.1 ms, 1.5x 4.6 ms; static pass at 2.5x 8.75 ms but only on change. A single-pass vs stacked comparison measured a mean difference of 0.79 per channel with 6,989 of 504,900 pixels over 40 — pure text/edge antialiasing, no missing or shifted geometry.
+
+### What Phase 2.2 does not include
+
+- The spatial 3D view is still a single canvas at the adaptive DPR; it was not part of the reported problem.
+- If p95 is still above 22 ms at DPR 1.0, the next lever is drawing the internal-reflection waves with fewer or no wavefronts on coarse pointers.
+
 ### What Phase 2 does not include
 
 - No release/signed workflow yet (Phase 4).
 - No native file/share/back-button integration yet (Phase 3); status bar and immersive mode are already done.
-- No static-layer cache yet (perf lever 3).
 - No local Gradle build: this machine has no JDK 21 and no Android SDK.
 
 ## 5. Roadmap
@@ -179,7 +200,7 @@ Status: committed and pushed (`c835e4e`), awaiting real-device smoke test.
 
 ### Phase 2 - Debug CI
 
-Status: done. Runs `40091642446` and `40098152879` are green; artifact `waves-debug-apk` is 5.98 MB, published as `v1.0.0-debug.1` and then `v1.0.0-debug.2`.
+Status: done. Runs `40091642446`, `40098152879` and `40107959365` are green; artifact `waves-debug-apk` is 5.98–6.0 MB, published as `v1.0.0-debug.1`, `v1.0.0-debug.2` and `v1.0.0-debug.3`.
 
 - [x] Add `.github/workflows/android-debug.yml`.
 - [x] Node 22, JDK 21, Android SDK 36.
@@ -299,7 +320,9 @@ Select-String -Path src\styles.css -Pattern "dvh"
 
 ## 10. Risks
 
-- 60 fps at DPR 2 is not guaranteed on the Mali-G71 MP2. Adaptive DPR starts at 1.5 on touch and steps down to 1; if p95 is still above 22 ms at DPR 1, the static-layer cache is the next lever.
+- 60 fps at DPR 2 is not guaranteed on the Mali-G71 MP2. Adaptive DPR starts at 1.5 on touch and steps down to 1; the scenery layer now stays sharp at 2.5x regardless of that ladder, so a low DPR only softens the moving waves.
+- debug.2 measured p95 33.4 ms at DPR 1.00, i.e. the animated pass alone was too slow. debug.3 cuts its per-frame work roughly in half on desktop; the phone number is still unknown. If p95 is still above 22 ms, the next lever is fewer/no internal-reflection wavefronts on coarse pointers.
+- The scenery canvas is repainted on every parameter, theme, hover or selection change. Dragging a slider therefore repaints 2.5x scenery each step; watch for stutter while dragging on the phone.
 - Headless Chrome reports 26 to 29 fps, so local browser FPS numbers are not meaningful. Only the phone counts.
 - Debug builds are slower and re-signed. Do not compare them to release.
 - Android 10 is end-of-life; an outdated WebView can dominate performance and rendering.
@@ -310,20 +333,20 @@ Select-String -Path src\styles.css -Pattern "dvh"
 
 ## 11. Open questions
 
-- Confirm the adaptive DPR thresholds (22 ms down, 14 ms up, 3 s settle) against debug.2 on the M20.
+- Confirm the adaptive DPR thresholds (22 ms down, 14 ms up, 3 s settle) against debug.3 on the M20.
 - The short-landscape present layout fits, but the annotations are cramped at 360 px height. Decide whether to hide the brand row in short landscape.
 - Decide who holds the release keystore and where the offline backup lives.
 - Decide whether v1 should include a changelog file or rely on GitHub Release notes.
 
 ## 12. File map
 
-- `src/App.tsx`: all UI, canvas orchestration, exports, present mode, About/help overlays, perf instrumentation.
+- `src/App.tsx`: all UI, canvas orchestration, exports, present mode, About/help overlays, perf instrumentation. The section view uses two stacked canvases: `om-canvas-backdrop` for the sharp, rarely repainted scenery and the interactive canvas for the animated pass.
 - `src/styles.css`: complete visual system, responsive breakpoints, safe-area rules, HUD styles.
 - `src/perf.ts`: frame ring buffer and `readPerf`.
 - `src/PerfHud.tsx`: hidden diagnostic overlay.
 - `src/vite-env.d.ts`: `__APP_VERSION__` declaration.
 - `src/physics.ts`: transfer-matrix physics. Do not change.
-- `src/waveRays.ts`: 2D cross-section renderer.
+- `src/waveRays.ts`: 2D cross-section renderer. Split into `rayGeometry`, `drawRayBackdrop` (scenery), `drawRayWaves` (animated), `drawRayForeground` (instruments/labels) and the `drawWaveRays` wrapper; `layer` selects one pass.
 - `src/spatialScene.ts`: spatial renderer.
 - `src/materialSurfaces.ts`: procedural material textures.
 - `src/share.ts`: URL state encoding/decoding.
@@ -370,6 +393,15 @@ Planned:
 - `npm test` 16/16 and `npm run build` green. Pushed as `51b238f`.
 - CI run [`40098152879`](https://github.com/FYI88/WAVES/actions/runs/40098152879) is green: the new Java and theme compile, tests/build/`apksigner`/size guard pass. Artifact 5.98 MB.
 - Published **`v1.0.0-debug.2`** on `51b238f` with `WaveS-1.0.0-debug.2.apk` (6,760,842 bytes); unauthenticated download returns HTTP 206.
+- The user installed debug.2: the HUD checkbox works, but the scene ran at 29–34 fps with p95 33.4 ms at DPR 1.00 in a 450x499 buffer on a 1080 px panel, and text/graphics looked soft.
+- Diagnosed it as per-frame canvas work, not fill rate: at DPR 1.00 the cost cannot be the pixel count, and lowering resolution further was the direct cause of the blur.
+- Phase 2.2: split the section view into a scenery canvas at up to 2.5x device pixels (repainted only on parameter/theme/hover/selection change) and an animated canvas at the adaptive DPR. `waveRays.ts` gained `rayGeometry`, `drawRayBackdrop`, `drawRayWaves`, `drawRayForeground` and a `layer` option; `App.tsx` wires the second canvas and composites both for PNG export.
+- Animated-pass micro-optimisations: cached per-segment gradients, solid wavefront/particle strokes, memoised `rgba()`, no array copy/reverse in the crest polygon, 4 px crest sampling in low-power.
+- Added a `__BUILD_SHA__` commit stamp to the About build line so the installed build is identifiable.
+- Verified with the browser harness: single-pass vs stacked mean difference 0.79 per channel, 6,989/504,900 pixels over 40 — text/edge antialiasing only. Desktop benchmark at 450x499 low-power: full 5.4 ms -> animated 3.9 ms at 1.0x, 4.6 ms at 1.5x; static 8.75 ms at 2.5x but only on change.
+- `npm test` 16/16, `npm run build` green, `npx cap sync android` green. Pushed as `8ac3fe8`.
+- CI run [`40107959365`](https://github.com/FYI88/WAVES/actions/runs/40107959365) is green.
+- Published **`v1.0.0-debug.3`** on `8ac3fe8` with `WaveS-1.0.0-debug.3.apk` (6,761,946 bytes); unauthenticated range GET returns HTTP 206.
 - No post-fix device measurement yet.
 
 ### 2026-10-22
@@ -385,7 +417,7 @@ Planned:
 
 ## 14. Next actions
 
-1. Install `WaveS-1.0.0-debug.2.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.2> on the M20 (uninstall debug.1 first).
-2. Open About, tick **Performance HUD**, play for 30 s and report fps, p95, DPR, and whether the status/navigation bars are hidden.
-3. If p95 is still above 22 ms at DPR 1, implement the static-layer cache (perf lever 3).
+1. Install `WaveS-1.0.0-debug.3.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.3> on the M20 (uninstall debug.2 first).
+2. Open About, check that the build line shows `8ac3fe8`, tick **Performance HUD**, play for 30 s and report fps, p95, DPR, buffer size, and whether text/graphics now look sharp.
+3. If p95 is still above 22 ms at DPR 1, cut the internal-reflection wavefronts on coarse pointers (perf lever 5) and re-measure.
 4. Then Phase 3 native integration: PNG/CSV share, back button, splash; Phase 4: signed release.
