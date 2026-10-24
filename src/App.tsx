@@ -272,13 +272,7 @@ const en = {
   repoTitle: "Open the GitHub repository in a new tab",
   contactTitle: "Send an email",
   authorLabel: "Author",
-  schoolLabel: "School",
   contactLabel: "Contact",
-  modelLabel: "Model",
-  emailSchool: "Institutional",
-  emailPersonal: "Personal",
-  modelNote:
-    "Stack of homogeneous layers in free space, solved with a stable transfer recursion. Complex permittivity, Snell’s law and complex Fresnel coefficients with multiple internal reflections.",
   linear: "Lin",
   db: "dB",
   angleShort: "θ",
@@ -415,13 +409,7 @@ const fr: Dict = {
   repoTitle: "Ouvrir le dépôt GitHub dans un nouvel onglet",
   contactTitle: "Envoyer un email",
   authorLabel: "Auteur",
-  schoolLabel: "École",
   contactLabel: "Contact",
-  modelLabel: "Modèle",
-  emailSchool: "Institutionnel",
-  emailPersonal: "Personnel",
-  modelNote:
-    "Empilement de couches homogènes dans l’air, résolu par une récursion de transfert stable. Permittivité complexe, loi de Snell et coefficients de Fresnel complexes avec réflexions internes multiples.",
   linear: "Lin",
   db: "dB",
   angleShort: "θ",
@@ -476,10 +464,7 @@ const fr: Dict = {
 const DICTS: Record<Lang, Dict> = { fr, en };
 
 const REPO_URL = "https://github.com/FYI88/WAVES";
-const CONTACT_EMAILS = [
-  { labelKey: "emailSchool", address: "chetaine.younes@etu.uae.ac.ma" },
-  { labelKey: "emailPersonal", address: "youneschetaine@gmail.com" },
-] as const;
+const CONTACT_EMAILS = ["chetaine.younes@etu.uae.ac.ma", "youneschetaine@gmail.com"] as const;
 
 const tpl = (s: string, vars: Record<string, string>) =>
   s.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? "");
@@ -894,9 +879,9 @@ function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>, dprCap = 2): Ca
    The About card must show all of itself at once on a phone: no inner
    scrolling, close button always in view, and a strip of backdrop above and
    below that can be tapped to dismiss. The CSS compacts the card for narrow
-   screens; this only scales the whole card down (a vector transform, so text
-   stays sharp) when it still cannot fit, e.g. a very short viewport. Short
-   landscape is left scrollable by CSS, where scaling would make type unreadable. */
+   screens and lays it out sideways in short landscape; this only scales the
+   whole card down (a vector transform, so text stays sharp) when it still
+   cannot fit, e.g. an unusually short portrait viewport. */
 function useFitToViewport(ref: RefObject<HTMLDivElement | null>, active: boolean) {
   useLayoutEffect(() => {
     const card = ref.current;
@@ -915,15 +900,14 @@ function useFitToViewport(ref: RefObject<HTMLDivElement | null>, active: boolean
       frame = requestAnimationFrame(measure);
     };
     measure();
-    // KaTeX typesets after its dynamic import resolves, and the bundled fonts
-    // finish loading slightly later; both change the height, so measure again.
-    const timers = [200, 700].map((ms) => window.setTimeout(measure, ms));
+    // the bundled fonts finish loading slightly later and change the height
+    const timer = window.setTimeout(measure, 250);
     void document.fonts?.ready.then(measure).catch(() => {});
     window.addEventListener("resize", schedule);
     window.addEventListener("orientationchange", schedule);
     return () => {
       cancelAnimationFrame(frame);
-      timers.forEach((timer) => clearTimeout(timer));
+      clearTimeout(timer);
       window.removeEventListener("resize", schedule);
       window.removeEventListener("orientationchange", schedule);
     };
@@ -2063,25 +2047,6 @@ const Icon = {
     <svg viewBox="0 0 24 24" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"><path d="M12 3 2.5 20h19L12 3Z" /><path d="M12 10v4M12 17h.01" strokeLinecap="round" /></svg>
   ),
 };
-
-function Eq({ tex }: { tex: string }) {
-  const [html, setHtml] = useState<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    void import("katex/dist/katex.min.css");
-    import("katex").then(({ default: katex }) => {
-      if (!alive) return;
-      setHtml(katex.renderToString(tex, { throwOnError: false, displayMode: true }));
-    });
-    return () => {
-      alive = false;
-    };
-  }, [tex]);
-
-  if (!html) return <div className="om-eq om-eq-pending" aria-hidden />;
-  return <div className="om-eq" dangerouslySetInnerHTML={{ __html: html }} />;
-}
 
 function Stat(props: { label: string; value: string; unit?: string; sub?: string; tone?: string; delay: number }) {
   return (
@@ -3306,64 +3271,53 @@ export function App() {
             </div>
 
             <div className="om-about-body">
-              <div className="om-about-grid">
-                <div className="om-about-cell">
-                  <span className="om-about-label">{t.authorLabel}</span>
-                  <strong>{t.author}</strong>
-                </div>
-                <div className="om-about-cell">
-                  <span className="om-about-label">{t.schoolLabel}</span>
-                  <strong>{t.school}</strong>
-                </div>
+              <div className="om-about-section">
+                <span className="om-about-label">{t.authorLabel}</span>
+                <strong className="om-about-value">{t.author}</strong>
               </div>
 
-              <div className="om-about-block">
+              <div className="om-about-section">
                 <span className="om-about-label">{t.contactLabel}</span>
                 <div className="om-mails">
-                  {CONTACT_EMAILS.map((c) => (
-                    <a key={c.address} className="om-mail" href={`mailto:${c.address}`} title={t.contactTitle}>
+                  {CONTACT_EMAILS.map((address) => (
+                    <a key={address} className="om-mail" href={`mailto:${address}`} title={t.contactTitle}>
                       <span className="om-mail-icon">{Icon.mail}</span>
-                      <span className="om-mail-addr">{c.address}</span>
-                      <span className="om-mail-tag">{t[c.labelKey]}</span>
+                      <span className="om-mail-addr">{address}</span>
                     </a>
                   ))}
                 </div>
               </div>
 
-              <div className="om-model">
-                <div className="om-model-head">
-                  <span className="om-about-label">{t.modelLabel}</span>
-                  <span className="om-model-ref">ITU-R P.2040 § 3</span>
+              <div className="om-about-section om-about-foot">
+                <a className="om-about-repo" href={REPO_URL} target="_blank" rel="noopener noreferrer" title={t.repoTitle}>
+                  {Icon.github}
+                  <span>{t.repo}</span>
+                  <span className="om-about-arrow" aria-hidden>
+                    ↗
+                  </span>
+                </a>
+                <div className="om-about-meta">
+                  <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
+                    {buildInfo}
+                  </button>
+                  <label className="om-about-perf">
+                    <input
+                      type="checkbox"
+                      checked={perfOn}
+                      onChange={(event) => {
+                        const next = event.currentTarget.checked;
+                        setPerfOn(next);
+                        try {
+                          localStorage.setItem("waves:perf", next ? "1" : "0");
+                        } catch {
+                          /* storage unavailable: keep the session toggle */
+                        }
+                      }}
+                    />
+                    <span>{lang === "fr" ? "HUD perf" : "Perf HUD"}</span>
+                  </label>
                 </div>
-                <Eq tex={String.raw`\eta = \varepsilon' - j\,\frac{17.98\,\sigma}{f}`} />
-                <Eq tex={String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`} />
-                <Eq tex={String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`} />
-                <p className="om-model-note">{t.modelNote}</p>
               </div>
-
-              <a className="om-about-repo" href={REPO_URL} target="_blank" rel="noopener noreferrer" title={t.repoTitle}>
-                {Icon.github}
-                <span>{t.repo}</span>
-              </a>
-              <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
-                {buildInfo}
-              </button>
-              <label className="om-about-perf">
-                <input
-                  type="checkbox"
-                  checked={perfOn}
-                  onChange={(event) => {
-                    const next = event.currentTarget.checked;
-                    setPerfOn(next);
-                    try {
-                      localStorage.setItem("waves:perf", next ? "1" : "0");
-                    } catch {
-                      /* storage unavailable: keep the session toggle */
-                    }
-                  }}
-                />
-                <span>{lang === "fr" ? "HUD de performance" : "Performance HUD"}</span>
-              </label>
             </div>
           </div>
         </div>
