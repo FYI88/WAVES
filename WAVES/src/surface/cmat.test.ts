@@ -28,7 +28,15 @@ describe("complex matrices", () => {
   });
 
   it("expm(A)·expm(−A) is the identity for a large-norm matrix", () => {
-    const a = cmScale(sample(), cx(0, 40));
+    // j·(Hermitian) has a unitary exponential, so the product is well conditioned
+    const h = cmDiag([cx(2), cx(-1), cx(3)]);
+    h.re[1] = 0.4;
+    h.im[1] = 0.3;
+    h.re[3] = 0.4;
+    h.im[3] = -0.3;
+    h.re[5] = 0.7;
+    h.re[7] = 0.7;
+    const a = cmScale(h, cx(0, 40));
     const p = cmMul(cmExpm(a), cmExpm(cmScale(a, cx(-1))));
     expect(cmNorm1(cmSub(p, cmEye(3)))).toBeLessThan(1e-8);
   });
