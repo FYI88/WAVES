@@ -298,6 +298,8 @@ Status: not started.
 
 ### Versions
 
+Planned for Phase 3 — only `@capacitor/core`, `@capacitor/android` and `@capacitor/cli` are installed today; the rest are pinned targets, not dependencies yet.
+
 - `@capacitor/core`, `@capacitor/android`, `@capacitor/cli`: `8.5.3`.
 - `@capacitor/filesystem`: `8.1.5`.
 - `@capacitor/share`: `8.0.3`.
