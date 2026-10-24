@@ -15,6 +15,7 @@ import { drawWaveRays } from "./waveRays";
 import { decodeShare, encodeShare, shareHashOf } from "./share";
 import { recordFrame } from "./perf";
 import { PerfHud } from "./PerfHud";
+import { AIR_TINT } from "./render/util";
 import {
   C0,
   CUSTOM_SWATCH,
@@ -45,7 +46,6 @@ import {
 type LayerMat = MaterialId | "air";
 const LAYER_MATS: LayerMat[] = ["air", ...MATERIAL_IDS];
 const AIR_SWATCH = "linear-gradient(135deg, rgba(150,220,255,.55), rgba(150,220,255,.12) 60%, rgba(255,255,255,.35))";
-const AIR_TINT = "#8fd8ff";
 const MAX_LAYERS = 6;
 
 interface Layer {
@@ -974,6 +974,8 @@ interface SceneParams {
 interface SceneLayout {
   rects: { x0: number; x1: number; y0: number; y1: number }[];
   polygons?: { x: number; y: number }[][];
+  /** back-to-front draw order of `polygons` (spatial view) */
+  order?: number[];
   tiles?: { x0: number; x1: number; y0: number; y1: number; index: number }[];
 }
 
@@ -1155,7 +1157,6 @@ function RayScene(props: {
   const clock = useRef(0);
   const introStart = useRef<number | null>(null);
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-  const patterns = useRef(new Map<string, CanvasPattern | null>());
   const layout = useRef<SceneLayout>({ rects: [] });
   const french = props.lang === "fr";
 
@@ -1201,15 +1202,9 @@ function RayScene(props: {
       if (moving) clock.current += dt * cur.speed;
       const ctx = prepCanvas(canvas, size);
       if (!ctx) return;
-      const pats = cur.params.layers.map((layer) => {
-        if (layer.mat === "air") return null;
-        const key = `${layer.mat}-${cur.pal.dark}`;
-        if (!patterns.current.has(key)) patterns.current.set(key, ctx.createPattern(makeTexture(layer.mat, cur.pal.dark), "repeat"));
-        return patterns.current.get(key) ?? null;
-      });
       const parameters = { ...cur.params, hover: cur.hover };
       layout.current = cur.view === "spatial"
-        ? drawSpatialScene(ctx, size.w, size.h, clock.current, intro, parameters, cur.pal, pats, cur.fmtNum, { display: cur.display, annotations: cur.annotations, az: cur.orbit.az, el: cur.orbit.el, lang: cur.lang })
+        ? drawSpatialScene(ctx, size.w, size.h, clock.current, intro, parameters, cur.pal, cur.fmtNum, { display: cur.display, annotations: cur.annotations, az: cur.orbit.az, el: cur.orbit.el, lang: cur.lang })
         : drawWaveRays(ctx, size.w, size.h, clock.current, parameters, cur.pal, cur.fmtNum, { display: cur.display, reflections: cur.reflections, annotations: cur.annotations, lang: cur.lang });
       recordFrame(elapsed, { dpr: size.dpr, width: canvas.width, height: canvas.height });
     };
@@ -1225,7 +1220,10 @@ function RayScene(props: {
     if (tile) return tile.index;
     const polygons = layout.current.polygons;
     if (polygons) {
-      for (let index = polygons.length - 1; index >= 0; index--) {
+      // topmost first: walk the draw order backwards
+      const order = layout.current.order ?? polygons.map((_, index) => index);
+      for (let rank = order.length - 1; rank >= 0; rank--) {
+        const index = order[rank];
         const polygon = polygons[index];
         let inside = false;
         for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current++) {

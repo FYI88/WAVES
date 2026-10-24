@@ -1,0 +1,36 @@
+# GitLab CI for the WaveS web simulator (the app lives in WAVES/).
+# WAVES/.github/workflows/ is GitHub-only (Android APK) and is ignored by GitLab.
+
+image: node:22
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages:
+  - test
+  - build
+
+.node-job:
+  cache:
+    key:
+      files:
+        - WAVES/package-lock.json
+    paths:
+      - WAVES/.npm/
+  before_script:
+    - cd WAVES
+    - npm ci --cache .npm --prefer-offline
+
+test:
+  extends: .node-job
+  stage: test
+  script:
+    - npm test
+
+build:
+  extends: .node-job
+  stage: build
+  script:
+    - npm run build
