@@ -4,7 +4,7 @@ Last updated: 2026-10-24
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
-Head at handoff: `1776c4f` (Phase 2.3) - release tag `v1.0.0-debug.2` points at `51b238f`
+Head at handoff: `8741636` (Phase 2.4.1) - latest release tag `v1.0.0-debug.6` points at `8741636`
 
 ## 1. Mission
 
@@ -77,9 +77,9 @@ Do not change the physics or the chart semantics.
 
 ### Repository
 
-- Head: `1776c4f` (Phase 2.3, About card fit).
-- Recent commits: `1776c4f` phone-sized About card, `bdf8c1f` Phase 2.2 docs, `8ac3fe8` two-layer scenery/wave split, `773e157` debug.2 device-report docs.
-- Phases 0–2.3 are committed and pushed. The current debug APK is pre-release `v1.0.0-debug.4`.
+- Head: `8741636` (Phase 2.4.1, GitHub button restored).
+- Recent commits: `8741636` bordered GitHub button, `00e9bf3` About card without the model block, `bb37d3c` Phase 2.3 docs, `1776c4f` phone-sized About card.
+- Phases 0–2.4.1 are committed and pushed. The current debug APK is pre-release `v1.0.0-debug.6`.
 - `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
 ### Test and build status
@@ -90,7 +90,9 @@ Do not change the physics or the chart semantics.
 - GitHub Actions `Android debug APK`: green on `51b238f` (run `40098152879`, 5.98 MB artifact); this run also compiled the immersive `MainActivity` and the new theme items.
 - GitHub Actions `Android debug APK`: green on `8ac3fe8` (run [`40107959365`](https://github.com/FYI88/WAVES/actions/runs/40107959365), artifact `waves-debug-apk` 6,272,620 bytes zipped / 6,761,946 bytes APK).
 - GitHub Actions `Android debug APK`: green on `1776c4f` (run [`40111884605`](https://github.com/FYI88/WAVES/actions/runs/40111884605), artifact 6,273,599 bytes zipped / 6,762,622 bytes APK).
-- Production output: approximately 3.1 MB across 96 files, including KaTeX fonts and the bundled Inter Tight / JetBrains Mono subsets.
+- GitHub Actions `Android debug APK`: green on `00e9bf3` (run [`40114195190`](https://github.com/FYI88/WAVES/actions/runs/40114195190), artifact `waves-debug-apk` 5,288,051 bytes zipped / 5,768,915 bytes APK).
+- GitHub Actions `Android debug APK`: green on `8741636` (run [`40115210963`](https://github.com/FYI88/WAVES/actions/runs/40115210963), artifact `waves-debug-apk` 5,288,093 bytes zipped / 5,768,947 bytes APK).
+- Production output: 1,897,330 bytes across 35 files. Dropping KaTeX removed ~1.2 MB and 61 files (was ~3.1 MB / 96 files).
 
 ### Releases
 
@@ -98,8 +100,10 @@ Do not change the physics or the chart semantics.
 - **`v1.0.0-debug.2`** (pre-release, tag on `51b238f`) — asset `WaveS-1.0.0-debug.2.apk`, 6.4 MB. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.2>
 - **`v1.0.0-debug.3`** (pre-release, tag on `8ac3fe8`) — asset `WaveS-1.0.0-debug.3.apk`, 6,761,946 bytes. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.3>
 - **`v1.0.0-debug.4`** (pre-release, tag on `1776c4f`) — asset `WaveS-1.0.0-debug.4.apk`, 6,762,622 bytes. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.4>
+- **`v1.0.0-debug.5`** (pre-release, tag on `00e9bf3`) — asset `WaveS-1.0.0-debug.5.apk`, 5,768,915 bytes, SHA-256 `B6B1CB30110B6331E049824CA2FB0BE5CE45B5546FB663EC0859B793060D8113`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.5>
+- **`v1.0.0-debug.6`** (pre-release, tag on `8741636`) — asset `WaveS-1.0.0-debug.6.apk`, 5,768,947 bytes, SHA-256 `BA41D2BFF832CEF97AB0ECDDB03D263FB638AB97B41D6098402487475C555363`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.6>
 - Debug-signed. Uninstall a previous debug build before installing this one; each CI run uses a different debug key.
-- Verified each asset is publicly downloadable without authentication (debug.3: HTTP 206 on a range GET, HEAD 200 with the right `Content-Length`).
+- Verified each asset is publicly downloadable without authentication (debug.5 and debug.6: HTTP 206 on a range GET, HEAD 200 with the right `Content-Length`, and a full unauthenticated download matched the local SHA-256).
 
 ### Phase 0 changes (committed as `d3614b6`)
 
@@ -172,6 +176,32 @@ The About card ("info" button) scrolled on the phone, and once scrolled the abso
 - The backdrop now closes on `pointerdown` (first contact) as well as `click`, and only when the event target is the backdrop itself, so a scroll gesture outside the card dismisses it immediately. Tapping inside the card still does nothing.
 - Verified in a 320x568 iframe: card fully inside, no scroll, close visible, 3 KaTeX equations rendered, inside tap keeps it open, outside tap closes, close button closes.
 
+### Phase 2.4 changes (design feedback, committed as `00e9bf3`)
+
+The user rejected the About card as out of proportion — awkward spacing and a large decorative block — and asked for the model block to be removed.
+
+- Removed the `.om-model` block, all three KaTeX equations and the model note, plus the `modelLabel`, `modelNote`, `schoolLabel`, `emailSchool` and `emailPersonal` i18n keys. `katex` is uninstalled; production output fell to 1,897,330 bytes / 35 files.
+- Rebuilt the card as one ruled column: head (logo, kicker, title, tagline, close), then author, contact and footer sections separated by hairlines. No inner boxes, no decorative tags, one accent hairline at the top.
+- Card width is `min(430px, 100%)` on desktop (was 560 px) and sized by its content; measured 430x360.9 px at 800x656.
+- Head is a three-column grid (`auto minmax(0, 1fr) auto`) so the close button sits in the flow instead of being absolutely positioned — it can no longer scroll or overlap the title.
+- Contact rows are plain `mailto:` links with an icon, the address and no "Institutional/Personal" tags; `CONTACT_EMAILS` is now a plain string array. Both addresses fit on one line at 320 px.
+- Footer combines the repository link, the build line and the HUD checkbox in one meta strip; the build line is left-aligned 9.5 px mono (9 px under 480 px).
+- **Specificity fix:** `.om button { font: inherit; color: inherit; }` (0,1,1) outranked `.om-about-build` and `.om-about-close` (0,1,0), so the build line rendered at 15 px body ink instead of 9.5 px mono grey. The About rules are now `.om-about .om-about-build` / `.om-about .om-about-close` (0,2,0). This was the main reason the card looked lopsided.
+- Phone layout is one `max-width: 480px` step driven by a `--about-pad` custom property (16 px); nothing is hidden and no section changes shape. Measured 361.1 px tall at both 320x568 and 360x640, leaving 103.5 px and 139.5 px of tappable backdrop above and below, no scroll, close visible.
+- Short landscape: `min-width: 620px and max-height: 520px` becomes a two-column grid (232 px head panel + body) measured 660x254.9 px at 780x360 with no scroll. Narrower short landscape falls back to a scroll with a sticky head, ordered after the two-column rule so it cannot override it.
+- `useFitToViewport` no longer waits on the KaTeX import: one 250 ms re-measure plus `document.fonts.ready`.
+- Verified: 16/16 tests, `tsc --noEmit`, `npm run build`, `npx cap sync android`; inside tap keeps the card open, outside `pointerdown` closes it, the close button closes it; a simulated 40 px coarse close keeps the card at 361.1 px. The shipped APK contains the `00e9bf3` stamp, the section markup, the specificity-fixed rules and the landscape breakpoint, and no KaTeX assets or references.
+
+### Phase 2.4.1 changes (design follow-up, committed as `8741636`)
+
+The plain repository row lost the bordered button the user liked, including its hover tint and press scale.
+
+- Restored `.om-about-repo` as the bordered button: 40 px tall, 10 px radius, 1 px `--om-line-2` border, transparent background, 16 px GitHub icon, centred label.
+- Restored its effects: hover fills with 6% accent and shifts the border to 45% accent; `:active` scales to 0.995. The `↗` arrow that came with the plain row is gone.
+- Phones keep the 34 px height and 11.5 px label under 480 px, so the card grows only 6 px: 367.1 px tall at both 320x568 and 360x640, leaving 100.5 px and 136.5 px of backdrop above and below.
+- Short landscape is 660x266.9 px at 780x360 with no scroll and 46.5 px strips; the footer is pushed to the bottom of the right column, so the 40 px button still fits.
+- Re-verified: 16/16 tests, `tsc --noEmit`, `npm run build`, `npx cap sync android`; no scroll at 320x568, 360x640 or 780x360; close visible; inside tap keeps it open, outside `pointerdown` and the close button dismiss; a simulated 40 px coarse close keeps the card at 367.1 px with a two-line tagline. The shipped APK contains the `8741636` stamp, the 40 px and 34 px button rules, and the hover/press effects, with no `om-about-arrow` markup and no KaTeX references.
+
 ### What Phase 2.3 does not include
 
 - The keyboard shortcuts sheet (`.om-help`) still scrolls; it is desktop-only and its content is a key list.
@@ -217,7 +247,7 @@ Status: committed and pushed (`c835e4e`), awaiting real-device smoke test.
 
 ### Phase 2 - Debug CI
 
-Status: done. Runs `40091642446`, `40098152879` and `40107959365` are green; artifact `waves-debug-apk` is 5.98–6.0 MB, published as `v1.0.0-debug.1`, `v1.0.0-debug.2` and `v1.0.0-debug.3`.
+Status: done. Runs `40091642446`, `40098152879`, `40107959365`, `40111884605`, `40114195190` and `40115210963` are green; artifact `waves-debug-apk` is 5.3–6.3 MB zipped, published as `v1.0.0-debug.1` through `v1.0.0-debug.6`.
 
 - [x] Add `.github/workflows/android-debug.yml`.
 - [x] Node 22, JDK 21, Android SDK 36.
@@ -426,6 +456,15 @@ Planned:
 - CI run [`40111884605`](https://github.com/FYI88/WAVES/actions/runs/40111884605) is green.
 - Published **`v1.0.0-debug.4`** on `1776c4f` with `WaveS-1.0.0-debug.4.apk` (6,762,622 bytes); unauthenticated range GET returns HTTP 206 and the APK contains the `1776c4f` stamp plus the compact About CSS.
 - No post-fix device measurement yet.
+- User feedback on debug.4: the About card still looked out of proportion, and the ITU-R model block took too much space; asked for the model block to be removed.
+- Phase 2.4: removed `.om-model`, the three KaTeX equations, the model note and the `modelLabel` / `modelNote` / `schoolLabel` / `emailSchool` / `emailPersonal` keys; uninstalled `katex`; rebuilt the card as one ruled column (430 px desktop width, in-flow close button, plain contact rows, footer meta strip) and fixed the `.om button` specificity clash that rendered the build line at 15 px.
+- Measured 361.1 px at 320x568 and 360x640, 660x254.9 px in short landscape, no scroll; inside tap keeps the card open, outside `pointerdown` and the close button dismiss. `npm test` 16/16, `npm run build` and `npx cap sync android` green. Pushed as `00e9bf3`.
+- CI run [`40114195190`](https://github.com/FYI88/WAVES/actions/runs/40114195190) green; artifact 5,288,051 bytes zipped / 5,768,915 bytes APK. Production output 1,897,330 bytes / 35 files, down from ~3.1 MB / 96.
+- Published **`v1.0.0-debug.5`** on `00e9bf3` with `WaveS-1.0.0-debug.5.apk` (5,768,915 bytes); range GET 206, HEAD 200 with the right length, and a full unauthenticated download matched SHA-256 `B6B1CB30…D8113`.
+- User feedback on debug.5: the plain repository row lost the old bordered GitHub button and its hover/press effects.
+- Phase 2.4.1: restored the 40 px bordered `.om-about-repo` button (10 px radius, accent-tinted hover fill, accent border on hover, 0.995 press scale), removed the `↗` arrow, and kept the 34 px phone height. Card is 367.1 px at 320x568 and 360x640, 660x266.9 px in short landscape, still no scroll. Tests/build/sync green. Pushed as `8741636`.
+- CI run [`40115210963`](https://github.com/FYI88/WAVES/actions/runs/40115210963) green; artifact 5,288,093 bytes zipped / 5,768,947 bytes APK. The APK contains the `8741636` stamp and the restored button rules.
+- Published **`v1.0.0-debug.6`** on `8741636` with `WaveS-1.0.0-debug.6.apk` (5,768,947 bytes); range GET 206, HEAD 200, and a full unauthenticated download matched SHA-256 `BA41D2BF…555363`.
 
 ### 2026-10-22
 
@@ -440,8 +479,8 @@ Planned:
 
 ## 14. Next actions
 
-1. Install `WaveS-1.0.0-debug.4.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.4> on the M20 (uninstall debug.3 first).
-2. Open About: confirm the whole card is visible at once, no scrolling, close button on screen; tap above or below it and confirm it closes.
-3. Check the build line shows `1776c4f`, tick **Performance HUD**, play for 30 s and report fps, p95, DPR, buffer size, and whether text/graphics look sharp.
+1. Install `WaveS-1.0.0-debug.6.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.6> on the M20 (uninstall debug.5 first).
+2. Open About: confirm the whole card is visible at once, no scrolling, close button on screen; tap above or below it and confirm it closes. Hover or press the GitHub button and confirm the bordered style and its effects are back.
+3. Check the build line shows `8741636`, tick **Performance HUD**, play for 30 s and report fps, p95, DPR, buffer size, and whether text/graphics look sharp.
 4. If p95 is still above 22 ms at DPR 1, cut the internal-reflection wavefronts on coarse pointers (perf lever 5) and re-measure.
 5. Then Phase 3 native integration: PNG/CSV share, back button, splash; Phase 4: signed release.
