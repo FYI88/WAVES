@@ -843,7 +843,9 @@ function drawRayForeground(
   meter(refEnd.x - 48 * scale, refEnd.y - 14 * scale, params.R, palette.ref);
 
   if (options.annotations) {
-    const polGlyph = params.pol === "TE" ? "E ⊙" : params.pol === "TM" ? "E ↕" : "TE+TM";
+    // plain text: the old circled-dot / arrow glyphs fall back to the Android
+    // colour emoji font and read as an emoji inside the label
+    const polGlyph = params.pol === "AVG" ? "TE+TM" : params.pol;
     pill(french ? "INCIDENTE" : "INCIDENT", { x: source.x, y: source.y - (compact ? 30 : 38) }, palette.inc, polGlyph);
     pill(french ? "TRANSMISE" : "TRANSMITTED", { x: receiver.x, y: Math.min(bottom + 4, receiver.y + (compact ? 30 : 38)) }, palette.tra, `${format(params.T * 100, params.T < 0.01 ? 2 : 1)} %`);
     pill(french ? "RÉFLÉCHIE" : "REFLECTED", { x: refEnd.x, y: Math.min(bottom + 4, refEnd.y + (compact ? 30 : 38)) }, palette.ref, `${format(params.R * 100, 1)} %`);

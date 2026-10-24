@@ -1305,9 +1305,14 @@ function RayScene(props: {
         return patterns.current.get(key) ?? null;
       });
       const parameters = { ...cur.params, hover: cur.hover };
-      layout.current = cur.view === "spatial"
-        ? drawSpatialScene(ctx, size.w, size.h, clock.current, intro, parameters, cur.pal, pats, cur.fmtNum, { display: cur.display, annotations: cur.annotations, az: cur.orbit.az, el: cur.orbit.el, lang: cur.lang, shadows: !COARSE_POINTER })
-        : drawWaveRays(ctx, size.w, size.h, clock.current, parameters, cur.pal, cur.fmtNum, { display: cur.display, reflections: cur.reflections, annotations: cur.annotations, lang: cur.lang, lowPower: COARSE_POINTER, shadows: !COARSE_POINTER, layer: "animated" });
+      if (cur.view === "spatial") {
+        // the camera moves every frame, so the hit geometry must be rebuilt
+        layout.current = drawSpatialScene(ctx, size.w, size.h, clock.current, intro, parameters, cur.pal, pats, cur.fmtNum, { display: cur.display, annotations: cur.annotations, az: cur.orbit.az, el: cur.orbit.el, lang: cur.lang, shadows: !COARSE_POINTER });
+      } else {
+        // the animated pass paints waves only; its hit geometry is empty. The
+        // static pass owns the layer tiles/rects and publishes them below.
+        drawWaveRays(ctx, size.w, size.h, clock.current, parameters, cur.pal, cur.fmtNum, { display: cur.display, reflections: cur.reflections, annotations: cur.annotations, lang: cur.lang, lowPower: COARSE_POINTER, shadows: !COARSE_POINTER, layer: "animated" });
+      }
       recordFrame(elapsed, { dpr: size.dpr, width: canvas.width, height: canvas.height });
     };
     raf = requestAnimationFrame(frame);
@@ -1326,7 +1331,7 @@ function RayScene(props: {
       ctx.clearRect(0, 0, staticSize.w, staticSize.h);
       return;
     }
-    drawWaveRays(ctx, staticSize.w, staticSize.h, 0, { ...props.params, hover }, props.pal, props.fmtNum, {
+    layout.current = drawWaveRays(ctx, staticSize.w, staticSize.h, 0, { ...props.params, hover }, props.pal, props.fmtNum, {
       display,
       reflections,
       annotations,
@@ -1368,7 +1373,9 @@ function RayScene(props: {
       aria-label={french ? "Simulation : onde incidente, milieux, réflexion et transmission. Sélectionnez un milieu dans la liste pour le modifier." : "Simulation: incident wave, media, reflection and transmission. Select a medium in the layer list to edit it."}
       role="img"
       onPointerMove={event => {
-        setHover(hit(event));
+        // a finger has no hover: updating it repaints the 2.5x scenery on
+        // every move, which makes taps on the material tiles feel frozen
+        if (!COARSE_POINTER) setHover(hit(event));
         const d = drag.current;
         if (d && view === "spatial") {
           const dx = (event.clientX - d.x) / cssZoom();
@@ -2538,7 +2545,7 @@ export function App() {
   const selDef = selL.mat === "air" || selL.mat === "custom" ? null : MATERIALS[selL.mat];
   const matName = (m: LayerMat) => t.materials[m];
 
-  const sceneParams: SceneParams = {
+  const sceneParams = useMemo<SceneParams>(() => ({
     etas: res.etas,
     ds: res.ds,
     theta: sim.angle,
@@ -2559,7 +2566,7 @@ export function App() {
     freq: sim.freq,
     pol: sim.pol,
     labels: { normal: t.normal, tx: "Tx", rx: "Rx", refl: t.reflShort },
-  };
+  }), [res, sim, t]);
 
   const bands = useMemo(
     () => sim.layers.map((l) => ({ tint: matTint(l.mat), label: matName(l.mat).toUpperCase(), air: l.mat === "air" })),
