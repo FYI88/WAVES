@@ -4,7 +4,7 @@ Last updated: 2026-10-24
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
-Head at handoff: `6b0c395` (docs) - release tag `v1.0.0-debug.1` points at `3f7a656`
+Head at handoff: `51b238f` - release tag `v1.0.0-debug.2` points at `51b238f`
 
 ## 1. Mission
 
@@ -63,14 +63,12 @@ The HUD shows fps, p95 frame time, DPR, canvas buffer size and `live`/`idle`. It
 
 The About card version line shows the app version plus the Android and Chrome/WebView versions parsed from the user agent. Record the phone's WebView version before trusting FPS numbers: Android 10 is end-of-life and an old WebView can dominate results.
 
-### Perf levers for Phase 1
+### Perf levers (applied in order)
 
-Apply only if the release baseline misses the contract, in this order:
-
-1. One-way adaptive DPR: 2 -> 1.75 -> 1.5 -> 1.25 -> 1 after a 2 s warm-up when p95 is above 22 ms.
-2. Mobile shadow tier: disable canvas `shadowBlur` on coarse pointers.
-3. Static-layer cache: render the wall/scene background to an offscreen canvas and redraw only when parameters change.
-4. Reduce spatial detail (grid density, sample counts) without changing physics.
+1. Adaptive DPR (done in `51b238f`): 2 -> 1.75 -> 1.5 -> 1.25 -> 1 after a 3 s warm-up when p95 is above 22 ms. Coarse pointers start at 1.5; the choice is persisted in `localStorage["waves:dprCap"]`.
+2. Mobile shadow tier (done in `51b238f`): canvas `shadowBlur` is off on coarse pointers, and CSS `backdrop-filter` is disabled there too.
+3. Static-layer cache: render the wall/scene background to an offscreen canvas and redraw only when parameters change. Not done yet.
+4. Reduce spatial detail (grid density, sample counts) without changing physics. Partly done: coarser crest sampling, every second wavefront and no particle halos in the 2D low-power tier.
 
 Do not change the physics or the chart semantics.
 
@@ -78,9 +76,9 @@ Do not change the physics or the chart semantics.
 
 ### Repository
 
-- Head: `6b0c395` (docs after Phase 2).
-- Recent commits: `6b0c395` handoff CI record, `3f7a656` Phase 2 (debug CI), `c835e4e` Phase 1 (Capacitor + bundled fonts).
-- Phases 0–2 are committed, pushed and CI-verified. The debug APK is published as pre-release `v1.0.0-debug.1`.
+- Head: `51b238f` (Phase 2.1 perf + immersive; docs commit follows).
+- Recent commits: `51b238f` adaptive DPR/mobile tier/immersive, `1dc1b52` debug.1 release docs, `3f7a656` Phase 2 (debug CI), `c835e4e` Phase 1 (Capacitor + bundled fonts).
+- Phases 0–2.1 are committed, pushed and CI-verified. The debug APK is published as pre-release `v1.0.0-debug.2`.
 - `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
 ### Test and build status
@@ -88,11 +86,13 @@ Do not change the physics or the chart semantics.
 - `npm test`: 16/16 passing.
 - `npm run build`: green (`tsc --noEmit && vite build`).
 - GitHub Actions `Android debug APK`: green on `3f7a656` (run `40091642446`, 2.1 min, 5.98 MB artifact).
+- GitHub Actions `Android debug APK`: green on `51b238f` (run `40098152879`, 5.98 MB artifact); this run also compiled the immersive `MainActivity` and the new theme items.
 - Production output: approximately 3.1 MB across 96 files, including KaTeX fonts and the bundled Inter Tight / JetBrains Mono subsets.
 
 ### Releases
 
 - **`v1.0.0-debug.1`** (pre-release, tag on `3f7a656`) — asset `WaveS-1.0.0-debug.apk`, 6.4 MB. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.1>
+- **`v1.0.0-debug.2`** (pre-release, tag on `51b238f`) — asset `WaveS-1.0.0-debug.2.apk`, 6.4 MB. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.2>
 - Debug-signed. Uninstall a previous debug build before installing this one; each CI run uses a different debug key.
 - Verified the asset is publicly downloadable without authentication.
 
@@ -131,11 +131,22 @@ Do not change the physics or the chart semantics.
 - `android/app/build.gradle` reads `versionName` from `package.json`, so the app version has one source of truth (`versionCode` stays manual).
 - `tsconfig.json` now typechecks `capacitor.config.ts`; added `.nvmrc` (22) and an Android/APK section to `README.md`.
 
+### Phase 2.1 changes (device feedback, committed as `51b238f`)
+
+The first installed APK reported Android 10 / WebView 155, roughly 12–15 fps, no visible HUD and a visible status bar. Fixes:
+
+- Adaptive DPR in `src/App.tsx`: coarse pointers start at cap 1.5 instead of 2; p95 above 22 ms steps 1.75 -> 1.5 -> 1.25 -> 1; the choice persists in `localStorage["waves:dprCap"]`. Only the main scene canvas is affected; the chart canvases keep DPR 2.
+- Mobile shadow tier: every `shadowBlur` in `waveRays.ts` and `spatialScene.ts` is gated by a new `shadows` option, set to false on coarse pointers. `shadowOffsetY` is gated too so no sharp offset shadows remain.
+- Low-power 2D detail: crest sampling every 3.2 px instead of 1.5 px, every second wavefront, no particle halos. Physics untouched.
+- CSS: `backdrop-filter` is disabled under `@media (pointer: coarse)`; the tinted surfaces remain, the per-frame blur does not.
+- Immersive fullscreen: `MainActivity.java` now calls `WindowCompat.setDecorFitsSystemWindows(false)`, hides the system bars with `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`, uses `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`, and re-applies on window focus. `styles.xml` sets the status/navigation bar and window background to `#061018`.
+- Discoverability: the About card now has a visible **Performance HUD** checkbox. The five-tap gesture on the build line still works.
+
 ### What Phase 2 does not include
 
 - No release/signed workflow yet (Phase 4).
-- No native file/share/status-bar/back-button integration yet (Phase 3).
-- No adaptive DPR yet.
+- No native file/share/back-button integration yet (Phase 3); status bar and immersive mode are already done.
+- No static-layer cache yet (perf lever 3).
 - No local Gradle build: this machine has no JDK 21 and no Android SDK.
 
 ## 5. Roadmap
@@ -164,11 +175,11 @@ Status: committed and pushed (`c835e4e`), awaiting real-device smoke test.
 - [x] Run `npx cap add android`.
 - [x] Commit `android/`.
 - [x] Sync and confirm the web app still passes `npm test` and `npm run build`.
-- [ ] Add adaptive DPR only if the Phase 0 baseline demands it.
+- [x] Add adaptive DPR (done in `51b238f` after the debug.1 device report).
 
 ### Phase 2 - Debug CI
 
-Status: done. First run `40091642446` is green; artifact `waves-debug-apk` is 5.98 MB, published as the `v1.0.0-debug.1` pre-release.
+Status: done. Runs `40091642446` and `40098152879` are green; artifact `waves-debug-apk` is 5.98 MB, published as `v1.0.0-debug.1` and then `v1.0.0-debug.2`.
 
 - [x] Add `.github/workflows/android-debug.yml`.
 - [x] Node 22, JDK 21, Android SDK 36.
@@ -179,14 +190,14 @@ Status: done. First run `40091642446` is green; artifact `waves-debug-apk` is 5.
 
 ### Phase 3 - Native features
 
-Status: not started.
+Status: partially done ahead of schedule in `51b238f` (immersive fullscreen + dark system bars). Exports, back button and splash remain.
 
-- PNG and CSV exports go through `@capacitor/filesystem` and `@capacitor/share` on native, while keeping the web download path.
-- Status bar colour `#061018`, dark content.
-- Immersive mode while presenting.
-- Android back button closes overlays first, then leaves present mode.
-- Splash screen with the existing logo.
-- Do not call native plugins on web without a guard.
+- [ ] PNG and CSV exports go through `@capacitor/filesystem` and `@capacitor/share` on native, while keeping the web download path.
+- [x] Status bar colour `#061018`, dark content.
+- [x] Immersive mode (always on; bars hidden, swipe from an edge to reveal them).
+- [ ] Android back button closes overlays first, then leaves present mode.
+- [ ] Splash screen with the existing logo.
+- [ ] Do not call native plugins on web without a guard.
 
 ### Phase 4 - Signed release
 
@@ -275,19 +286,20 @@ Select-String -Path src\styles.css -Pattern "dvh"
 
 ## 9. Verification on the M20
 
-1. Open the web build over the Vercel HTTPS URL. Enable the HUD with `?perf=1`.
-2. Let the intro finish, then play for 30 seconds. Record median FPS, p95 and the worst repeated frame.
+1. Open the web build over the Vercel HTTPS URL, or the debug APK. Enable the HUD with `?perf=1`, the five-tap gesture on the About build line, or the **Performance HUD** checkbox in About.
+2. Let the intro finish, then play for 30 seconds. Record median FPS, p95, the DPR shown by the HUD and the worst repeated frame.
 3. Drag the frequency slider and orbit for 10 seconds. Note dropped frames.
 4. Pause for 10 seconds. Confirm the HUD says `idle` and no canvas draws occur.
 5. Open About and check the Android/WebView version. Write it into the handoff journal.
-6. Rotate to landscape and open Present. Confirm the deck scrolls horizontally and the scene is not clipped.
-7. Install the debug APK, repeat steps 2 to 6. Uninstall before installing a later debug build.
-8. Install the release APK and repeat. Release numbers are the contract numbers.
-9. Check cold start, warm start and PSS after five minutes.
+6. Confirm the status and navigation bars are hidden; swipe from an edge to reveal them temporarily, then let them hide again.
+7. Rotate to landscape and open Present. Confirm the deck scrolls horizontally and the scene is not clipped.
+8. Install the debug APK, repeat steps 2 to 7. Uninstall before installing a later debug build.
+9. Install the release APK and repeat. Release numbers are the contract numbers.
+10. Check cold start, warm start and PSS after five minutes.
 
 ## 10. Risks
 
-- 60 fps at DPR 2 is not guaranteed on the Mali-G71 MP2. Adaptive DPR is the insurance policy.
+- 60 fps at DPR 2 is not guaranteed on the Mali-G71 MP2. Adaptive DPR starts at 1.5 on touch and steps down to 1; if p95 is still above 22 ms at DPR 1, the static-layer cache is the next lever.
 - Headless Chrome reports 26 to 29 fps, so local browser FPS numbers are not meaningful. Only the phone counts.
 - Debug builds are slower and re-signed. Do not compare them to release.
 - Android 10 is end-of-life; an outdated WebView can dominate performance and rendering.
@@ -298,7 +310,7 @@ Select-String -Path src\styles.css -Pattern "dvh"
 
 ## 11. Open questions
 
-- Adaptive DPR is recommended, but confirm the exact downgrade threshold during the Phase 1 device test.
+- Confirm the adaptive DPR thresholds (22 ms down, 14 ms up, 3 s settle) against debug.2 on the M20.
 - The short-landscape present layout fits, but the annotations are cramped at 360 px height. Decide whether to hide the brand row in short landscape.
 - Decide who holds the release keystore and where the offline backup lives.
 - Decide whether v1 should include a changelog file or rely on GitHub Release notes.
@@ -353,7 +365,12 @@ Planned:
 - Pushed Phase 2 as `3f7a656` once the PAT gained the Workflows permission.
 - First CI run [`40091642446`](https://github.com/FYI88/WAVES/actions/runs/40091642446) is fully green in 2.1 min: wrapper validation, all tests/build steps, `apksigner verify` and the 10 MB guard passed. Artifact `waves-debug-apk` is 5.98 MB (14-day retention).
 - Published **`v1.0.0-debug.1`** as a GitHub pre-release on `3f7a656` with `WaveS-1.0.0-debug.apk` (6,759,318 bytes), so the phone can download it without a GitHub login. Confirmed an unauthenticated download returns HTTP 206.
-- No real-device measurement yet; the APK has not been installed on the M20.
+- The user installed debug.1 on the M20: Android 10, WebView 155, versionName 1.0.0. Reported roughly 12–15 fps, a visible status bar and no FPS counter.
+- Phase 2.1: adaptive DPR (coarse start 1.5, step down to 1 when p95 > 22 ms, persisted), mobile shadow tier (canvas `shadowBlur` + CSS `backdrop-filter` off on coarse pointers), low-power 2D detail (coarser crest sampling, alternate wavefronts, no particle halos), immersive `MainActivity` (hidden bars, edge-to-edge, short-edge cutout, re-applied on focus), dark `#061018` system bars, and a visible Performance HUD checkbox in About.
+- `npm test` 16/16 and `npm run build` green. Pushed as `51b238f`.
+- CI run [`40098152879`](https://github.com/FYI88/WAVES/actions/runs/40098152879) is green: the new Java and theme compile, tests/build/`apksigner`/size guard pass. Artifact 5.98 MB.
+- Published **`v1.0.0-debug.2`** on `51b238f` with `WaveS-1.0.0-debug.2.apk` (6,760,842 bytes); unauthenticated download returns HTTP 206.
+- No post-fix device measurement yet.
 
 ### 2026-10-22
 
@@ -368,7 +385,7 @@ Planned:
 
 ## 14. Next actions
 
-1. Install `WaveS-1.0.0-debug.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.1> on the M20 (uninstall any older debug build first).
-2. Verify Phases 0–2 on the device: layout, HUD, WebView version, baseline FPS, APK cold/warm start and PSS.
-3. Start Phase 3 native integration: PNG/CSV share, status bar, back button, splash.
-4. Start Phase 4 once the device check is clean: signed release workflow and branded icons/splash.
+1. Install `WaveS-1.0.0-debug.2.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.2> on the M20 (uninstall debug.1 first).
+2. Open About, tick **Performance HUD**, play for 30 s and report fps, p95, DPR, and whether the status/navigation bars are hidden.
+3. If p95 is still above 22 ms at DPR 1, implement the static-layer cache (perf lever 3).
+4. Then Phase 3 native integration: PNG/CSV share, back button, splash; Phase 4: signed release.
