@@ -4,7 +4,7 @@ Last updated: 2026-10-24
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
-Head at handoff: `c835e4e` - `Phase 1: wrap WaveS with Capacitor 8 and bundle fonts offline`
+Head at handoff: `3f7a656` - `Phase 2: add debug APK CI and harden the Android build`
 
 ## 1. Mission
 
@@ -78,15 +78,16 @@ Do not change the physics or the chart semantics.
 
 ### Repository
 
-- Head: `c835e4e`.
-- Recent commits: `c835e4e` Phase 1 (Capacitor + bundled fonts), `e47c85c` header clipping, `d3614b6` Phase 0 hardening.
-- Phase 0 and Phase 1 are committed and pushed. Phase 2 (debug CI) is in the working tree.
+- Head: `3f7a656`.
+- Recent commits: `3f7a656` Phase 2 (debug CI), `c835e4e` Phase 1 (Capacitor + bundled fonts), `e47c85c` header clipping.
+- Phases 0–2 are committed, pushed and CI-verified. The first debug APK artifact exists.
 - `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
 ### Test and build status
 
 - `npm test`: 16/16 passing.
 - `npm run build`: green (`tsc --noEmit && vite build`).
+- GitHub Actions `Android debug APK`: green on `3f7a656` (run `40091642446`, 2.1 min, 5.98 MB artifact).
 - Production output: approximately 3.1 MB across 96 files, including KaTeX fonts and the bundled Inter Tight / JetBrains Mono subsets.
 
 ### Phase 0 changes (committed as `d3614b6`)
@@ -113,7 +114,7 @@ Do not change the physics or the chart semantics.
 - Set `versionName "1.0.0"` in `android/app/build.gradle` to match `package.json` (versionCode stays `1`).
 - Root `.gitignore` now also ignores keystores and Android build folders as belt-and-braces.
 
-### Phase 2 changes in the working tree
+### Phase 2 changes (committed as `3f7a656`, CI green)
 
 - Added `.github/workflows/android-debug.yml`: checkout, Node 22 with npm cache, Temurin JDK 21, `android-actions/setup-android@v4` (SDK 36 platform + build-tools 36.0.0, licences accepted), `gradle/actions/setup-gradle@v6` (wrapper validation + cache), `npm ci`, `npm test`, `npm run build`, `npx cap sync android`, `./gradlew assembleDebug`, APK summary and artifact upload (`waves-debug-apk`, 14 days).
 - Added `apksigner verify` and a hard **10 MiB APK budget** check; the job fails if the debug APK grows past it.
@@ -161,13 +162,14 @@ Status: committed and pushed (`c835e4e`), awaiting real-device smoke test.
 
 ### Phase 2 - Debug CI
 
-Status: workflow written, awaiting first green run.
+Status: done. First run `40091642446` is green; artifact `waves-debug-apk` is 5.98 MB.
 
 - [x] Add `.github/workflows/android-debug.yml`.
 - [x] Node 22, JDK 21, Android SDK 36.
 - [x] Steps: `npm ci`, `npm test`, `npm run build`, `npx cap sync android`, `./gradlew assembleDebug`, upload the APK artifact.
 - [x] Trigger on push and pull request (plus manual `workflow_dispatch`; docs-only pushes are skipped via `paths-ignore`).
-- [ ] Confirm the first run uploads `waves-debug-apk` and the APK installs on the M20.
+- [x] Confirm the first run uploads `waves-debug-apk`.
+- [ ] Install the APK on the M20 and verify the native shell.
 
 ### Phase 3 - Native features
 
@@ -342,7 +344,9 @@ Planned:
 - Phase 2: added `.github/workflows/android-debug.yml` (Node 22 + npm cache, Temurin 21, Android SDK 36, Gradle cache, tests, build, `cap sync`, `assembleDebug`, artifact).
 - Marked `android/gradlew` executable in the index (`100755`), since the file was created on Windows.
 - Review pass before the first push: moved all actions to current 2026 majors (checkout v7, setup-node v7, setup-java v6, setup-android v4, setup-gradle v6, upload-artifact v7), let setup-android install SDK packages and accept licences, enabled Gradle wrapper validation, added `apksigner verify` + a 10 MiB size guard, pinned the Gradle wrapper checksum and switched to the `-bin` distribution, raised the Gradle heap, derived `versionName` from `package.json`, typechecked `capacitor.config.ts`, added `.nvmrc`, and documented the Android/APK flow in `README.md`.
-- No real-device measurement yet. The first CI run still has to prove the APK builds.
+- Pushed Phase 2 as `3f7a656` once the PAT gained the Workflows permission.
+- First CI run [`40091642446`](https://github.com/FYI88/WAVES/actions/runs/40091642446) is fully green in 2.1 min: wrapper validation, all tests/build steps, `apksigner verify` and the 10 MB guard passed. Artifact `waves-debug-apk` is 5.98 MB (14-day retention).
+- No real-device measurement yet; the APK has not been installed on the M20.
 
 ### 2026-10-22
 
@@ -357,7 +361,7 @@ Planned:
 
 ## 14. Next actions
 
-1. Commit and push Phase 2 (debug CI workflow + handoff) and confirm the first green run.
-2. Download `waves-debug-apk` from the Actions run and install it on the M20 (uninstall any older debug build first).
-3. Verify Phase 0/1 on the M20 and record the WebView version and baseline FPS.
-4. Start Phase 3 native integration once the debug APK is confirmed working.
+1. Download `waves-debug-apk` from run `40091642446` and install it on the M20 (uninstall any older debug build first).
+2. Verify Phases 0–2 on the device: layout, HUD, WebView version, baseline FPS, APK cold/warm start and PSS.
+3. Start Phase 3 native integration: PNG/CSV share, status bar, back button, splash.
+4. Start Phase 4 once the device check is clean: signed release workflow and branded icons/splash.
