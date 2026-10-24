@@ -2194,16 +2194,18 @@ a:hover {
 .om-mail-addr { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .om-about-foot { display: flex; flex-direction: column; }
 .om-about-repo {
-  display: flex; align-items: center; gap: 8px;
-  min-height: 28px; text-decoration: none;
-  color: var(--om-ink-2); font-size: 12px; font-weight: 500;
-  transition: color 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  height: 40px; border-radius: 10px; text-decoration: none;
+  border: 1px solid var(--om-line-2); background: transparent;
+  color: var(--om-ink); font-size: 12.5px; font-weight: 600;
+  transition: background 0.2s, border-color 0.2s;
 }
-.om-about-repo:hover { color: var(--om-ink); }
-.om-about-repo:hover svg { color: var(--om-inc); }
-.om-about-repo svg { flex: none; width: 14px; height: 14px; color: var(--om-ink-3); transition: color 0.2s; }
-.om-about-arrow { margin-left: auto; color: var(--om-ink-3); font-size: 12px; transition: color 0.2s; }
-.om-about-repo:hover .om-about-arrow { color: var(--om-inc); }
+.om-about-repo:hover {
+  background: color-mix(in srgb, var(--om-acc) 6%, transparent);
+  border-color: color-mix(in srgb, var(--om-acc) 45%, var(--om-line-2));
+}
+.om-about-repo:active { transform: scale(0.995); }
+.om-about-repo svg { width: 16px; height: 16px; flex: none; color: var(--om-ink-2); }
 .om-about-meta {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
   gap: 4px 12px; margin-top: 8px; padding-top: 8px;
@@ -2252,7 +2254,7 @@ a:hover {
   .om-about-value { font-size: 12.5px; }
   .om-mail { padding: 7px 0; font-size: 11.5px; }
   .om-mail-icon svg { width: 13px; height: 13px; }
-  .om-about-repo { font-size: 11.5px; }
+  .om-about-repo { height: 34px; font-size: 11.5px; }
   .om-about .om-about-build { font-size: 9px; }
   .om-about-perf { font-size: 8.5px; }
 }

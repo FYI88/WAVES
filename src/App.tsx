@@ -3292,9 +3292,6 @@ export function App() {
                 <a className="om-about-repo" href={REPO_URL} target="_blank" rel="noopener noreferrer" title={t.repoTitle}>
                   {Icon.github}
                   <span>{t.repo}</span>
-                  <span className="om-about-arrow" aria-hidden>
-                    ↗
-                  </span>
                 </a>
                 <div className="om-about-meta">
                   <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
