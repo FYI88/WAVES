@@ -44,6 +44,26 @@ npm run dev      # → http://localhost:5173
 
 ---
 
+## Android / APK
+
+WaveS ships as an offline Android APK through Capacitor 8 (`io.github.fyi88.waves`, minSdk 24, targetSdk 36).
+
+- **CI build** — every push to `main` runs `.github/workflows/android-debug.yml` (Node 22, JDK 21, Android SDK 36, Gradle cache) and publishes the `waves-debug-apk` artifact on the Actions run page. The workflow also verifies the APK signature and enforces the 10 MB budget.
+- **Local build** — needs Node 22, JDK 21 and Android SDK 36:
+
+```bash
+npm ci
+npm test
+npm run build
+npx cap sync android
+cd android && ./gradlew assembleDebug
+# → android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+- **Install** — sideload the APK. Each CI run generates a fresh debug keystore, so uninstall a previous debug build before installing a newer one.
+- **Fonts** — Inter Tight and JetBrains Mono are bundled with Fontsource (Latin + Greek subsets); the app makes no network request at runtime.
+- **Version** — `package.json` is the single source of truth: `versionName` in `android/app/build.gradle` is read from it. Bump `versionCode` manually in that file for each release.
+
 ## Features
 
 - **Multilayer walls** — up to 6 layers, air gaps included; add, duplicate, reorder, remove; 8 ITU-R materials (concrete, brick, plasterboard, wood, glass, chipboard, plywood, marble) + fully custom media (ε′/σ or n/κ).
@@ -84,7 +104,10 @@ npm run dev      # → http://localhost:5173
 ```text
 ./
 ├── index.html            # title, splash boot screen, mount #root
-├── package.json          # dev / build / test scripts
+├── package.json          # dev / build / test scripts, version
+├── capacitor.config.ts   # Capacitor app id / name / webDir
+├── android/              # generated Capacitor Android project
+├── .github/workflows/    # debug APK CI
 ├── src/
 │   ├── main.tsx          # React root + crash boundary wiring
 │   ├── App.tsx           # entire UI (state, views, charts, i18n, persistence)
@@ -109,7 +132,8 @@ Local physics references (parent folder, outside git): `chapitre-1-.pdf` (Snell,
 ## Roadmap
 
 - **Phase 2 — done** — shortcuts overlay (`?`) with the full key map, angle/view/display/present keys, fullscreen present mode.
-- **Phase 3** — PWA manifest/icons/offline, bundled fonts (Inter Tight + JetBrains Mono), Tauri `.exe`, Capacitor APK.
+- **Android (Phases 0–2) — done** — mobile/safe-area hardening and perf HUD, Capacitor 8 wrap, bundled Inter Tight + JetBrains Mono, debug APK CI.
+- **Android next** — native PNG/CSV share, status bar and back-button handling, signed GitHub Release.
 - **V3** — Chapitre 2 dispersive plasma, k² = (ω² − ωp²)/c² (not implemented).
 
 ---

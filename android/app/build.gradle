@@ -1,5 +1,8 @@
 apply plugin: 'com.android.application'
 
+// Single source of truth for the app version: package.json.
+def packageJson = new groovy.json.JsonSlurper().parseText(file("../../package.json").getText("UTF-8"))
+
 android {
     namespace = "io.github.fyi88.waves"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -8,7 +11,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0.0"
+        versionName packageJson.version
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

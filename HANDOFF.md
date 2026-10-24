@@ -4,7 +4,7 @@ Last updated: 2026-10-24
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
-Head at handoff: `e47c85c` - `Fix header text clipping on tablet viewports (561px-900px)`
+Head at handoff: `c835e4e` - `Phase 1: wrap WaveS with Capacitor 8 and bundle fonts offline`
 
 ## 1. Mission
 
@@ -78,10 +78,9 @@ Do not change the physics or the chart semantics.
 
 ### Repository
 
-- Head: `e47c85c`.
-- Recent commits: `e47c85c` header clipping, `d3614b6` Phase 0 hardening, `0946a9d` tab title.
-- The working tree is now on a fresh clone of `main`; Phase 0 is committed upstream.
-- Phase 1 is implemented in the working tree but not committed yet.
+- Head: `c835e4e`.
+- Recent commits: `c835e4e` Phase 1 (Capacitor + bundled fonts), `e47c85c` header clipping, `d3614b6` Phase 0 hardening.
+- Phase 0 and Phase 1 are committed and pushed. Phase 2 (debug CI) is in the working tree.
 - `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
 ### Test and build status
@@ -103,7 +102,7 @@ Do not change the physics or the chart semantics.
 - Added `version: 1.0.0` to `package.json` and `__APP_VERSION__` to the Vite config.
 - Added `.om-perf` and `.om-about-build` styles.
 
-### Phase 1 changes in the working tree
+### Phase 1 changes (committed as `c835e4e`)
 
 - Installed `@capacitor/core`, `@capacitor/android` `8.5.3` and `@capacitor/cli` `8.5.3` (dev).
 - Installed `@fontsource/inter-tight` and `@fontsource/jetbrains-mono` `5.3.0`.
@@ -114,9 +113,20 @@ Do not change the physics or the chart semantics.
 - Set `versionName "1.0.0"` in `android/app/build.gradle` to match `package.json` (versionCode stays `1`).
 - Root `.gitignore` now also ignores keystores and Android build folders as belt-and-braces.
 
-### What Phase 1 does not include
+### Phase 2 changes in the working tree
 
-- No CI workflow yet (Phase 2).
+- Added `.github/workflows/android-debug.yml`: checkout, Node 22 with npm cache, Temurin JDK 21, `android-actions/setup-android@v4` (SDK 36 platform + build-tools 36.0.0, licences accepted), `gradle/actions/setup-gradle@v6` (wrapper validation + cache), `npm ci`, `npm test`, `npm run build`, `npx cap sync android`, `./gradlew assembleDebug`, APK summary and artifact upload (`waves-debug-apk`, 14 days).
+- Added `apksigner verify` and a hard **10 MiB APK budget** check; the job fails if the debug APK grows past it.
+- Runs on pushes to `main`, pull requests and manual dispatch; docs-only pushes are skipped with `paths-ignore: ["**.md"]`, and superseded runs are cancelled by `concurrency`. Timeout is 45 minutes for the cold Gradle download.
+- Marked `android/gradlew` executable in the Git index (`100755`) so Linux runners can invoke it without a `chmod`.
+- Gradle wrapper now fetches `gradle-8.14.3-bin.zip` (not `-all`) with a pinned `distributionSha256Sum`.
+- `android/gradle.properties`: heap raised to 2048 MB + 512 MB metaspace, `org.gradle.caching=true`.
+- `android/app/build.gradle` reads `versionName` from `package.json`, so the app version has one source of truth (`versionCode` stays manual).
+- `tsconfig.json` now typechecks `capacitor.config.ts`; added `.nvmrc` (22) and an Android/APK section to `README.md`.
+
+### What Phase 2 does not include
+
+- No release/signed workflow yet (Phase 4).
 - No native file/share/status-bar/back-button integration yet (Phase 3).
 - No adaptive DPR yet.
 - No local Gradle build: this machine has no JDK 21 and no Android SDK.
@@ -139,24 +149,25 @@ Status: committed (`d3614b6`), awaiting real-device check.
 
 ### Phase 1 - Capacitor wrap
 
-Status: implemented locally, awaiting commit and push.
+Status: committed and pushed (`c835e4e`), awaiting real-device smoke test.
 
 - [x] Install Capacitor 8 packages.
 - [x] Create `capacitor.config.ts`.
 - [x] Bundle fonts with Fontsource and remove the Google Fonts effect.
 - [x] Run `npx cap add android`.
-- [ ] Commit `android/`.
+- [x] Commit `android/`.
 - [x] Sync and confirm the web app still passes `npm test` and `npm run build`.
 - [ ] Add adaptive DPR only if the Phase 0 baseline demands it.
 
 ### Phase 2 - Debug CI
 
-Status: not started.
+Status: workflow written, awaiting first green run.
 
-- Add `.github/workflows/android-debug.yml`.
-- Node 22, JDK 21, Android SDK 36.
-- Steps: `npm ci`, `npm test`, `npm run build`, `npx cap sync android`, `./gradlew assembleDebug`, upload the APK artifact.
-- Trigger on push and pull request.
+- [x] Add `.github/workflows/android-debug.yml`.
+- [x] Node 22, JDK 21, Android SDK 36.
+- [x] Steps: `npm ci`, `npm test`, `npm run build`, `npx cap sync android`, `./gradlew assembleDebug`, upload the APK artifact.
+- [x] Trigger on push and pull request (plus manual `workflow_dispatch`; docs-only pushes are skipped via `paths-ignore`).
+- [ ] Confirm the first run uploads `waves-debug-apk` and the APK installs on the M20.
 
 ### Phase 3 - Native features
 
@@ -197,7 +208,9 @@ Status: not started.
 
 Capacitor 8 requires Node 22+, JDK 21, Android SDK 36 and minSdk 24.
 
-### Planned config
+### Config (implemented)
+
+`capacitor.config.ts`:
 
 ```ts
 import type { CapacitorConfig } from "@capacitor/cli";
@@ -212,25 +225,13 @@ const config: CapacitorConfig = {
 export default config;
 ```
 
-### Planned workflow shape
+### Debug workflow (implemented)
 
-```yaml
-# debug
-- uses: actions/setup-node@v4
-  with: { node-version: 22, cache: npm }
-- uses: actions/setup-java@v4
-  with: { distribution: temurin, java-version: 21 }
-- uses: android-actions/setup-android@v3
-- run: npm ci
-- run: npm test
-- run: npm run build
-- run: npx cap sync android
-- run: cd android && ./gradlew assembleDebug
-- uses: actions/upload-artifact@v4
-  with: { name: waves-debug, path: android/app/build/outputs/apk/debug/app-debug.apk }
-```
+`.github/workflows/android-debug.yml` is the source of truth. It uses current action majors: `actions/checkout@v7`, `actions/setup-node@v7`, `actions/setup-java@v6`, `android-actions/setup-android@v4` (installs SDK 36 platform + build-tools and accepts licences), `gradle/actions/setup-gradle@v6` (wrapper validation + cache), `actions/upload-artifact@v7`.
 
-The release workflow mirrors this with `assembleRelease`, `apksigner verify` and `softprops/action-gh-release`. Pin action versions before shipping.
+It runs `npm ci`, `npm test`, `npm run build`, `npx cap sync android`, `./gradlew assembleDebug`, then `apksigner verify`, a 10 MB size guard and the artifact upload.
+
+The release workflow mirrors this with `assembleRelease`, `apksigner verify` and `softprops/action-gh-release`. Action majors must be re-checked before shipping.
 
 ## 7. Environment
 
@@ -313,13 +314,14 @@ Select-String -Path src\styles.css -Pattern "dvh"
 - `index.html`: viewport, theme colour, splash styling.
 - `public/logo.png`: 1254x1254 source for icons and splash.
 - `android/`: generated Capacitor Android project. `gradle-wrapper.jar` is tracked; copied web assets and `capacitor.config.json` are ignored.
+- `.github/workflows/android-debug.yml`: debug APK CI (Node 22, JDK 21, SDK 36, artifact upload).
 - `dist/`: production output, regenerated by `npm run build`.
 - `.gitignore`: must ignore Android build outputs and keystores while tracking `gradle-wrapper.jar`.
+- `.nvmrc`: Node 22 for local version managers.
 - `HANDOFF.md`: this file.
 
 Planned:
 
-- `.github/workflows/android-debug.yml`
 - `.github/workflows/android-release.yml`
 - `THIRD_PARTY_NOTICES.md`
 
@@ -335,8 +337,12 @@ Planned:
 - `npx cap add android` + `npx cap sync android`: `android/` generated, 53 trackable files including the Gradle wrapper jar.
 - Set `versionName "1.0.0"`; added keystore/Android build rules to `.gitignore`.
 - Production output grew to 3.1 MB / 96 files, still under the 10 MB APK budget.
+- Pushed Phase 1 to `origin/main` as `c835e4e` after verifying the remote head.
 - `npm test` 16/16 and `npm run build` green after the changes. No local Gradle build (no JDK 21 / Android SDK).
-- No real-device measurement yet.
+- Phase 2: added `.github/workflows/android-debug.yml` (Node 22 + npm cache, Temurin 21, Android SDK 36, Gradle cache, tests, build, `cap sync`, `assembleDebug`, artifact).
+- Marked `android/gradlew` executable in the index (`100755`), since the file was created on Windows.
+- Review pass before the first push: moved all actions to current 2026 majors (checkout v7, setup-node v7, setup-java v6, setup-android v4, setup-gradle v6, upload-artifact v7), let setup-android install SDK packages and accept licences, enabled Gradle wrapper validation, added `apksigner verify` + a 10 MiB size guard, pinned the Gradle wrapper checksum and switched to the `-bin` distribution, raised the Gradle heap, derived `versionName` from `package.json`, typechecked `capacitor.config.ts`, added `.nvmrc`, and documented the Android/APK flow in `README.md`.
+- No real-device measurement yet. The first CI run still has to prove the APK builds.
 
 ### 2026-10-22
 
@@ -351,7 +357,7 @@ Planned:
 
 ## 14. Next actions
 
-1. Commit and push Phase 1 (`android/`, `capacitor.config.ts`, Fontsource, handoff).
-2. Add the Phase 2 debug CI workflow and get the first APK artifact from GitHub Actions.
+1. Commit and push Phase 2 (debug CI workflow + handoff) and confirm the first green run.
+2. Download `waves-debug-apk` from the Actions run and install it on the M20 (uninstall any older debug build first).
 3. Verify Phase 0/1 on the M20 and record the WebView version and baseline FPS.
-4. Start Phase 3 native integration once an APK exists to test.
+4. Start Phase 3 native integration once the debug APK is confirmed working.
