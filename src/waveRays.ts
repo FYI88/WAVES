@@ -5,7 +5,16 @@ interface Point { x: number; y: number }
 interface Layer { mat: MaterialId | "air"; cm: number; thetaT: number; nRe: number; fluxIn: number; fluxOut: number; absorbed?: number; name: string }
 interface Parameters { layers: Layer[]; etas: Cx[]; ds: number[]; theta: number; freq: number; pol: PolMode; R: number; T: number; sel: number; hover: number }
 interface Palette { dark: boolean; ink: string; muted: string; faint: string; inc: string; ref: string; tra: string; abs?: string; grid: string }
-export interface RayOptions { display: "field" | "fronts" | "both"; reflections: boolean; annotations: boolean; lang: "fr" | "en" }
+export interface RayOptions {
+  display: "field" | "fronts" | "both";
+  reflections: boolean;
+  annotations: boolean;
+  lang: "fr" | "en";
+  /** mobile tier: coarser crest sampling, fewer wavefronts, no particle halos */
+  lowPower?: boolean;
+  /** canvas shadowBlur is very expensive on Mali GPUs; disable it on phones */
+  shadows?: boolean;
+}
 
 const TAU = Math.PI * 2;
 const DEG = Math.PI / 180;
@@ -36,6 +45,8 @@ export function drawWaveRays(
   const compact = width < 640;
   const french = options.lang === "fr";
   const dark = palette.dark;
+  const lowPower = options.lowPower === true;
+  const shadows = options.shadows !== false;
   const absColor = palette.abs ?? (dark ? "#edc17f" : "#8d5b13");
   const count = params.layers.length;
 
@@ -110,8 +121,8 @@ export function drawWaveRays(
     const x = clamp(at.x - w / 2, 8, width - w - 8);
     const y = clamp(at.y, h / 2 + 4, height - h / 2 - 4);
     ctx.shadowColor = dark ? "rgba(0,0,0,.5)" : "rgba(30,60,80,.16)";
-    ctx.shadowBlur = 6;
-    ctx.shadowOffsetY = 5;
+    ctx.shadowBlur = shadows ? 6 : 0;
+    ctx.shadowOffsetY = shadows ? 5 : 0;
     ctx.beginPath();
     ctx.roundRect(x, y - h / 2, w, h, h / 2);
     ctx.fillStyle = dark ? "rgba(8,14,24,.88)" : "rgba(255,255,255,.94)";
@@ -322,7 +333,7 @@ export function drawWaveRays(
   if (params.sel >= 0 && params.sel < count) {
     ctx.save();
     ctx.shadowColor = palette.inc;
-    ctx.shadowBlur = dark ? 14 : 6;
+    ctx.shadowBlur = shadows ? (dark ? 14 : 6) : 0;
     outline(params.sel, rgba(palette.inc, 0.95), 1.6);
     ctx.restore();
     const x0 = bx[params.sel] - 6;
@@ -424,7 +435,7 @@ export function drawWaveRays(
     if (options.display !== "fronts") {
       const crest: Point[] = [];
       const base: Point[] = [];
-      const steps = Math.max(2, Math.ceil(distance / 1.5));
+      const steps = Math.max(2, Math.ceil(distance / (lowPower ? 3.2 : 1.5)));
       for (let step = 0; step <= steps; step++) {
         const along = distance * step / steps;
         const offset = Math.sin(phase + k * along - omega) * amplitude * power(along / distance);
@@ -454,7 +465,7 @@ export function drawWaveRays(
       ctx.stroke();
       ctx.globalAlpha = 1;
       ctx.shadowColor = color;
-      ctx.shadowBlur = dark ? 4 : 0;
+      ctx.shadowBlur = shadows && dark ? 4 : 0;
       ctx.lineWidth = compact ? 1.8 : 2.3;
       ctx.stroke();
       ctx.shadowBlur = 0;
@@ -463,7 +474,7 @@ export function drawWaveRays(
       const spacing = TAU / k;
       let first = ((omega - phase + Math.PI / 2) / k) % spacing;
       if (first < 0) first += spacing;
-      for (let along = first; along < distance; along += spacing) {
+      for (let along = first; along < distance; along += lowPower ? spacing * 2 : spacing) {
         const f = along / distance;
         const extent = amplitude * (0.75 + 0.9 * power(f));
         const center = { x: from.x + dir.x * along, y: from.y + dir.y * along };
@@ -507,7 +518,7 @@ export function drawWaveRays(
       ctx.strokeStyle = trail;
       ctx.lineWidth = 2.2;
       ctx.stroke();
-      glow(x, y, 11, color, 0.5 * strength);
+      if (!lowPower) glow(x, y, 11, color, 0.5 * strength);
       ctx.beginPath();
       ctx.arc(x, y, 1.8, 0, TAU);
       ctx.fillStyle = rgba(dark ? "#ffffff" : color, strength);
@@ -590,8 +601,8 @@ export function drawWaveRays(
       ctx.stroke();
     }
     ctx.shadowColor = "rgba(0,0,0,.4)";
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetY = 4;
+    ctx.shadowBlur = shadows ? 12 : 0;
+    ctx.shadowOffsetY = shadows ? 4 : 0;
     ctx.beginPath();
     ctx.roundRect(-46, -8, 16, 16, 3);
     ctx.fillStyle = metal(-8, 8);
@@ -609,7 +620,7 @@ export function drawWaveRays(
     ctx.strokeStyle = palette.inc;
     ctx.lineWidth = 2.2;
     ctx.shadowColor = palette.inc;
-    ctx.shadowBlur = dark ? 6 : 0;
+    ctx.shadowBlur = shadows && dark ? 6 : 0;
     ctx.stroke();
     ctx.restore();
   }
@@ -620,8 +631,8 @@ export function drawWaveRays(
     ctx.scale(scale, scale);
     glow(-10, 0, 34, color, (dark ? 0.4 : 0.2) * Math.min(1, Math.sqrt(power) * 1.6));
     ctx.shadowColor = "rgba(0,0,0,.4)";
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetY = 4;
+    ctx.shadowBlur = shadows ? 12 : 0;
+    ctx.shadowOffsetY = shadows ? 4 : 0;
     ctx.beginPath();
     ctx.arc(-22, 0, 25, -0.8, 0.8);
     ctx.arc(-27, 0, 25, 0.72, -0.72, true);
@@ -642,7 +653,7 @@ export function drawWaveRays(
     ctx.arc(-15, 0, 2.6, 0, TAU);
     ctx.fillStyle = color;
     ctx.shadowColor = color;
-    ctx.shadowBlur = dark ? 10 * Math.min(1, Math.sqrt(power) * 2) : 0;
+    ctx.shadowBlur = shadows && dark ? 10 * Math.min(1, Math.sqrt(power) * 2) : 0;
     ctx.fill();
     ctx.restore();
   };

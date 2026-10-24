@@ -21,6 +21,11 @@ const state = {
   lastAt: 0,
 };
 
+export function resetPerf(): void {
+  state.samples.length = 0;
+  state.lastAt = 0;
+}
+
 export function recordFrame(ms: number, meta?: FrameMeta): void {
   if (!Number.isFinite(ms) || ms <= 0 || ms > 200) return;
   state.samples.push(ms);

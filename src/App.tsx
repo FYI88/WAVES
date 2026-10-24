@@ -13,7 +13,7 @@ import {
 import { drawSpatialScene, type SceneOptions } from "./spatialScene";
 import { drawWaveRays } from "./waveRays";
 import { decodeShare, encodeShare, shareHashOf } from "./share";
-import { recordFrame } from "./perf";
+import { readPerf, recordFrame, resetPerf } from "./perf";
 import { PerfHud } from "./PerfHud";
 import {
   C0,
@@ -860,14 +860,14 @@ function downloadFile(href: string, filename: string): void {
   a.remove();
 }
 
-function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>): CanvasSize {
+function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>, dprCap = 2): CanvasSize {
   const [size, setSize] = useState<CanvasSize>({ w: 0, h: 0, dpr: 1 });
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const update = () => {
       const r = el.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
       // getBoundingClientRect is already shrunk by page zoom: size the drawing
       // in layout px so zoom is a uniform optical shrink. The renderers (their
       // `compact` branches and absolute-px constants like lambdaPx) then behave
@@ -885,8 +885,75 @@ function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>): CanvasSize {
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [ref]);
+  }, [ref, dprCap]);
   return size;
+}
+
+/* ── Adaptive resolution ────────────────────────────────────────────────
+   The target phone (Mali-G71 MP2) cannot hold 60 fps at DPR 2. Step the
+   canvas backing resolution down when p95 frame time stays above 22 ms and
+   back up after three comfortable windows. The last choice is remembered so
+   the next launch starts at the right level. */
+const DPR_STEPS = [1, 1.25, 1.5, 1.75, 2] as const;
+const DPR_STORAGE_KEY = "waves:dprCap";
+const COARSE_POINTER = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+
+function storedDprCap(fallback: number): number {
+  try {
+    const raw = window.localStorage.getItem(DPR_STORAGE_KEY);
+    const value = raw === null ? NaN : Number(raw);
+    if ((DPR_STEPS as readonly number[]).includes(value)) return value;
+  } catch {
+    /* storage unavailable */
+  }
+  return fallback;
+}
+
+function useAdaptiveDprCap(): number {
+  const [cap, setCap] = useState(() => storedDprCap(COARSE_POINTER ? 1.5 : 2));
+  useEffect(() => {
+    let goodWindows = 0;
+    let settledAt = performance.now();
+    const timer = window.setInterval(() => {
+      if (performance.now() - settledAt < 3000) return;
+      const { p95, idle } = readPerf();
+      if (idle || p95 <= 0) {
+        goodWindows = 0;
+        return;
+      }
+      const index = (DPR_STEPS as readonly number[]).indexOf(cap);
+      if (p95 > 22 && index > 0) {
+        const next = DPR_STEPS[index - 1];
+        setCap(next);
+        try {
+          window.localStorage.setItem(DPR_STORAGE_KEY, String(next));
+        } catch {
+          /* storage unavailable */
+        }
+        resetPerf();
+        settledAt = performance.now();
+        goodWindows = 0;
+      } else if (p95 < 14) {
+        goodWindows += 1;
+        if (goodWindows >= 3 && index < DPR_STEPS.length - 1) {
+          const next = DPR_STEPS[index + 1];
+          setCap(next);
+          try {
+            window.localStorage.setItem(DPR_STORAGE_KEY, String(next));
+          } catch {
+            /* storage unavailable */
+          }
+          resetPerf();
+          settledAt = performance.now();
+          goodWindows = 0;
+        }
+      } else {
+        goodWindows = 0;
+      }
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [cap]);
+  return cap;
 }
 
 function prepCanvas(canvas: HTMLCanvasElement, size: CanvasSize) {
@@ -1142,7 +1209,8 @@ function RayScene(props: {
   onSelect: (i: number) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const size = useCanvasSize(ref);
+  const dprCap = useAdaptiveDprCap();
+  const size = useCanvasSize(ref, dprCap);
   const [hover, setHover] = useState(-1);
   const [view, setView] = useState<"wave" | "spatial">("wave");
   const [display, setDisplay] = useState<SceneOptions["display"]>("both");
@@ -1209,8 +1277,8 @@ function RayScene(props: {
       });
       const parameters = { ...cur.params, hover: cur.hover };
       layout.current = cur.view === "spatial"
-        ? drawSpatialScene(ctx, size.w, size.h, clock.current, intro, parameters, cur.pal, pats, cur.fmtNum, { display: cur.display, annotations: cur.annotations, az: cur.orbit.az, el: cur.orbit.el, lang: cur.lang })
-        : drawWaveRays(ctx, size.w, size.h, clock.current, parameters, cur.pal, cur.fmtNum, { display: cur.display, reflections: cur.reflections, annotations: cur.annotations, lang: cur.lang });
+        ? drawSpatialScene(ctx, size.w, size.h, clock.current, intro, parameters, cur.pal, pats, cur.fmtNum, { display: cur.display, annotations: cur.annotations, az: cur.orbit.az, el: cur.orbit.el, lang: cur.lang, shadows: !COARSE_POINTER })
+        : drawWaveRays(ctx, size.w, size.h, clock.current, parameters, cur.pal, cur.fmtNum, { display: cur.display, reflections: cur.reflections, annotations: cur.annotations, lang: cur.lang, lowPower: COARSE_POINTER, shadows: !COARSE_POINTER });
       recordFrame(elapsed, { dpr: size.dpr, width: canvas.width, height: canvas.height });
     };
     raf = requestAnimationFrame(frame);
@@ -3195,6 +3263,22 @@ export function App() {
               <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
                 {buildInfo}
               </button>
+              <label className="om-about-perf">
+                <input
+                  type="checkbox"
+                  checked={perfOn}
+                  onChange={(event) => {
+                    const next = event.currentTarget.checked;
+                    setPerfOn(next);
+                    try {
+                      localStorage.setItem("waves:perf", next ? "1" : "0");
+                    } catch {
+                      /* storage unavailable: keep the session toggle */
+                    }
+                  }}
+                />
+                <span>{lang === "fr" ? "HUD de performance" : "Performance HUD"}</span>
+              </label>
             </div>
           </div>
         </div>

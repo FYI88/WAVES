@@ -1338,6 +1338,9 @@ a:hover {
   .om-value-input { font-size: 16px; }
 }
 @media (pointer: coarse) {
+  /* Mali-G71 re-blurs the animated canvas behind every frosted surface on each
+     frame. The tinted backgrounds stay; only the expensive blur goes away. */
+  .om, .om * { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
   .om-layer-actions { gap: 3px; }
   .om-layer-actions button { min-width: 32px; min-height: 40px; }
   .om .om-preset, .om .om-budget-layers button { min-height: 40px; }
@@ -2225,6 +2228,15 @@ a:hover {
   text-align: center; overflow-wrap: anywhere; touch-action: manipulation;
 }
 .om-about-build:hover { color: var(--om-ink-2); }
+.om-about-perf {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 0 0 6px; min-height: 32px; cursor: pointer;
+  color: var(--om-ink-2); font: 500 10.5px/1.4 var(--om-mono); letter-spacing: 0.06em;
+  text-transform: uppercase; touch-action: manipulation;
+}
+.om-about-perf input {
+  width: 15px; height: 15px; margin: 0; accent-color: var(--om-inc); cursor: pointer;
+}
 .om-perf {
   position: fixed; left: max(8px, env(safe-area-inset-left)); bottom: max(8px, env(safe-area-inset-bottom));
   z-index: 120; display: flex; flex-wrap: wrap; gap: 8px; padding: 5px 8px;

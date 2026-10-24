@@ -45,6 +45,8 @@ export interface SceneOptions {
   az: number;
   el: number;
   lang: "fr" | "en";
+  /** canvas shadowBlur is very expensive on Mali GPUs; disable it on phones */
+  shadows?: boolean;
 }
 const TAU = Math.PI * 2;
 const DEGREE = Math.PI / 180;
@@ -76,6 +78,7 @@ export function drawSpatialScene(
 ) {
   const compact = width < 600;
   const scale = Math.min(width / (compact ? 760 : 940), height / 510);
+  const shadows = options.shadows !== false;
   const center = { x: width * 0.50, y: height * (compact ? 0.46 : 0.50) };
   const ca = Math.cos(options.az), sa = Math.sin(options.az);
   const se = Math.sin(options.el), ce = Math.cos(options.el);
@@ -323,7 +326,7 @@ export function drawSpatialScene(
         }
         polygon([...crest, ...base.reverse()], alpha(color, palette.dark ? 0.13 : 0.10));
         ctx.shadowColor = color;
-        ctx.shadowBlur = palette.dark ? 4 : 0;
+        ctx.shadowBlur = shadows && palette.dark ? 4 : 0;
         line(crest, alpha(color, Math.min(0.96, visible)), polarization === "TE" ? 1.8 : 1.25);
         ctx.shadowBlur = 0;
         for (let distance = 0; distance < length; distance += 10) {
