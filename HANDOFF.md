@@ -4,7 +4,7 @@ Last updated: 2026-10-24
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
-Head at handoff: `8ac3fe8` (Phase 2.2) - release tag `v1.0.0-debug.2` points at `51b238f`
+Head at handoff: `1776c4f` (Phase 2.3) - release tag `v1.0.0-debug.2` points at `51b238f`
 
 ## 1. Mission
 
@@ -77,9 +77,9 @@ Do not change the physics or the chart semantics.
 
 ### Repository
 
-- Head: `8ac3fe8` (Phase 2.2, two-layer scene).
-- Recent commits: `8ac3fe8` two-layer scenery/wave split, `773e157` debug.2 device-report docs, `66b766c` debug.2 handoff, `51b238f` adaptive DPR/mobile tier/immersive.
-- Phases 0–2.2 are committed and pushed. The current debug APK is pre-release `v1.0.0-debug.3`.
+- Head: `1776c4f` (Phase 2.3, About card fit).
+- Recent commits: `1776c4f` phone-sized About card, `bdf8c1f` Phase 2.2 docs, `8ac3fe8` two-layer scenery/wave split, `773e157` debug.2 device-report docs.
+- Phases 0–2.3 are committed and pushed. The current debug APK is pre-release `v1.0.0-debug.4`.
 - `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
 ### Test and build status
@@ -89,6 +89,7 @@ Do not change the physics or the chart semantics.
 - GitHub Actions `Android debug APK`: green on `3f7a656` (run `40091642446`, 2.1 min, 5.98 MB artifact).
 - GitHub Actions `Android debug APK`: green on `51b238f` (run `40098152879`, 5.98 MB artifact); this run also compiled the immersive `MainActivity` and the new theme items.
 - GitHub Actions `Android debug APK`: green on `8ac3fe8` (run [`40107959365`](https://github.com/FYI88/WAVES/actions/runs/40107959365), artifact `waves-debug-apk` 6,272,620 bytes zipped / 6,761,946 bytes APK).
+- GitHub Actions `Android debug APK`: green on `1776c4f` (run [`40111884605`](https://github.com/FYI88/WAVES/actions/runs/40111884605), artifact 6,273,599 bytes zipped / 6,762,622 bytes APK).
 - Production output: approximately 3.1 MB across 96 files, including KaTeX fonts and the bundled Inter Tight / JetBrains Mono subsets.
 
 ### Releases
@@ -96,6 +97,7 @@ Do not change the physics or the chart semantics.
 - **`v1.0.0-debug.1`** (pre-release, tag on `3f7a656`) — asset `WaveS-1.0.0-debug.apk`, 6.4 MB. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.1>
 - **`v1.0.0-debug.2`** (pre-release, tag on `51b238f`) — asset `WaveS-1.0.0-debug.2.apk`, 6.4 MB. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.2>
 - **`v1.0.0-debug.3`** (pre-release, tag on `8ac3fe8`) — asset `WaveS-1.0.0-debug.3.apk`, 6,761,946 bytes. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.3>
+- **`v1.0.0-debug.4`** (pre-release, tag on `1776c4f`) — asset `WaveS-1.0.0-debug.4.apk`, 6,762,622 bytes. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.4>
 - Debug-signed. Uninstall a previous debug build before installing this one; each CI run uses a different debug key.
 - Verified each asset is publicly downloadable without authentication (debug.3: HTTP 206 on a range GET, HEAD 200 with the right `Content-Length`).
 
@@ -158,6 +160,21 @@ debug.2 on the M20 reported 29–34 fps, p95 33.4 ms, DPR bottomed out at 1.00 w
 - The About build line now includes a `__BUILD_SHA__` commit stamp (from `git rev-parse --short HEAD` in `vite.config.ts`, `"dev"` outside a checkout), so the installed build can be identified on the phone.
 
 Desktop benchmark at 450x499, low-power, shadows off: full scene at 1.0x 5.4 ms -> animated pass at 1.0x 3.9 ms, 1.25x 4.1 ms, 1.5x 4.6 ms; static pass at 2.5x 8.75 ms but only on change. A single-pass vs stacked comparison measured a mean difference of 0.79 per channel with 6,989 of 504,900 pixels over 40 — pure text/edge antialiasing, no missing or shifted geometry.
+
+### Phase 2.3 changes (device feedback, committed as `1776c4f`)
+
+The About card ("info" button) scrolled on the phone, and once scrolled the absolutely positioned close button left the screen. Tapping outside it to dismiss was also unreliable.
+
+- `.om-about` no longer has `max-height`/`overflow: auto` in portrait: the card shows all of itself at once.
+- New `@media (max-width: 420px)` block compacts the card instead of scrolling it: 38 px logo, 19 px title, 11 px tagline, two-column facts grid, 6 px mail rows, tighter model block, 34 px repo button, 24 px build and HUD rows. Measured 566.5 px tall at 360x640, leaving ~37 px of tappable backdrop above and below.
+- `useFitToViewport` in `src/App.tsx` measures the card and applies a `transform: scale()` only if it still cannot fit (floor 0.62, so text stays legible). At 320x568 it scales to 0.854 and the whole card fits with the close button in view.
+- Short landscape (`max-height: 520px`) is the one case that may still scroll, because scaling would make the type unreadable; the head is sticky there so the close button stays on screen.
+- The backdrop now closes on `pointerdown` (first contact) as well as `click`, and only when the event target is the backdrop itself, so a scroll gesture outside the card dismisses it immediately. Tapping inside the card still does nothing.
+- Verified in a 320x568 iframe: card fully inside, no scroll, close visible, 3 KaTeX equations rendered, inside tap keeps it open, outside tap closes, close button closes.
+
+### What Phase 2.3 does not include
+
+- The keyboard shortcuts sheet (`.om-help`) still scrolls; it is desktop-only and its content is a key list.
 
 ### What Phase 2.2 does not include
 
@@ -402,6 +419,12 @@ Planned:
 - `npm test` 16/16, `npm run build` green, `npx cap sync android` green. Pushed as `8ac3fe8`.
 - CI run [`40107959365`](https://github.com/FYI88/WAVES/actions/runs/40107959365) is green.
 - Published **`v1.0.0-debug.3`** on `8ac3fe8` with `WaveS-1.0.0-debug.3.apk` (6,761,946 bytes); unauthenticated range GET returns HTTP 206.
+- User feedback on debug.3: the About card scrolled on the phone and the close button scrolled out of view; tapping outside did not reliably dismiss it.
+- Phase 2.3: removed the portrait `max-height`/`overflow: auto` from `.om-about`, added a `max-width: 420px` compaction (38 px logo, 19 px title, two-column facts, tighter equations, 24 px build/HUD rows), made the backdrop dismiss on `pointerdown` at the backdrop itself, kept a scroll plus sticky head only in short landscape, and added `useFitToViewport` to scale the card (floor 0.62) when it still cannot fit.
+- Measured: 566.5 px tall at 360x640 with no scroll and ~37 px of backdrop above and below; at 320x568 it scales to 0.854 and still fits, close visible, all three equations rendered. Inside tap keeps it open, outside tap and the close button both dismiss.
+- `npm test` 16/16 and `npm run build` green. Pushed as `1776c4f`.
+- CI run [`40111884605`](https://github.com/FYI88/WAVES/actions/runs/40111884605) is green.
+- Published **`v1.0.0-debug.4`** on `1776c4f` with `WaveS-1.0.0-debug.4.apk` (6,762,622 bytes); unauthenticated range GET returns HTTP 206 and the APK contains the `1776c4f` stamp plus the compact About CSS.
 - No post-fix device measurement yet.
 
 ### 2026-10-22
@@ -417,7 +440,8 @@ Planned:
 
 ## 14. Next actions
 
-1. Install `WaveS-1.0.0-debug.3.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.3> on the M20 (uninstall debug.2 first).
-2. Open About, check that the build line shows `8ac3fe8`, tick **Performance HUD**, play for 30 s and report fps, p95, DPR, buffer size, and whether text/graphics now look sharp.
-3. If p95 is still above 22 ms at DPR 1, cut the internal-reflection wavefronts on coarse pointers (perf lever 5) and re-measure.
-4. Then Phase 3 native integration: PNG/CSV share, back button, splash; Phase 4: signed release.
+1. Install `WaveS-1.0.0-debug.4.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.4> on the M20 (uninstall debug.3 first).
+2. Open About: confirm the whole card is visible at once, no scrolling, close button on screen; tap above or below it and confirm it closes.
+3. Check the build line shows `1776c4f`, tick **Performance HUD**, play for 30 s and report fps, p95, DPR, buffer size, and whether text/graphics look sharp.
+4. If p95 is still above 22 ms at DPR 1, cut the internal-reflection wavefronts on coarse pointers (perf lever 5) and re-measure.
+5. Then Phase 3 native integration: PNG/CSV share, back button, splash; Phase 4: signed release.
