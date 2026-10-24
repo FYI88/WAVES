@@ -2,6 +2,7 @@ import {
   Component,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -887,6 +888,46 @@ function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>, dprCap = 2): Ca
     return () => ro.disconnect();
   }, [ref, dprCap]);
   return size;
+}
+
+/* ── Fitted overlay card ────────────────────────────────────────────────
+   The About card must show all of itself at once on a phone: no inner
+   scrolling, close button always in view, and a strip of backdrop above and
+   below that can be tapped to dismiss. The CSS compacts the card for narrow
+   screens; this only scales the whole card down (a vector transform, so text
+   stays sharp) when it still cannot fit, e.g. a very short viewport. Short
+   landscape is left scrollable by CSS, where scaling would make type unreadable. */
+function useFitToViewport(ref: RefObject<HTMLDivElement | null>, active: boolean) {
+  useLayoutEffect(() => {
+    const card = ref.current;
+    if (!active || !card) return;
+    let frame = 0;
+    const measure = () => {
+      card.style.transform = "";
+      const needed = card.offsetHeight;
+      const available = window.innerHeight - (window.innerHeight > 520 ? 72 : 52);
+      if (window.innerHeight > 520 && needed > available) {
+        card.style.transform = `scale(${Math.max(0.62, available / needed).toFixed(3)})`;
+      }
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
+    measure();
+    // KaTeX typesets after its dynamic import resolves, and the bundled fonts
+    // finish loading slightly later; both change the height, so measure again.
+    const timers = [200, 700].map((ms) => window.setTimeout(measure, ms));
+    void document.fonts?.ready.then(measure).catch(() => {});
+    window.addEventListener("resize", schedule);
+    window.addEventListener("orientationchange", schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      timers.forEach((timer) => clearTimeout(timer));
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("orientationchange", schedule);
+    };
+  }, [ref, active]);
 }
 
 /* ── Adaptive resolution ────────────────────────────────────────────────
@@ -2260,6 +2301,8 @@ export function App() {
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const aboutRef = useRef<HTMLDivElement>(null);
+  useFitToViewport(aboutRef, showAbout);
   const [perfOn, setPerfOn] = useState(() => {
     try {
       return localStorage.getItem("waves:perf") === "1" || new URLSearchParams(window.location.search).get("perf") === "1";
@@ -3222,8 +3265,19 @@ export function App() {
       )}
 
       {showAbout && (
-        <div className="om-help-backdrop" onClick={() => setShowAbout(false)}>
+        <div
+          className="om-help-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setShowAbout(false);
+          }}
+          onPointerDown={(event) => {
+            // touch: dismiss on the first contact outside the card instead of
+            // waiting for a full click, which a scroll gesture would swallow
+            if (event.target === event.currentTarget) setShowAbout(false);
+          }}
+        >
           <div
+            ref={aboutRef}
             className="om-about"
             role="dialog"
             aria-modal="true"
