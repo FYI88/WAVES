@@ -4,7 +4,7 @@ Last updated: 2026-10-24
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
-Head at handoff: `3f7a656` - `Phase 2: add debug APK CI and harden the Android build`
+Head at handoff: `6b0c395` (docs) - release tag `v1.0.0-debug.1` points at `3f7a656`
 
 ## 1. Mission
 
@@ -78,9 +78,9 @@ Do not change the physics or the chart semantics.
 
 ### Repository
 
-- Head: `3f7a656`.
-- Recent commits: `3f7a656` Phase 2 (debug CI), `c835e4e` Phase 1 (Capacitor + bundled fonts), `e47c85c` header clipping.
-- Phases 0–2 are committed, pushed and CI-verified. The first debug APK artifact exists.
+- Head: `6b0c395` (docs after Phase 2).
+- Recent commits: `6b0c395` handoff CI record, `3f7a656` Phase 2 (debug CI), `c835e4e` Phase 1 (Capacitor + bundled fonts).
+- Phases 0–2 are committed, pushed and CI-verified. The debug APK is published as pre-release `v1.0.0-debug.1`.
 - `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
 ### Test and build status
@@ -89,6 +89,12 @@ Do not change the physics or the chart semantics.
 - `npm run build`: green (`tsc --noEmit && vite build`).
 - GitHub Actions `Android debug APK`: green on `3f7a656` (run `40091642446`, 2.1 min, 5.98 MB artifact).
 - Production output: approximately 3.1 MB across 96 files, including KaTeX fonts and the bundled Inter Tight / JetBrains Mono subsets.
+
+### Releases
+
+- **`v1.0.0-debug.1`** (pre-release, tag on `3f7a656`) — asset `WaveS-1.0.0-debug.apk`, 6.4 MB. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.1>
+- Debug-signed. Uninstall a previous debug build before installing this one; each CI run uses a different debug key.
+- Verified the asset is publicly downloadable without authentication.
 
 ### Phase 0 changes (committed as `d3614b6`)
 
@@ -162,7 +168,7 @@ Status: committed and pushed (`c835e4e`), awaiting real-device smoke test.
 
 ### Phase 2 - Debug CI
 
-Status: done. First run `40091642446` is green; artifact `waves-debug-apk` is 5.98 MB.
+Status: done. First run `40091642446` is green; artifact `waves-debug-apk` is 5.98 MB, published as the `v1.0.0-debug.1` pre-release.
 
 - [x] Add `.github/workflows/android-debug.yml`.
 - [x] Node 22, JDK 21, Android SDK 36.
@@ -346,6 +352,7 @@ Planned:
 - Review pass before the first push: moved all actions to current 2026 majors (checkout v7, setup-node v7, setup-java v6, setup-android v4, setup-gradle v6, upload-artifact v7), let setup-android install SDK packages and accept licences, enabled Gradle wrapper validation, added `apksigner verify` + a 10 MiB size guard, pinned the Gradle wrapper checksum and switched to the `-bin` distribution, raised the Gradle heap, derived `versionName` from `package.json`, typechecked `capacitor.config.ts`, added `.nvmrc`, and documented the Android/APK flow in `README.md`.
 - Pushed Phase 2 as `3f7a656` once the PAT gained the Workflows permission.
 - First CI run [`40091642446`](https://github.com/FYI88/WAVES/actions/runs/40091642446) is fully green in 2.1 min: wrapper validation, all tests/build steps, `apksigner verify` and the 10 MB guard passed. Artifact `waves-debug-apk` is 5.98 MB (14-day retention).
+- Published **`v1.0.0-debug.1`** as a GitHub pre-release on `3f7a656` with `WaveS-1.0.0-debug.apk` (6,759,318 bytes), so the phone can download it without a GitHub login. Confirmed an unauthenticated download returns HTTP 206.
 - No real-device measurement yet; the APK has not been installed on the M20.
 
 ### 2026-10-22
@@ -361,7 +368,7 @@ Planned:
 
 ## 14. Next actions
 
-1. Download `waves-debug-apk` from run `40091642446` and install it on the M20 (uninstall any older debug build first).
+1. Install `WaveS-1.0.0-debug.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.1> on the M20 (uninstall any older debug build first).
 2. Verify Phases 0–2 on the device: layout, HUD, WebView version, baseline FPS, APK cold/warm start and PSS.
 3. Start Phase 3 native integration: PNG/CSV share, status bar, back button, splash.
 4. Start Phase 4 once the device check is clean: signed release workflow and branded icons/splash.
