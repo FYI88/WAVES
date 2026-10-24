@@ -4,7 +4,7 @@ Last updated: 2026-10-24
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
-Head at handoff: `8741636` (Phase 2.4.1) - latest release tag `v1.0.0-debug.6` points at `8741636`
+Head at handoff: `e4b1a8b` (Phase 2.4.2) - latest release tag `v1.0.0-debug.7` points at `e4b1a8b`
 
 ## 1. Mission
 
@@ -77,9 +77,9 @@ Do not change the physics or the chart semantics.
 
 ### Repository
 
-- Head: `8741636` (Phase 2.4.1, GitHub button restored).
-- Recent commits: `8741636` bordered GitHub button, `00e9bf3` About card without the model block, `bb37d3c` Phase 2.3 docs, `1776c4f` phone-sized About card.
-- Phases 0–2.4.1 are committed and pushed. The current debug APK is pre-release `v1.0.0-debug.6`.
+- Head: `e4b1a8b` (Phase 2.4.2, canvas selection and incident label fixed).
+- Recent commits: `e4b1a8b` canvas selection + emoji glyph + touch-hover repaints, `bb4ac1a` Phase 2.4.1 docs, `8741636` bordered GitHub button, `00e9bf3` About card without the model block, `1776c4f` phone-sized About card.
+- Phases 0–2.4.2 are committed and pushed. The current debug APK is pre-release `v1.0.0-debug.7`.
 - `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
 ### Test and build status
@@ -92,6 +92,7 @@ Do not change the physics or the chart semantics.
 - GitHub Actions `Android debug APK`: green on `1776c4f` (run [`40111884605`](https://github.com/FYI88/WAVES/actions/runs/40111884605), artifact 6,273,599 bytes zipped / 6,762,622 bytes APK).
 - GitHub Actions `Android debug APK`: green on `00e9bf3` (run [`40114195190`](https://github.com/FYI88/WAVES/actions/runs/40114195190), artifact `waves-debug-apk` 5,288,051 bytes zipped / 5,768,915 bytes APK).
 - GitHub Actions `Android debug APK`: green on `8741636` (run [`40115210963`](https://github.com/FYI88/WAVES/actions/runs/40115210963), artifact `waves-debug-apk` 5,288,093 bytes zipped / 5,768,947 bytes APK).
+- GitHub Actions `Android debug APK`: green on `e4b1a8b` (run [`40117554972`](https://github.com/FYI88/WAVES/actions/runs/40117554972), artifact `waves-debug-apk` 5,288,057 bytes zipped / 5,768,927 bytes APK).
 - Production output: 1,897,330 bytes across 35 files. Dropping KaTeX removed ~1.2 MB and 61 files (was ~3.1 MB / 96 files).
 
 ### Releases
@@ -102,8 +103,9 @@ Do not change the physics or the chart semantics.
 - **`v1.0.0-debug.4`** (pre-release, tag on `1776c4f`) — asset `WaveS-1.0.0-debug.4.apk`, 6,762,622 bytes. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.4>
 - **`v1.0.0-debug.5`** (pre-release, tag on `00e9bf3`) — asset `WaveS-1.0.0-debug.5.apk`, 5,768,915 bytes, SHA-256 `B6B1CB30110B6331E049824CA2FB0BE5CE45B5546FB663EC0859B793060D8113`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.5>
 - **`v1.0.0-debug.6`** (pre-release, tag on `8741636`) — asset `WaveS-1.0.0-debug.6.apk`, 5,768,947 bytes, SHA-256 `BA41D2BFF832CEF97AB0ECDDB03D263FB638AB97B41D6098402487475C555363`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.6>
+- **`v1.0.0-debug.7`** (pre-release, tag on `e4b1a8b`) — asset `WaveS-1.0.0-debug.7.apk`, 5,768,927 bytes, SHA-256 `5AF7EB700BCA441B3532660ACBFBDB08EB719CBBCE77201B7D31FEEBC9857899`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.7>
 - Debug-signed. Uninstall a previous debug build before installing this one; each CI run uses a different debug key.
-- Verified each asset is publicly downloadable without authentication (debug.5 and debug.6: HTTP 206 on a range GET, HEAD 200 with the right `Content-Length`, and a full unauthenticated download matched the local SHA-256).
+- Verified each asset is publicly downloadable without authentication (debug.5–debug.7: HTTP 206 on a range GET, HEAD 200 with the right `Content-Length`, and a full unauthenticated download matched the local SHA-256).
 
 ### Phase 0 changes (committed as `d3614b6`)
 
@@ -202,6 +204,19 @@ The plain repository row lost the bordered button the user liked, including its 
 - Short landscape is 660x266.9 px at 780x360 with no scroll and 46.5 px strips; the footer is pushed to the bottom of the right column, so the 40 px button still fits.
 - Re-verified: 16/16 tests, `tsc --noEmit`, `npm run build`, `npx cap sync android`; no scroll at 320x568, 360x640 or 780x360; close visible; inside tap keeps it open, outside `pointerdown` and the close button dismiss; a simulated 40 px coarse close keeps the card at 367.1 px with a two-line tagline. The shipped APK contains the `8741636` stamp, the 40 px and 34 px button rules, and the hover/press effects, with no `om-about-arrow` markup and no KaTeX references.
 
+### Phase 2.4.2 changes (device regressions, committed as `e4b1a8b`)
+
+Three regressions reported after debug.6. None of them came from the About card work: `git diff 1776c4f..HEAD` touches only `App.tsx` (About markup), `styles.css` (About rules), `package.json` and the lockfile. `waveRays.ts`, `spatialScene.ts`, `physics.ts`, `materialSurfaces.ts`, `capacitor.config.ts` and `android/` were untouched.
+
+1. **Material tiles in the canvas stopped selecting layers.** Introduced by the Phase 2.2 two-canvas split (`8ac3fe8`), not by the About work. The animated pass calls `drawWaveRays(..., { layer: "animated" })`, which paints only the moving waves and returns empty `rects`/`tiles`; the frame loop assigned that empty result to `layout.current`, wiping the hit geometry the static pass had just published. `hit()` therefore always found nothing.
+   - The animated pass no longer writes `layout.current` in section view; the static pass owns the tiles and slabs, and its return value is assigned there.
+   - The spatial view still rebuilds geometry every frame, because its camera moves every frame.
+2. **Emoji in the incident-wave label.** `polGlyph` drew `E ⊙` for TE and `E ↕` for TM. Android has no text glyph for those code points in the bundled font, so WebView fell back to the colour emoji font. It now draws plain `TE` / `TM` / `TE+TM`, matching the header readout.
+3. **Touch lag and freezes.** `onPointerMove` called `setHover(hit(event))` unconditionally. On a phone every finger move (including the moves that precede a tap) changed hover state, which repainted the whole scenery canvas at 2.5x device pixels and re-rendered the App tree. Taps therefore competed with repeated full-resolution repaints and often felt frozen or got lost.
+   - Hover updates are skipped on coarse pointers; the static layer now repaints only when the setup, theme, selection or annotations actually change.
+   - `sceneParams` is memoised on `[res, sim, t]`; before this, every App render created a fresh object and forced a full scenery repaint on unrelated state changes.
+   - Verified with synthetic pointer events at desktop size (789.6x412.4, 3 layers, 150 px tiles) and compact phone size (349.6 px wide, 100.5 px tiles): clicking tiles 0, 1 and 2 selects the matching layer. A `fillText` probe during a theme repaint captured `INCIDENT` + `TE` and no `⊙`/`↕`; no other canvas label uses those glyphs. `tsc --noEmit` clean, 16/16 tests, build green.
+
 ### What Phase 2.3 does not include
 
 - The keyboard shortcuts sheet (`.om-help`) still scrolls; it is desktop-only and its content is a key list.
@@ -247,7 +262,7 @@ Status: committed and pushed (`c835e4e`), awaiting real-device smoke test.
 
 ### Phase 2 - Debug CI
 
-Status: done. Runs `40091642446`, `40098152879`, `40107959365`, `40111884605`, `40114195190` and `40115210963` are green; artifact `waves-debug-apk` is 5.3–6.3 MB zipped, published as `v1.0.0-debug.1` through `v1.0.0-debug.6`.
+Status: done. Runs `40091642446`, `40098152879`, `40107959365`, `40111884605`, `40114195190`, `40115210963` and `40117554972` are green; artifact `waves-debug-apk` is 5.3–6.3 MB zipped, published as `v1.0.0-debug.1` through `v1.0.0-debug.7`.
 
 - [x] Add `.github/workflows/android-debug.yml`.
 - [x] Node 22, JDK 21, Android SDK 36.
@@ -465,6 +480,12 @@ Planned:
 - Phase 2.4.1: restored the 40 px bordered `.om-about-repo` button (10 px radius, accent-tinted hover fill, accent border on hover, 0.995 press scale), removed the `↗` arrow, and kept the 34 px phone height. Card is 367.1 px at 320x568 and 360x640, 660x266.9 px in short landscape, still no scroll. Tests/build/sync green. Pushed as `8741636`.
 - CI run [`40115210963`](https://github.com/FYI88/WAVES/actions/runs/40115210963) green; artifact 5,288,093 bytes zipped / 5,768,947 bytes APK. The APK contains the `8741636` stamp and the restored button rules.
 - Published **`v1.0.0-debug.6`** on `8741636` with `WaveS-1.0.0-debug.6.apk` (5,768,947 bytes); range GET 206, HEAD 200, and a full unauthenticated download matched SHA-256 `BA41D2BF…555363`.
+- User feedback on debug.6: material tiles in the canvas no longer select layers, the incident-wave label shows an emoji-like glyph, and the scene is laggy and freezes.
+- Phase 2.4.2: traced all three. The tile regression came from `8ac3fe8` (Phase 2.2), not the About work: the animated pass returned empty `rects`/`tiles` and overwrote `layout.current` every frame, so `hit()` never matched. The glyph was `E ⊙` / `E ↕` falling back to Android's colour emoji font. The lag came from `setHover` on every pointer move repainting the 2.5x scenery layer, plus a new `sceneParams` object on every App render forcing the same repaint.
+- Fixes: static pass owns `layout.current` in section view; animated pass only paints; hover skipped on coarse pointers; `sceneParams` memoised on `[res, sim, t]`; incident pill draws plain `TE`/`TM`/`TE+TM`.
+- Verified: tiles 0/1/2 select correctly at 789.6x412.4 and at 349.6 px compact width; `fillText` probe captured `INCIDENT` + `TE`, no `⊙`/`↕`; `tsc --noEmit`, 16/16 tests, build green. Pushed as `e4b1a8b`.
+- CI run [`40117554972`](https://github.com/FYI88/WAVES/actions/runs/40117554972) green; artifact 5,288,057 bytes zipped / 5,768,927 bytes APK. The APK contains the `e4b1a8b` stamp, two `layout.current` assignments, the coarse-pointer hover guard and plain `TE+TM`, with no `⊙`/`↕` code points.
+- Published **`v1.0.0-debug.7`** on `e4b1a8b` with `WaveS-1.0.0-debug.7.apk` (5,768,927 bytes); range GET 206, HEAD 200, and a full unauthenticated download matched SHA-256 `5AF7EB70…57899`.
 
 ### 2026-10-22
 
@@ -479,8 +500,9 @@ Planned:
 
 ## 14. Next actions
 
-1. Install `WaveS-1.0.0-debug.6.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.6> on the M20 (uninstall debug.5 first).
-2. Open About: confirm the whole card is visible at once, no scrolling, close button on screen; tap above or below it and confirm it closes. Hover or press the GitHub button and confirm the bordered style and its effects are back.
-3. Check the build line shows `8741636`, tick **Performance HUD**, play for 30 s and report fps, p95, DPR, buffer size, and whether text/graphics look sharp.
-4. If p95 is still above 22 ms at DPR 1, cut the internal-reflection wavefronts on coarse pointers (perf lever 5) and re-measure.
-5. Then Phase 3 native integration: PNG/CSV share, back button, splash; Phase 4: signed release.
+1. Install `WaveS-1.0.0-debug.7.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.7> on the M20 (uninstall debug.6 first).
+2. Tap the three material tiles drawn inside the canvas and confirm each selects the matching layer in the list below; tap the slabs themselves as well.
+3. Confirm the incident-wave label reads `INCIDENT` with a plain `TE` underneath and no emoji-like symbol.
+4. Check the build line shows `e4b1a8b`, tick **Performance HUD**, play for 30 s and report fps, p95, DPR, buffer size, and whether text/graphics look sharp. Note whether the freeze still happens and what you were doing at the time (dragging, rotating the spatial view, opening About).
+5. If p95 is still above 22 ms at DPR 1, cut the internal-reflection wavefronts on coarse pointers (perf lever 5) and re-measure.
+6. Then Phase 3 native integration: PNG/CSV share, back button, splash; Phase 4: signed release.
