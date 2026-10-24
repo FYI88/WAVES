@@ -4,7 +4,7 @@ Last updated: 2026-10-24
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
-Head at handoff: `51b238f` - release tag `v1.0.0-debug.2` points at `51b238f`
+Head at handoff: `66b766c` (docs) - release tag `v1.0.0-debug.2` points at `51b238f`
 
 ## 1. Mission
 
@@ -76,8 +76,8 @@ Do not change the physics or the chart semantics.
 
 ### Repository
 
-- Head: `51b238f` (Phase 2.1 perf + immersive; docs commit follows).
-- Recent commits: `51b238f` adaptive DPR/mobile tier/immersive, `1dc1b52` debug.1 release docs, `3f7a656` Phase 2 (debug CI), `c835e4e` Phase 1 (Capacitor + bundled fonts).
+- Head: `66b766c` (docs after Phase 2.1).
+- Recent commits: `66b766c` debug.2 handoff, `51b238f` adaptive DPR/mobile tier/immersive, `1dc1b52` debug.1 release docs, `3f7a656` Phase 2 (debug CI).
 - Phases 0–2.1 are committed, pushed and CI-verified. The debug APK is published as pre-release `v1.0.0-debug.2`.
 - `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
