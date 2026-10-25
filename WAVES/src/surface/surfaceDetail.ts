@@ -2,6 +2,7 @@ import { DEG } from "../physics";
 import { MONO, SANS } from "../theme";
 import { profileHeight, type ProfileParams, type ProfileSlice } from "./profiles";
 import type { RcwaSweep } from "./rcwa";
+import type { SweepAxis } from "./labState";
 
 /* Detail cross-section of a profiled wall and its diffraction orders.
    Screen x = depth into the wall (z), screen y = along the period (x).
@@ -40,9 +41,26 @@ export interface DetailParams {
   bubbles: { fraction: number; water: boolean; diameterMm: number; target: number } | null;
   fog: number;
   lang: "fr" | "en";
+  /** draw the local surface normals (outward, towards the air) */
+  normals: boolean;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/* Sweep chart axes: angle (linear, degrees) or frequency (log, GHz). */
+export const SWEEP_ANGLE_MAX = 85;
+export const SWEEP_F_MIN = 0.5;
+export const SWEEP_F_MAX = 40;
+/** horizontal plot margins of drawOrderSweep, in CSS px (pointer mapping uses them too) */
+export const SWEEP_PAD = { l: 36, r: 12 };
+
+/** position of a value along the sweep axis, 0 to 1 */
+export const sweepFrac = (axis: SweepAxis, v: number) =>
+  axis === "angle" ? v / SWEEP_ANGLE_MAX : Math.log(v / SWEEP_F_MIN) / Math.log(SWEEP_F_MAX / SWEEP_F_MIN);
+
+/** inverse of sweepFrac */
+export const sweepValue = (axis: SweepAxis, frac: number) =>
+  axis === "angle" ? frac * SWEEP_ANGLE_MAX : SWEEP_F_MIN * Math.pow(SWEEP_F_MAX / SWEEP_F_MIN, frac);
 
 const hexA = (hex: string, a: number) => {
   const h = hex.replace("#", "");
@@ -183,6 +201,33 @@ export function drawSurfaceDetail(
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
+
+  /* local normals: surface x = s(y), tangent (s′, 1), outward normal (−1, s′)/|…| */
+  if (p.normals && prof.id !== "flat" && depthPx > 2) {
+    const stepY = clamp(periodPx / 8, 9, 28);
+    const len = compact ? 9 : 12;
+    ctx.save();
+    ctx.strokeStyle = hexA(pal.ink, 0.6);
+    ctx.fillStyle = hexA(pal.ink, 0.6);
+    ctx.lineWidth = 1;
+    for (let y = top + stepY / 2; y < bottom; y += stepY) {
+      const sx = surfaceX(y);
+      const slope = (surfaceX(y + 0.75) - surfaceX(y - 0.75)) / 1.5;
+      // skip the vertical jumps of créneaux / dents de scie / marches
+      if (!Number.isFinite(slope) || Math.abs(slope) > 40) continue;
+      const n = Math.hypot(1, slope);
+      const nx = -1 / n;
+      const ny = slope / n;
+      ctx.beginPath();
+      ctx.moveTo(sx, y);
+      ctx.lineTo(sx + nx * len, y + ny * len);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(sx, y, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 
   /* flat layers */
   let x = baseX;
@@ -418,20 +463,24 @@ export function drawOrderSweep(
   w: number,
   h: number,
   sweep: RcwaSweep | null,
-  angle: number,
+  axis: SweepAxis,
+  cursor: number,
   pal: LabPalette,
   lang: "fr" | "en",
   fmt: (v: number, d?: number) => string,
 ) {
   const fr = lang === "fr";
   ctx.clearRect(0, 0, w, h);
-  const L = 36;
-  const R = 12;
+  const L = SWEEP_PAD.l;
+  const R = SWEEP_PAD.r;
   const T = 14;
   const B = 22;
-  const xMax = 85;
-  const X = (a: number) => L + ((w - L - R) * a) / xMax;
+  const X = (v: number) => L + (w - L - R) * clamp(sweepFrac(axis, v), 0, 1);
   const Y = (v: number) => T + (h - T - B) * (1 - clamp(v, 0, 1));
+  const ticks =
+    axis === "angle"
+      ? [0, 15, 30, 45, 60, 75].map((a) => ({ v: a, label: `${a}°` }))
+      : [0.5, 1, 2, 5, 10, 20, 40].map((f) => ({ v: f, label: fmt(f, f < 1 ? 1 : 0) }));
   ctx.save();
   ctx.strokeStyle = pal.grid;
   ctx.fillStyle = pal.faint;
@@ -447,7 +496,19 @@ export function drawOrderSweep(
   }
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  for (let a = 0; a <= xMax; a += 15) ctx.fillText(`${a}°`, X(a), h - B + 6);
+  for (const tk of ticks) {
+    if (axis === "freq") {
+      ctx.beginPath();
+      ctx.moveTo(Math.round(X(tk.v)) + 0.5, T);
+      ctx.lineTo(Math.round(X(tk.v)) + 0.5, h - B);
+      ctx.stroke();
+    }
+    ctx.fillText(tk.label, X(tk.v), h - B + 6);
+  }
+  if (axis === "freq") {
+    ctx.textAlign = "right";
+    ctx.fillText("GHz", w - R, T - 12);
+  }
   ctx.restore();
   if (!sweep || sweep.x.length < 2) {
     ctx.fillStyle = pal.muted;
@@ -477,8 +538,8 @@ export function drawOrderSweep(
   ctx.strokeStyle = hexA(pal.ink, 0.5);
   ctx.setLineDash([2, 3]);
   ctx.beginPath();
-  ctx.moveTo(X(clamp(angle, 0, xMax)) + 0.5, T);
-  ctx.lineTo(X(clamp(angle, 0, xMax)) + 0.5, h - B);
+  ctx.moveTo(X(cursor) + 0.5, T);
+  ctx.lineTo(X(cursor) + 0.5, h - B);
   ctx.stroke();
   ctx.restore();
 }

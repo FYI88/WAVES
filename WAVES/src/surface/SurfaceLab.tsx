@@ -7,7 +7,20 @@ import { lambdaCm, littrowDeg, propagatingOrders } from "./grating";
 import { wallAt, type WallSpec } from "./rcwaJobs";
 import { rcwaPoint, rcwaSweep } from "./rcwaClient";
 import type { RcwaResult, RcwaSweep } from "./rcwa";
-import { drawOrderSweep, drawSurfaceDetail, type DetailOrder, type DetailParams, type LabPalette } from "./surfaceDetail";
+import {
+  SWEEP_ANGLE_MAX,
+  SWEEP_F_MAX,
+  SWEEP_F_MIN,
+  SWEEP_PAD,
+  drawOrderSweep,
+  drawSurfaceDetail,
+  sweepValue,
+  type DetailOrder,
+  type DetailParams,
+  type LabPalette,
+} from "./surfaceDetail";
+import { LAB_MAX_BELOW, labFromHash, loadLab, saveLab, setLabSnapshot, type LabLayer, type LabMode, type LabState, type SweepAxis } from "./labState";
+import { downloadText } from "../dom";
 import { LAB_SCENARIOS, type LabScenario } from "./scenarios";
 import { NO_INCLUSIONS, inclusionValidity, type InclusionKind, type Inclusions } from "../media/mixing";
 import { FOG_PRESETS, NO_FOG, fogDbPerKm, withFog, type Fog, type FogPreset } from "../media/fog";
@@ -22,14 +35,8 @@ import "./surfaceLab.css";
    ════════════════════════════════════════════════════════════════════════ */
 
 type Tab = "surface" | "layers" | "medium" | "wave" | "calc";
-type Mode = "fast" | "rigorous";
-
-interface BelowLayer {
-  material: SurfaceMaterialId;
-  cm: number;
-  customEps: number;
-  customSigma: number;
-}
+type Mode = LabMode;
+type BelowLayer = LabLayer;
 
 export interface SurfaceLabProps {
   freq: number;
@@ -44,9 +51,11 @@ export interface SurfaceLabProps {
 }
 
 const TABS: Tab[] = ["surface", "layers", "medium", "wave", "calc"];
-const MAX_BELOW = 4;
-const SWEEP_MAX = 85;
+const MAX_BELOW = LAB_MAX_BELOW;
+const SWEEP_MAX = SWEEP_ANGLE_MAX;
 const SWEEP_ANGLES = Array.from({ length: 35 }, (_, i) => i * 2.5);
+/** 41 log-spaced frequencies, 0.5 to 40 GHz */
+const SWEEP_FREQS = Array.from({ length: 41 }, (_, i) => Number((SWEEP_F_MIN * Math.pow(SWEEP_F_MAX / SWEEP_F_MIN, i / 40)).toFixed(4)));
 const SWEEP_HARMONICS = 6;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -161,22 +170,25 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   const matName = (id: SurfaceMaterialId) => MATERIAL_NAMES[id][lang];
   const pct = (v: number) => fmtNum(v * 100, v * 100 < 10 ? 2 : 1);
 
+  // share link > saved state > defaults (read once)
+  const init = useMemo(() => loadLab(), []);
   const [tab, setTab] = useState<Tab>("surface");
-  const [profile, setProfile] = useState<ProfileParams>({ ...DEFAULT_PROFILE, id: "square", period: 4, depth: 2 });
-  const [material, setMaterial] = useState<SurfaceMaterialId>("concrete");
-  const [customEps, setCustomEps] = useState(4);
-  const [customSigma, setCustomSigma] = useState(0.05);
-  const [below, setBelow] = useState<BelowLayer[]>([{ material: "concrete", cm: 15, customEps: 4, customSigma: 0.05 }]);
-  const [inclusions, setInclusions] = useState<Inclusions>(NO_INCLUSIONS);
-  const [incTarget, setIncTarget] = useState(-1);
-  const [fog, setFog] = useState<Fog>(NO_FOG);
-  const [mode, setMode] = useState<Mode>("fast");
-  const [harmonics, setHarmonics] = useState(10);
-  const [slices, setSlices] = useState(16);
+  const [profile, setProfile] = useState<ProfileParams>(init.profile);
+  const [material, setMaterial] = useState<SurfaceMaterialId>(init.material);
+  const [customEps, setCustomEps] = useState(init.customEps);
+  const [customSigma, setCustomSigma] = useState(init.customSigma);
+  const [below, setBelow] = useState<BelowLayer[]>(init.below);
+  const [inclusions, setInclusions] = useState<Inclusions>(init.inclusions);
+  const [incTarget, setIncTarget] = useState(init.incTarget);
+  const [fog, setFog] = useState<Fog>(init.fog);
+  const [mode, setMode] = useState<Mode>(init.mode);
+  const [harmonics, setHarmonics] = useState(init.harmonics);
+  const [slices, setSlices] = useState(init.slices);
+  const [axis, setAxis] = useState<SweepAxis>(init.axis);
   const [scenario, setScenario] = useState<string | null>(null);
 
   const [point, setPoint] = useState<{ key: string; result: RcwaResult; ms: number } | null>(null);
-  const [sweep, setSweep] = useState<{ key: string; sweep: RcwaSweep } | null>(null);
+  const [sweep, setSweep] = useState<{ key: string; axis: SweepAxis; sweep: RcwaSweep } | null>(null);
   const [pointBusy, setPointBusy] = useState(false);
   const [sweepBusy, setSweepBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -211,6 +223,42 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
     onAngle(Math.round(s.thetaDeg * 10) / 10);
   };
 
+  const applyLab = (s: LabState) => {
+    setProfile(s.profile);
+    setMaterial(s.material);
+    setCustomEps(s.customEps);
+    setCustomSigma(s.customSigma);
+    setBelow(s.below);
+    setInclusions(s.inclusions);
+    setIncTarget(s.incTarget);
+    setFog(s.fog);
+    setMode(s.mode);
+    setHarmonics(s.harmonics);
+    setSlices(s.slices);
+    setAxis(s.axis);
+    setScenario(null);
+  };
+
+  // saved locally and exposed to the share link (share codec v2)
+  useEffect(() => {
+    const s: LabState = { profile, material, customEps, customSigma, below, inclusions, incTarget, fog, mode, harmonics, slices, axis };
+    setLabSnapshot(s);
+    const timer = window.setTimeout(() => saveLab(s), 250);
+    return () => window.clearTimeout(timer);
+  }, [profile, material, customEps, customSigma, below, inclusions, incTarget, fog, mode, harmonics, slices, axis]);
+
+  // a pasted share link replaces the lab setup, as it does for the main simulator
+  useEffect(() => {
+    const onHash = () => {
+      const s = labFromHash(window.location.hash);
+      if (s) applyLab(s);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+    // applyLab only calls state setters
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* ───────── physics ───────── */
 
   const target = incTarget < below.length ? incTarget : -1;
@@ -238,21 +286,29 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
     [profile.id, profile.period, freq, angle],
   );
 
+  // the axis variable is swept, the other one is held at its current value
+  const sweepHeld = axis === "angle" ? freq : angle;
   const fastSweep = useMemo<RcwaSweep>(() => {
+    const xs = axis === "angle" ? SWEEP_ANGLES : SWEEP_FREQS;
+    const fixedWall = axis === "angle" ? wallAt(spec, sweepHeld) : null;
     const R0: number[] = [];
     const T0: number[] = [];
     const A: number[] = [];
-    for (const a of SWEEP_ANGLES) {
-      const r = emtSolve(profile, wall.eta, wall.below, freq, a, pol, slices);
+    for (const x of xs) {
+      const f = axis === "angle" ? sweepHeld : x;
+      const a = axis === "angle" ? x : sweepHeld;
+      // frequency sweep: re-evaluate the ITU-R dispersion at every point
+      const w = fixedWall ?? wallAt(spec, f);
+      const r = emtSolve(profile, w.eta, w.below, f, a, pol, slices);
       R0.push(r.R);
       T0.push(r.T);
       A.push(r.A);
     }
-    return { x: SWEEP_ANGLES, R0, T0, R: R0, T: T0, A, orderR: { 0: R0 }, orderT: { 0: T0 } };
-  }, [profile, wall, freq, pol, slices]);
+    return { x: xs, R0, T0, R: R0, T: T0, A, orderR: { 0: R0 }, orderT: { 0: T0 } };
+  }, [axis, sweepHeld, spec, profile, pol, slices]);
 
   const pointKey = JSON.stringify([spec, freq, angle, pol, harmonics, slices]);
-  const sweepKey = JSON.stringify([spec, freq, pol, slices]);
+  const sweepKey = JSON.stringify([axis, spec, sweepHeld, pol, slices]);
 
   useEffect(() => {
     if (mode !== "rigorous") {
@@ -292,9 +348,14 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
     let alive = true;
     setSweepBusy(true);
     const timer = window.setTimeout(() => {
-      rcwaSweep({ kind: "angle", wall: spec, pol, harmonics: Math.min(harmonics, SWEEP_HARMONICS), slices, fGHz: freq, angles: SWEEP_ANGLES })
+      const sweepHarmonics = Math.min(harmonics, SWEEP_HARMONICS);
+      const request =
+        axis === "angle"
+          ? rcwaSweep({ kind: "angle", wall: spec, pol, harmonics: sweepHarmonics, slices, fGHz: sweepHeld, angles: SWEEP_ANGLES })
+          : rcwaSweep({ kind: "freq", wall: spec, pol, harmonics: sweepHarmonics, slices, thetaDeg: sweepHeld, freqs: SWEEP_FREQS });
+      request
         .then((result) => {
-          if (alive) setSweep({ key: sweepKey, sweep: result });
+          if (alive) setSweep({ key: sweepKey, axis, sweep: result });
         })
         .catch((e: unknown) => {
           if (alive) setError(e instanceof Error ? e.message : String(e));
@@ -316,7 +377,8 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   const T = rigorous ? rigorous.T : emt.T;
   const A = rigorous ? rigorous.A : emt.A;
   const link = withFog(R, T, fog, freq);
-  const shownSweep = mode === "rigorous" ? sweep?.sweep ?? null : fastSweep;
+  // never show an angle sweep on the frequency axis (or the reverse) while the new one runs
+  const shownSweep = mode === "rigorous" ? (sweep && sweep.axis === axis ? sweep.sweep : null) : fastSweep;
 
   const hostEta =
     target < 0
@@ -349,6 +411,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
       bubbles: hasBubbles ? { fraction: inclusions.fraction, water: inclusions.kind === "water", diameterMm: inclusions.diameterMm, target } : null,
       fog: fog.lwc,
       lang,
+      normals: tab === "surface",
     }),
     [profile, material, below, angle, detailOrders, rigorous, tab, slices, hasBubbles, inclusions, target, fog.lwc, lang],
   );
@@ -383,18 +446,41 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
     if (!canvas) return;
     const draw = () => {
       const { ctx, w, h } = fitCanvas(canvas);
-      if (ctx) drawOrderSweep(ctx, w, h, shownSweep, angle, pal, lang, fmtNum);
+      if (ctx) drawOrderSweep(ctx, w, h, shownSweep, axis, axis === "angle" ? angle : freq, pal, lang, fmtNum);
     };
     draw();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => draw()) : null;
     ro?.observe(canvas);
     return () => ro?.disconnect();
-  }, [shownSweep, angle, pal, lang, fmtNum]);
+  }, [shownSweep, axis, angle, freq, pal, lang, fmtNum]);
 
-  const angleFromPointer = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+  // click / drag on the sweep chart sets θ or f, depending on the axis
+  const sweepFromPointer = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    const a = ((e.clientX - r.left - 36) / Math.max(1, r.width - 48)) * SWEEP_MAX;
-    onAngle(clamp(Math.round(a * 2) / 2, 0, SWEEP_MAX));
+    const frac = clamp((e.clientX - r.left - SWEEP_PAD.l) / Math.max(1, r.width - SWEEP_PAD.l - SWEEP_PAD.r), 0, 1);
+    const v = sweepValue(axis, frac);
+    if (axis === "angle") onAngle(clamp(Math.round(v * 2) / 2, 0, SWEEP_MAX));
+    else onFreq(clamp(Number(v.toFixed(v < 10 ? 2 : 1)), SWEEP_F_MIN, SWEEP_F_MAX));
+  };
+
+  const downloadSweepCsv = () => {
+    const s = shownSweep;
+    if (!s) return;
+    const sep = lang === "fr" ? ";" : ",";
+    const cell = (v: number) => {
+      const out = Number.isFinite(v) ? v.toPrecision(6) : "";
+      return lang === "fr" ? out.replace(".", ",") : out;
+    };
+    const ms = Object.keys(s.orderR)
+      .map(Number)
+      .filter((m) => m !== 0)
+      .sort((a, b) => a - b);
+    const head = [axis === "angle" ? "angle_deg" : "freq_GHz", "R0", "T0", "R", "T", "A", ...ms.flatMap((m) => [`R_${m}`, `T_${m}`])].join(sep);
+    const rows = s.x.map((x, i) =>
+      [x, s.R0[i], s.T0[i], s.R[i], s.T[i], s.A[i], ...ms.flatMap((m) => [s.orderR[m][i], s.orderT[m][i]])].map(cell).join(sep),
+    );
+    const held = axis === "angle" ? `${freq}GHz` : `${angle}deg`;
+    downloadText([head, ...rows].join("\n"), `waves-lab-${axis}-${profile.id}-${pol}-${mode}-${held}.csv`);
   };
 
   /* ───────── tabs ───────── */
@@ -705,6 +791,29 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
             ))}
           </tbody>
         </table>
+        {rigorous && rigorous.orders.length > 0 && (
+          <div className="sl-bars" aria-label={t.efficiency}>
+            <div className="sl-bar-row sl-bar-head">
+              <span>{t.order}</span>
+              <span>R</span>
+              <span>T</span>
+            </div>
+            {rigorous.orders.map((o) => (
+              <div key={o.m} className={`sl-bar-row ${o.m === 0 ? "is-spec" : ""}`}>
+                <span className="sl-mono">
+                  {o.m > 0 ? "+" : ""}
+                  {o.m}
+                </span>
+                <span className="sl-bar" title={`R ${pct(o.R)} %`}>
+                  <i style={{ width: `${clamp(o.R, 0, 1) * 100}%`, background: "var(--sl-ref)" }} />
+                </span>
+                <span className="sl-bar" title={`T ${pct(o.T)} %`}>
+                  <i style={{ width: `${clamp(o.T, 0, 1) * 100}%`, background: "var(--sl-tra)" }} />
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         {fog.lwc > 0 && (
           <dl className="sl-kv sl-mono">
             <dt>{t.link} · R</dt>
@@ -750,8 +859,22 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
           <div className="sl-view">
             <div className="sl-view-head">
               <div>
-                <h3>{t.sweepTitle}</h3>
-                <span>{t.sweepHint}</span>
+                <h3>{axis === "angle" ? t.sweepTitle : t.sweepTitleFreq}</h3>
+                <span>{axis === "angle" ? t.sweepHint : t.sweepHintFreq}</span>
+              </div>
+              <div className="sl-view-tools">
+                <Seg<SweepAxis>
+                  label={t.sweepAxis}
+                  value={axis}
+                  onChange={setAxis}
+                  options={[
+                    { value: "angle", label: t.axisAngle },
+                    { value: "freq", label: t.axisFreq },
+                  ]}
+                />
+                <button type="button" className="sl-btn sl-btn-sm" title={t.csvTitle} aria-label={t.csvTitle} disabled={!shownSweep} onClick={downloadSweepCsv}>
+                  CSV
+                </button>
               </div>
               <div className="sl-legend">
                 <span><i style={{ "--tone": "var(--sl-ref)" } as CSSProperties} />R₀</span>
@@ -765,9 +888,9 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
               className="sl-sweep"
               role="img"
               aria-label={t.sweepTitle}
-              onPointerDown={angleFromPointer}
+              onPointerDown={sweepFromPointer}
               onPointerMove={(e) => {
-                if (e.buttons === 1) angleFromPointer(e);
+                if (e.buttons === 1) sweepFromPointer(e);
               }}
             />
           </div>
