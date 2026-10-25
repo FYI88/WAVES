@@ -1,6 +1,6 @@
 # WaveS - Android packaging handoff
 
-Last updated: 2026-10-24
+Last updated: 2026-10-25 (GitLab / Surface lab track: see §15; Android track unchanged since 2026-10-24)
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
@@ -328,12 +328,35 @@ Select-String -Path src\styles.css -Pattern "dvh"
 - `.nvmrc`: Node 22 for local version managers.
 - `HANDOFF.md`: this file.
 
+Added by the GitLab / Surface lab track (§15):
+
+- `.gitlab-ci.yml` (repo root): GitLab CI, `test` + `build` in `WAVES/` on `node:22`.
+- `src/render/util.ts`: shared renderer helpers (`rgba`, `mix`, `clamp`, `tintOf`, single `AIR_TINT`).
+- `src/theme.ts`, `src/i18n/` (dictionaries, `format.ts`), `src/state/` (layers, results, presets, persistence), `src/dom.ts`: extracted from `App.tsx` (on `main` since !1).
+- `src/scene/` (`canvas.ts`, `RayScene.tsx`) and `src/charts/` (`draw.ts`, `AngleChart.tsx`, `FieldChart.tsx`): extracted from `App.tsx` (on `main` since !1). `App.tsx` is about 1470 lines on `main`.
+- `src/surface/`: profiles, EMT, grating equation, RCWA + worker, metal, scenarios, Surface lab panel (`SurfaceLab.tsx`, `labText.ts`, `surfaceLab.css`, `surfaceDetail.ts`), lab state / share (`labState.ts`), main-view overlay (`sceneOverlay.ts`). On `feature/profiled-walls` (!2).
+- `src/media/`: bubbles (Maxwell Garnett), water permittivity, fog (P.840). On `feature/profiled-walls` (!2).
+
 Planned:
 
 - `.github/workflows/android-release.yml`
 - `THIRD_PARTY_NOTICES.md`
 
 ## 13. Journal
+
+### 2026-10-25 (GitLab / Surface lab track)
+
+- !1 finished and merged into `main`: `App.tsx` now imports the modules extracted in Phase 1 (theme, i18n, state, dom, scene, charts) instead of keeping copies (3205 → 1467 lines); angle sweep memoized on `stackSweepKey`. Intermediate commit `3df9e23a` failed CI by design, `1d0d978b` fixed it.
+- !2: Phase 4 (#5) done: θ / f sweep axis, order efficiency bars, CSV export, local normals, lab state in `localStorage` and in share links (share codec v2, v1 links still decode).
+- !2: main cross-section overlay (#3): lab profile on the wall face plus diffracted order directions; lab-wall efficiencies as an opt-in.
+- First browser check by the user. Fixed: lab card overlapping the sticky controls (own grid area), lab colours ignoring the app theme in light mode (`--om-*` tokens only), About dialog redesigned as a compact sheet (bottom sheet on phones).
+- Created #8 (3D waves on profiled walls) and the design brief on #7.
+
+### 2026-10-24 (GitLab / Surface lab track)
+
+- Imported to GitLab; tracking issue #1 and phase issues #2–#7.
+- !1: GitLab CI, `render/util.ts`, spatial depth-order fix, module extraction.
+- !2 (on top of !1): profiles, EMT, grating, RCWA + worker, bubbles, water, fog, Surface lab panel. Tests for every engine module; `physics.ts` untouched.
 
 ### 2026-10-24
 
@@ -372,3 +395,42 @@ Planned:
 2. Verify Phases 0–2 on the device: layout, HUD, WebView version, baseline FPS, APK cold/warm start and PSS.
 3. Start Phase 3 native integration: PNG/CSV share, status bar, back button, splash.
 4. Start Phase 4 once the device check is clean: signed release workflow and branded icons/splash.
+
+Surface lab track (§15): browser-check !2 (layout, light/dark, About sheet), merge it, then #7 (UI pass) and #8 (3D) on branches from `main`.
+
+## 15. GitLab / Surface lab track
+
+Runs in parallel with the Android track above. Project: <https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/42105243/waves>.
+
+### Rules
+
+- `physics.ts` stays untouched; every new physics module has tests; flat profiles must reproduce `solveStack`.
+- GitLab CI (`.gitlab-ci.yml`) runs `npm test` and `npm run build` in `WAVES/` on every MR and on `main`.
+- `App.tsx` and the scene code moved on `main` with !1. Branches older than !1 must not edit the moved blocks (`SceneParams`, local `RayScene`, dictionaries, palettes); new work starts from `main`.
+- Update this section and the journal at the end of every phase.
+
+### Status
+
+| Issue | Phase | Where | Status |
+| --- | --- | --- | --- |
+| #2 | CI, renderer cleanup, App.tsx split | !1 | merged |
+| #3 | profiles, EMT, grating, main-view overlay | !2 | done, closes with !2 |
+| #4 | RCWA + worker | !2 | done, closes with !2 |
+| #5 | lab views, sweep θ / f, bars, CSV, normals, share v2 | !2 | done, closes with !2 |
+| #6 | bubbles, water, fog | !2 | done except the Rayleigh roughness estimate |
+| #7 | UI / UX and design pass | - | not started; design brief on the issue |
+| #8 | 3D waves on profiled walls | - | not started |
+
+!2 is still a draft on `feature/profiled-walls`, no conflicts with `main`, pipeline green.
+
+### Design brief (#7)
+
+Targets phones, laptops and teaching boards. Simple, minimal, premium; UI only (canvas graphics out of scope). Neutral surfaces, wave colours as the only accents, one control system shared by the main panel and the lab, lab folded into the controls panel, bottom sheet for controls on phones, 44 px targets and large type on boards, WCAG AA.
+
+### Known gaps
+
+- Nothing in !2 has been measured against the performance contract (§3) yet.
+- The lab is still a separate card below the charts (#7 folds it into the panel).
+- DOM accents (`--om-*`) and canvas palettes (`theme.ts`) use different wave colours; unify in #7.
+- Rayleigh roughness estimate (#6) not implemented.
+- A few imports in `App.tsx` on `main` are unused (left to keep !2 mergeable).
