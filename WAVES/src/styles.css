@@ -2235,13 +2235,6 @@ a:hover {
 }
 .om-perf .is-idle { color: var(--om-ink-3); }
 @media (max-width: 520px) {
-  .om-about-head { padding: 21px 18px 16px; gap: 13px; }
-  .om-about-mark { width: 46px; height: 46px; }
-  .om-about-mark .om-logo { width: 39px; height: 39px; }
-  .om-about-id h2 { font-size: 22px; }
-  .om-about-id p { font-size: 12px; }
-  .om-about-body { padding: 17px 18px 19px; gap: 17px; }
-  .om-about-grid { grid-template-columns: 1fr; gap: 13px; }
   .om-mail-tag { display: none; }
 }
 @media (max-width: 560px) {
@@ -2254,6 +2247,142 @@ a:hover {
   .om .om-scene-toolbar .om-scene-toggle,
   .om-scene-camera,
   .om-scene-camera input[type="range"] { min-height: 40px; }
+}
+
+/* ═══ About dialog ═══
+   Sized to fit without scrolling on phones, laptops and boards: two columns
+   from 720px (details | model), one compact column below. Padding, gaps and
+   the title scale with the viewport height; equations scale with the model
+   card width. The overflow rule is only a guard for unusually tiny screens. */
+.om-about {
+  --ab-pad: clamp(16px, 2.8vh, 28px);
+  --ab-gap: clamp(12px, 2.1vh, 22px);
+  position: relative; display: flex; flex-direction: column;
+  width: min(880px, 100%); max-height: 100%; overflow: hidden auto;
+  background: var(--om-card-hi); border: 1px solid var(--om-line-2);
+  border-radius: 20px; box-shadow: var(--om-shadow);
+  backdrop-filter: blur(24px) saturate(1.2); -webkit-backdrop-filter: blur(24px) saturate(1.2);
+}
+.om-about-head {
+  position: relative; display: flex; align-items: center; gap: clamp(12px, 1.8vh, 18px);
+  padding: var(--ab-pad) var(--ab-pad) calc(var(--ab-pad) * 0.8);
+  border-bottom: 1px solid var(--om-line);
+}
+.om-about-mark {
+  flex: none; display: grid; place-items: center;
+  width: clamp(40px, 6vh, 52px); height: auto; aspect-ratio: 1; border-radius: 50%;
+  background: #fff; border: 1px solid var(--om-line-2); box-shadow: none;
+}
+.om-about-mark .om-logo { width: 84%; height: 84%; }
+.om-about-id { flex: 1 1 auto; min-width: 0; padding-right: 44px; }
+.om-about-kicker {
+  display: block; color: var(--om-ink-3);
+  font: 600 10px var(--om-mono); letter-spacing: 0.16em; text-transform: uppercase;
+}
+.om-about-id h2 {
+  margin: 4px 0 0; font-size: clamp(20px, 3.2vh, 28px); line-height: 1.1; font-weight: 700;
+  letter-spacing: -0.02em; color: var(--om-ink);
+}
+.om-about-id p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--om-ink-2); }
+.om-about-close {
+  position: absolute; top: calc(var(--ab-pad) - 6px); right: calc(var(--ab-pad) - 8px);
+  width: 36px; height: 36px; border-radius: 10px; cursor: pointer;
+  border: 1px solid transparent; background: transparent;
+  color: var(--om-ink-3); font-size: 18px; line-height: 1;
+  display: grid; place-items: center;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.om-about-close:hover { background: var(--om-chip); color: var(--om-ink); border-color: var(--om-line); }
+.om-about-close:focus-visible { outline: 2px solid var(--om-acc); outline-offset: 2px; }
+.om-about-body {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--ab-gap);
+  padding: var(--ab-pad); min-height: 0;
+}
+.om-about-info { display: flex; flex-direction: column; gap: var(--ab-gap); min-width: 0; }
+.om-about-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; margin: 0; }
+.om-about-facts dt,
+.om-about-label {
+  display: block; color: var(--om-ink-3);
+  font: 600 10px var(--om-mono); letter-spacing: 0.14em; text-transform: uppercase;
+}
+.om-about-facts dd { margin: 5px 0 0; font-size: 14px; font-weight: 600; color: var(--om-ink); overflow-wrap: anywhere; }
+.om-about-block { display: flex; flex-direction: column; }
+.om-mails { display: flex; flex-direction: column; margin-top: 4px; }
+.om-mail {
+  display: flex; align-items: center; gap: 10px;
+  padding: clamp(7px, 1.2vh, 10px) 0; text-decoration: none;
+  border-top: 1px solid var(--om-line);
+  color: var(--om-ink-2); font-size: 13px;
+  transition: color 0.2s;
+}
+.om-mail:first-child { border-top: 0; }
+.om-mail:hover { color: var(--om-ink); }
+.om-mail:hover .om-mail-icon { color: var(--om-inc); }
+.om-mail-icon { flex: none; display: grid; place-items: center; color: var(--om-ink-3); transition: color 0.2s; }
+.om-mail-icon svg { width: 15px; height: 15px; display: block; }
+.om-mail-addr { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.om-mail-tag {
+  flex: none; color: var(--om-ink-3);
+  font: 600 9.5px var(--om-mono); letter-spacing: 0.12em; text-transform: uppercase;
+}
+.om-about-foot {
+  margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px;
+}
+.om-about-repo {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 40px; padding: 0 16px; border-radius: 10px; text-decoration: none;
+  border: 1px solid var(--om-line-2); background: transparent;
+  color: var(--om-ink); font-size: 13px; font-weight: 600;
+  transition: background 0.2s, border-color 0.2s;
+}
+.om-about-repo:hover { background: var(--om-chip); border-color: color-mix(in srgb, var(--om-acc) 45%, var(--om-line-2)); }
+.om-about-repo:focus-visible { outline: 2px solid var(--om-acc); outline-offset: 2px; }
+.om-about-repo svg { width: 16px; height: 16px; flex: none; color: var(--om-ink-2); }
+.om-about-build {
+  appearance: none; flex: 0 1 auto; width: auto; margin: 0; padding: 6px 0; min-height: 32px;
+  border: 0; background: transparent; color: var(--om-ink-3);
+  font: 500 10.5px/1.4 var(--om-mono); letter-spacing: 0.04em;
+  text-align: right; overflow-wrap: anywhere; touch-action: manipulation; cursor: default;
+}
+.om-about-build:hover { color: var(--om-ink-2); }
+.om-model {
+  container-type: inline-size;
+  display: flex; flex-direction: column; min-width: 0;
+  padding: calc(var(--ab-pad) * 0.8); border-radius: 14px;
+  border: 1px solid var(--om-line); background: var(--om-chip);
+}
+.om-model-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding-bottom: 10px; border-bottom: 1px solid var(--om-line);
+}
+.om-model-ref { color: var(--om-ink-3); font: 600 10px var(--om-mono); letter-spacing: 0.06em; white-space: nowrap; }
+.om-eqs { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
+.om-eq { padding: clamp(6px, 1.3vh, 12px) 0; overflow: hidden; color: var(--om-ink); text-align: center; }
+.om-eq + .om-eq { border-top: 1px solid var(--om-line); }
+/* equations follow the card width instead of scrolling sideways */
+.om-eq .katex { font-size: clamp(13px, 5cqi, 18px); }
+.om-eq .katex-display { margin: 0; }
+.om-eq-pending { min-height: 32px; }
+.om-model-note {
+  margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--om-line);
+  font-size: 12px; line-height: 1.55; color: var(--om-ink-2);
+}
+@media (min-width: 720px) {
+  .om-about-body { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: stretch; }
+}
+@media (max-width: 520px) {
+  .om-about-id p { font-size: 12px; }
+}
+/* teaching boards / large screens: a little more room and type */
+@media (min-width: 1280px) and (min-height: 900px) {
+  .om-about { width: min(960px, 100%); }
+  .om-about-facts dd, .om-mail { font-size: 15px; }
+  .om-model-note { font-size: 13px; }
+}
+/* very short screens (landscape phones, small laptops): drop the decorative
+   tagline and the long model note rather than scroll */
+@media (max-height: 620px) {
+  .om-about-id p, .om-model-note { display: none; }
 }
 
 /* ═══ Surface lab placement ═══

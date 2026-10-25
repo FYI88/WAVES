@@ -3156,16 +3156,17 @@ export function App() {
             </div>
 
             <div className="om-about-body">
-              <div className="om-about-grid">
-                <div className="om-about-cell">
-                  <span className="om-about-label">{t.authorLabel}</span>
-                  <strong>{t.author}</strong>
+              <section className="om-about-info">
+              <dl className="om-about-facts">
+                <div>
+                  <dt>{t.authorLabel}</dt>
+                  <dd>{t.author}</dd>
                 </div>
-                <div className="om-about-cell">
-                  <span className="om-about-label">{t.schoolLabel}</span>
-                  <strong>{t.school}</strong>
+                <div>
+                  <dt>{t.schoolLabel}</dt>
+                  <dd>{t.school}</dd>
                 </div>
-              </div>
+              </dl>
 
               <div className="om-about-block">
                 <span className="om-about-label">{t.contactLabel}</span>
@@ -3180,24 +3181,29 @@ export function App() {
                 </div>
               </div>
 
-              <div className="om-model">
+              <div className="om-about-foot">
+                <a className="om-about-repo" href={REPO_URL} target="_blank" rel="noopener noreferrer" title={t.repoTitle}>
+                  {Icon.github}
+                  <span>{t.repo}</span>
+                </a>
+                <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
+                  {buildInfo}
+                </button>
+              </div>
+              </section>
+
+              <section className="om-model" aria-label={t.modelLabel}>
                 <div className="om-model-head">
                   <span className="om-about-label">{t.modelLabel}</span>
                   <span className="om-model-ref">ITU-R P.2040 § 3</span>
                 </div>
-                <Eq tex={String.raw`\eta = \varepsilon' - j\,\frac{17.98\,\sigma}{f}`} />
-                <Eq tex={String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`} />
-                <Eq tex={String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`} />
+                <div className="om-eqs">
+                  <Eq tex={String.raw`\eta = \varepsilon' - j\,\frac{17.98\,\sigma}{f}`} />
+                  <Eq tex={String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`} />
+                  <Eq tex={String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`} />
+                </div>
                 <p className="om-model-note">{t.modelNote}</p>
-              </div>
-
-              <a className="om-about-repo" href={REPO_URL} target="_blank" rel="noopener noreferrer" title={t.repoTitle}>
-                {Icon.github}
-                <span>{t.repo}</span>
-              </a>
-              <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
-                {buildInfo}
-              </button>
+              </section>
             </div>
           </div>
         </div>
