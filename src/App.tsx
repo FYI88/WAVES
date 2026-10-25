@@ -11,9 +11,12 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { App as CapacitorApp } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
 import { drawSpatialScene, type SceneOptions } from "./spatialScene";
 import { drawWaveRays } from "./waveRays";
 import { decodeShare, encodeShare, shareHashOf } from "./share";
+import { shareDataUrl, shareText } from "./native";
 import { readPerf, recordFrame, resetPerf } from "./perf";
 import { PerfHud } from "./PerfHud";
 import {
@@ -1365,6 +1368,32 @@ function RayScene(props: {
     return layout.current.rects.findIndex(rect => point.x >= rect.x0 - 3 && point.x <= rect.x1 + 3 && point.y >= rect.y0 - 6 && point.y <= rect.y1 + 4);
   };
 
+  const exportPng = async () => {
+    const canvas = ref.current;
+    if (!canvas || canvas.width < 2) return;
+    // the live canvases are transparent (stage colour comes from CSS):
+    // composite scenery + waves over the stage colour so the file looks
+    // like the app, and take the size from the sharper scenery layer
+    const scenery = backdropRef.current;
+    const out = document.createElement("canvas");
+    out.width = Math.max(canvas.width, scenery?.width ?? 0);
+    out.height = Math.max(canvas.height, scenery?.height ?? 0);
+    const octx = out.getContext("2d");
+    if (!octx) return;
+    octx.fillStyle = props.pal.bg0;
+    octx.fillRect(0, 0, out.width, out.height);
+    if (scenery && view === "wave") octx.drawImage(scenery, 0, 0, out.width, out.height);
+    octx.drawImage(canvas, 0, 0, out.width, out.height);
+    const filename = `waves-${props.params.freq}GHz-${props.params.theta}deg-${props.params.pol}-${view}.png`;
+    const dataUrl = out.toDataURL("image/png");
+    try {
+      if (await shareDataUrl(dataUrl, filename)) return;
+    } catch {
+      /* native share failed: fall through to the web download */
+    }
+    downloadFile(dataUrl, filename);
+  };
+
   return <>
     <canvas ref={backdropRef} className="om-canvas om-canvas-backdrop" aria-hidden="true" />
     <canvas
@@ -1432,25 +1461,7 @@ function RayScene(props: {
         title={french ? "Télécharger la scène en image PNG" : "Download the scene as a PNG image"}
         aria-label={french ? "Télécharger la scène en image PNG" : "Download the scene as a PNG image"}
         onClick={() => {
-          const canvas = ref.current;
-          if (!canvas || canvas.width < 2) return;
-          // the live canvases are transparent (stage colour comes from CSS):
-          // composite scenery + waves over the stage colour so the file looks
-          // like the app, and take the size from the sharper scenery layer
-          const scenery = backdropRef.current;
-          const out = document.createElement("canvas");
-          out.width = Math.max(canvas.width, scenery?.width ?? 0);
-          out.height = Math.max(canvas.height, scenery?.height ?? 0);
-          const octx = out.getContext("2d");
-          if (!octx) return;
-          octx.fillStyle = props.pal.bg0;
-          octx.fillRect(0, 0, out.width, out.height);
-          if (scenery && view === "wave") octx.drawImage(scenery, 0, 0, out.width, out.height);
-          octx.drawImage(canvas, 0, 0, out.width, out.height);
-          const a = document.createElement("a");
-          a.download = `waves-${props.params.freq}GHz-${props.params.theta}deg-${props.params.pol}-${view}.png`;
-          a.href = out.toDataURL("image/png");
-          a.click();
+          void exportPng();
         }}
       >
         PNG
@@ -2286,6 +2297,10 @@ export function App() {
   const buildTaps = useRef({ count: 0, at: 0 });
   const presentRef = useRef(present);
   presentRef.current = present;
+  const aboutOpen = useRef(showAbout);
+  aboutOpen.current = showAbout;
+  const helpOpen = useRef(showHelp);
+  helpOpen.current = showHelp;
   const buildInfo = useMemo(() => {
     const ua = navigator.userAgent;
     const android = /Android\s+([\d.]+)/.exec(ua)?.[1];
@@ -2443,10 +2458,17 @@ export function App() {
     copyTimer.current = window.setTimeout(() => setCopied(false), 1600);
   };
 
-  const downloadBlob = (text: string, filename: string) => {
-    const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
-    downloadFile(url, filename);
-    window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+  const exportText = (text: string, filename: string) => {
+    void (async () => {
+      try {
+        if (await shareText(text, filename)) return;
+      } catch {
+        /* native share failed: fall through to the web download */
+      }
+      const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+      downloadFile(url, filename);
+      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+    })();
   };
 
   const downloadSweepCsv = () => {
@@ -2465,7 +2487,7 @@ export function App() {
         .map((v, k) => (k === 0 ? v : fmt.num(v as number, 6)))
         .join(sep),
     );
-    downloadBlob([head, ...lines].join("\n"), `waves-sweep-${sim.freq}GHz-${sim.pol}.csv`);
+    exportText([head, ...lines].join("\n"), `waves-sweep-${sim.freq}GHz-${sim.pol}.csv`);
   };
 
   const downloadFieldCsv = () => {
@@ -2487,7 +2509,7 @@ export function App() {
         [fmt.num(z * 100, 4), fmt.num(v, 6), fmt.num(20 * Math.log10(Math.max(v, 1e-9)), 3)].join(sep),
       );
     }
-    downloadBlob([head, ...lines].join("\n"), `waves-field-${sim.freq}GHz-${sim.angle}deg-${sim.pol}.csv`);
+    exportText([head, ...lines].join("\n"), `waves-field-${sim.freq}GHz-${sim.angle}deg-${sim.pol}.csv`);
   };
 
   useEffect(() => {
@@ -2536,6 +2558,37 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [showHelp, showAbout, setPresentFull]);
+
+  // Android hardware back mirrors Escape: close About, then Help, then leave
+  // Present, then leave the app. Registering the listener disables Capacitor's
+  // default back behaviour, so the final branch must exit explicitly.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let disposed = false;
+    let detach: (() => Promise<void>) | undefined;
+    void CapacitorApp.addListener("backButton", () => {
+      if (aboutOpen.current) {
+        setShowAbout(false);
+        return;
+      }
+      if (helpOpen.current) {
+        setShowHelp(false);
+        return;
+      }
+      if (presentRef.current) {
+        setPresentFull(false);
+        return;
+      }
+      void CapacitorApp.exitApp();
+    }).then((handle) => {
+      if (disposed) void handle.remove();
+      else detach = () => handle.remove();
+    });
+    return () => {
+      disposed = true;
+      if (detach) void detach();
+    };
+  }, [setPresentFull]);
 
   const res = useMemo(() => computeResults(sim), [sim]);
   const sweep = useMemo(() => computeStackSweep(res.etas, res.ds, sim.freq), [res.etas, res.ds, sim.freq]);
