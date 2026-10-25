@@ -1,27 +1,12 @@
-import { MATERIALS, CUSTOM_TINT, solveStack, abs2, type Cx, type MaterialId, type PolMode } from "./physics";
+import { solveStack, abs2, type Cx, type MaterialId, type PolMode } from "./physics";
 import { drawMaterialSurface } from "./materialSurfaces";
+import { TAU, DEG, MONO, SANS, clamp, rgba, mix, tintOf } from "./render/util";
 
 interface Point { x: number; y: number }
 interface Layer { mat: MaterialId | "air"; cm: number; thetaT: number; nRe: number; fluxIn: number; fluxOut: number; absorbed?: number; name: string }
 interface Parameters { layers: Layer[]; etas: Cx[]; ds: number[]; theta: number; freq: number; pol: PolMode; R: number; T: number; sel: number; hover: number }
 interface Palette { dark: boolean; ink: string; muted: string; faint: string; inc: string; ref: string; tra: string; abs?: string; grid: string }
 export interface RayOptions { display: "field" | "fronts" | "both"; reflections: boolean; annotations: boolean; lang: "fr" | "en" }
-
-const TAU = Math.PI * 2;
-const DEG = Math.PI / 180;
-const MONO = '"JetBrains Mono", ui-monospace, monospace';
-const SANS = '"Inter Tight", system-ui, sans-serif';
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-const rgba = (hex: string, opacity: number) => {
-  const value = parseInt(hex.slice(1), 16);
-  return `rgba(${value >> 16},${(value >> 8) & 255},${value & 255},${clamp(opacity, 0, 1)})`;
-};
-const mix = (a: string, b: string, t: number) => {
-  const x = parseInt(a.slice(1), 16);
-  const y = parseInt(b.slice(1), 16);
-  return "#" + [16, 8, 0].map(shift => Math.round(((x >> shift) & 255) * (1 - t) + ((y >> shift) & 255) * t).toString(16).padStart(2, "0")).join("");
-};
-const tintOf = (material: Layer["mat"]) => material === "air" ? "#83c6dd" : material === "custom" ? CUSTOM_TINT : MATERIALS[material].tint;
 
 export function drawWaveRays(
   ctx: CanvasRenderingContext2D,
