@@ -355,7 +355,7 @@ Planned:
 
 - Branch `feature/canvas-drag` from `fix/sidebar-scroll` (!3); Draft MR !5 to `main`, depends on !3. `App.tsx` changes are small (3 callbacks, 1 import, keyboard branch, 2 help rows) so the merge with !4 (#7) stays easy; the logic is in `src/scene/`.
 - Commits: `dragStack.ts` + tests; renderers return boundary geometry + `hitTest.ts` + `dragOverlay.ts`; gestures in `RayScene.tsx`; keyboard + overlay + i18n.
-- **Not verified in the authoring sandbox**: the npm registry was blocked (403), so `npm ci`, `tsc`, `vitest`, `vite build` and the browser were unavailable. The pure logic of `dragStack.ts` was exercised with a type-stripped copy under plain Node and a tiny assert shim (37 checks, all passing); `RayScene.tsx`, `dragOverlay.ts` and the renderer changes were only reviewed by reading. CI (`npm test`, `npm run build`) and the browser checklist in !5 are the real checks.
+- The authoring sandbox could not reach the npm registry (403), so nothing ran locally; GitLab CI on !5 (`npm test`, `npm run build`) is green and was the first real type-check / vitest / build run. Before that, `dragStack.ts` was exercised type-stripped under plain Node (37 checks). **Not verified: any browser behaviour** (gestures, overlay, cursors, touch); see the checklist in !5.
 
 ### 2026-10-25 (GitLab / Surface lab track)
 
@@ -447,7 +447,7 @@ Run locally: `git checkout <branch> && cd WAVES && npm ci && npm run dev` (Vite 
 | #6 | bubbles, water, fog | !2 | merged except the Rayleigh roughness estimate |
 | #7 | UI / UX and design pass | - | not started; design brief on the issue |
 | #8 | 3D waves on profiled walls | - | not started |
-| #1 | Direct manipulation of the wall on the canvas (drag to reorder / resize) | !5 (draft, depends on !3) | implemented; `npm test` / `npm run build` not run in the authoring sandbox, browser check pending |
+| #1 | Direct manipulation of the wall on the canvas (drag to reorder / resize) | !5 (draft, depends on !3) | implemented; CI green; browser check pending |
 
 !2 merged into `main` on 2026-10-25 (`253bd62c`) after the user's browser check.
 
