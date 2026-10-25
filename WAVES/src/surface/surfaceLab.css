@@ -2,17 +2,20 @@
    Styled through the app tokens (--om-*) with neutral fallbacks. */
 
 .sl-lab {
-  --sl-ink: var(--om-ink, var(--fg-primary));
-  --sl-muted: var(--om-muted, var(--fg-secondary));
-  --sl-faint: var(--om-faint, var(--fg-muted));
-  --sl-line: var(--om-line, var(--border-subtle));
-  --sl-acc: var(--om-acc, var(--brand));
-  --sl-inc: var(--om-inc, #55dbf5);
-  --sl-ref: var(--om-ref, #ff9586);
-  --sl-tra: var(--om-tra, #79e2bc);
-  --sl-abs: var(--om-abs, #edc17f);
-  --sl-chip: color-mix(in srgb, var(--sl-ink) 6%, transparent);
-  --sl-chip-strong: color-mix(in srgb, var(--sl-ink) 12%, transparent);
+  /* app theme tokens only (.om[data-theme]); the base --fg-* / --surface-*
+     tokens follow the OS colour scheme, not the app's theme toggle */
+  --sl-ink: var(--om-ink);
+  --sl-muted: var(--om-ink-2);
+  --sl-faint: var(--om-ink-3);
+  --sl-line: var(--om-line-2);
+  --sl-acc: var(--om-acc);
+  --sl-inc: var(--om-inc);
+  --sl-ref: var(--om-ref);
+  --sl-tra: var(--om-tra);
+  --sl-abs: var(--om-abs);
+  --sl-chip: var(--om-chip);
+  --sl-chip-strong: var(--om-chip-hover);
+  --sl-raised: var(--om-card-hi);
   /* placed by the `lab` grid area in styles.css; the inner layout follows
      the width of that column, not the viewport */
   container-type: inline-size;
@@ -214,7 +217,7 @@
   color: var(--sl-ink);
 }
 .sl-tabs button.is-on {
-  background: var(--surface-card, var(--sl-chip-strong));
+  background: var(--sl-raised);
   color: var(--sl-ink);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
@@ -306,7 +309,7 @@
   cursor: pointer;
 }
 .sl-seg button.is-on {
-  background: var(--surface-card, var(--sl-chip-strong));
+  background: var(--sl-raised);
   color: var(--sl-ink);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
 }
@@ -406,7 +409,7 @@
   padding: 7px 9px;
   border: 1px solid var(--sl-line);
   border-radius: 8px;
-  background: var(--surface-input, transparent);
+  background: var(--sl-chip);
   color: var(--sl-ink);
   font: inherit;
   font-size: 12px;

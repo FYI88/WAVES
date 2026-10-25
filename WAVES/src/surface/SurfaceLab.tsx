@@ -914,10 +914,11 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
                 </button>
               </div>
               <div className="sl-legend">
-                <span><i style={{ "--tone": "var(--sl-ref)" } as CSSProperties} />R₀</span>
-                <span><i style={{ "--tone": "var(--sl-tra)" } as CSSProperties} />T₀</span>
-                <span><i className="is-dash" style={{ "--tone": "var(--sl-abs)" } as CSSProperties} />A</span>
-                {mode === "rigorous" && <span><i className="is-dash" style={{ "--tone": "var(--sl-inc)" } as CSSProperties} />m ≠ 0</span>}
+                {/* swatches use the canvas palette so they match the curves */}
+                <span><i style={{ "--tone": pal.ref } as CSSProperties} />R₀</span>
+                <span><i style={{ "--tone": pal.tra } as CSSProperties} />T₀</span>
+                <span><i className="is-dash" style={{ "--tone": pal.abs } as CSSProperties} />A</span>
+                {mode === "rigorous" && <span><i className="is-dash" style={{ "--tone": pal.inc } as CSSProperties} />m ≠ 0</span>}
               </div>
             </div>
             <canvas

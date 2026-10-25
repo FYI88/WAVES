@@ -382,7 +382,8 @@ export function drawSurfaceDetail(
       ctx.fillStyle = pal.dark ? "rgba(8,14,24,.85)" : "rgba(255,255,255,.9)";
       const tw = ctx.measureText(label).width;
       ctx.fillRect(dx < 0 ? tx - 2 : tx - tw - 2, ty - 7, tw + 4, 14);
-      ctx.fillStyle = color;
+      // pastel wave colours are too light for text on a light background
+      ctx.fillStyle = pal.dark ? color : shade(color, -0.4);
       ctx.fillText(label, tx, ty);
     }
     ctx.restore();
@@ -406,7 +407,7 @@ export function drawSurfaceDetail(
     ctx.beginPath();
     ctx.arc(hit.x, hit.y, 34, Math.PI, Math.PI + theta);
     ctx.stroke();
-    ctx.fillStyle = pal.inc;
+    ctx.fillStyle = pal.dark ? pal.inc : shade(pal.inc, -0.4);
     ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
     ctx.textAlign = "right";
     ctx.fillText(`θ ${fmt(p.thetaDeg, 1)}°`, hit.x - 38, hit.y - 6);

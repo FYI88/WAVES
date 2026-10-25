@@ -725,7 +725,7 @@ export function drawWaveRays(
           const tw = ctx.measureText(label).width;
           ctx.fillStyle = dark ? "rgba(8,14,24,.85)" : "rgba(255,255,255,.92)";
           ctx.fillRect(dx < 0 ? tx - 3 : tx - tw - 3, ty - 7, tw + 6, 14);
-          ctx.fillStyle = color;
+          ctx.fillStyle = dark ? color : mix(color, "#000000", 0.4);
           ctx.fillText(label, tx, ty);
         }
         ctx.restore();
