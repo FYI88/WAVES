@@ -2255,3 +2255,17 @@ a:hover {
   .om-scene-camera,
   .om-scene-camera input[type="range"] { min-height: 40px; }
 }
+
+/* ═══ Surface lab placement ═══
+   The lab card has its own grid area. Without one it was auto-placed in an
+   extra row spanning every column, and the sticky controls column slid over
+   it on desktop. Kept last so it follows the layouts above. */
+.om-layout > .sl-lab { grid-area: lab; }
+.om-layout { grid-template-areas: "scene" "controls" "results" "charts" "lab"; }
+@media (min-width: 1040px) {
+  .om-layout { grid-template-areas: "controls scene" "controls results" "controls charts" "controls lab"; }
+}
+@media (min-width: 1344px) {
+  .om-layout { grid-template-areas: "controls scene results" "controls charts results" "controls lab lab"; }
+}
+.om[data-present="true"] .om-layout > .sl-lab { display: none; }

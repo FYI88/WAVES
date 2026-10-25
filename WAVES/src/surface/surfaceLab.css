@@ -13,7 +13,9 @@
   --sl-abs: var(--om-abs, #edc17f);
   --sl-chip: color-mix(in srgb, var(--sl-ink) 6%, transparent);
   --sl-chip-strong: color-mix(in srgb, var(--sl-ink) 12%, transparent);
-  grid-column: 1 / -1;
+  /* placed by the `lab` grid area in styles.css; the inner layout follows
+     the width of that column, not the viewport */
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -510,7 +512,7 @@
   text-align: right;
 }
 
-@media (max-width: 960px) {
+@container (max-width: 760px) {
   .sl-body {
     grid-template-columns: minmax(0, 1fr);
   }
