@@ -2,6 +2,7 @@ import { solveStack, abs2, type Cx, type MaterialId, type PolMode } from "./phys
 import { drawMaterialSurface } from "./materialSurfaces";
 import { TAU, DEG, MONO, SANS, clamp, rgba, mix, tintOf } from "./render/util";
 import { profileHeight } from "./surface/profiles";
+import { drawWaveRibbon } from "./render/waveRibbon";
 import type { SceneSurface } from "./surface/sceneOverlay";
 
 interface Point { x: number; y: number }
@@ -370,147 +371,10 @@ export function drawWaveRays(
   }
 
   /* ── Waves ────────────────────────────────────────────────────────── */
-  const lambdaPx = clamp(70 * Math.pow(2.4 / params.freq, 0.2), 32, 96) * (compact ? 0.7 : 1);
-  const omega = time * TAU * 0.85;
-  const amplitude = compact ? 13 : 21;
-  const wave = (from: Point, to: Point, color: string, p0: number, p1: number, index: number, phase: number, opacity = 1) => {
-    const distance = Math.hypot(to.x - from.x, to.y - from.y);
-    if (distance < 0.5) return phase;
-    const dir = { x: (to.x - from.x) / distance, y: (to.y - from.y) / distance };
-    const nor = { x: -dir.y, y: dir.x };
-    const k = TAU / Math.max(10, lambdaPx / Math.max(index, 1));
-    const power = (f: number) => Math.sqrt(Math.max(0, p0 + (p1 - p0) * f));
-    const peak = Math.max(p0, p1);
-    if (peak < 1e-7) {
-      ctx.setLineDash([2, 6]);
-      path([from, to]);
-      ctx.strokeStyle = rgba(color, 0.2 * opacity);
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.setLineDash([]);
-      return phase + k * distance;
-    }
-    const alphaAt = (f: number) => opacity * clamp(0.22 + 0.78 * Math.min(1, power(f) * 1.2), 0, 1);
-    ctx.save();
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    if (dark) ctx.globalCompositeOperation = "lighter";
-    const halo = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
-    halo.addColorStop(0, rgba(color, alphaAt(0) * (dark ? 0.09 : 0.08)));
-    halo.addColorStop(1, rgba(color, alphaAt(1) * (dark ? 0.09 : 0.08)));
-    path([from, to]);
-    ctx.strokeStyle = halo;
-    ctx.lineWidth = amplitude * 2.7 * Math.max(0.35, Math.min(1, Math.sqrt(peak)));
-    ctx.stroke();
-    path([from, to]);
-    ctx.setLineDash([2, 5]);
-    ctx.strokeStyle = rgba(color, 0.28 * opacity);
-    ctx.lineWidth = 0.8;
-    ctx.stroke();
-    ctx.setLineDash([]);
-    if (options.display !== "fronts") {
-      const crest: Point[] = [];
-      const base: Point[] = [];
-      const steps = Math.max(2, Math.ceil(distance / 1.5));
-      for (let step = 0; step <= steps; step++) {
-        const along = distance * step / steps;
-        const offset = Math.sin(phase + k * along - omega) * amplitude * power(along / distance);
-        const x = from.x + dir.x * along;
-        const y = from.y + dir.y * along;
-        crest.push({ x: x + nor.x * offset, y: y + nor.y * offset });
-        base.push({ x, y });
-      }
-      const ribbon = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
-      ribbon.addColorStop(0, rgba(color, alphaAt(0) * (dark ? 0.16 : 0.12)));
-      ribbon.addColorStop(1, rgba(color, alphaAt(1) * (dark ? 0.16 : 0.12)));
-      path([...crest, ...base.reverse()], true);
-      ctx.fillStyle = ribbon;
-      ctx.fill();
-      const stroke = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
-      stroke.addColorStop(0, rgba(color, alphaAt(0)));
-      stroke.addColorStop(1, rgba(color, alphaAt(1)));
-      path(crest);
-      if (!dark) {
-        ctx.strokeStyle = "rgba(255,255,255,.7)";
-        ctx.lineWidth = 4.6;
-        ctx.stroke();
-      }
-      ctx.strokeStyle = stroke;
-      ctx.globalAlpha = dark ? 0.22 : 0.14;
-      ctx.lineWidth = compact ? 5 : 7;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = dark ? 4 : 0;
-      ctx.lineWidth = compact ? 1.8 : 2.3;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-    if (options.display !== "field") {
-      const spacing = TAU / k;
-      let first = ((omega - phase + Math.PI / 2) / k) % spacing;
-      if (first < 0) first += spacing;
-      for (let along = first; along < distance; along += spacing) {
-        const f = along / distance;
-        const extent = amplitude * (0.75 + 0.9 * power(f));
-        const center = { x: from.x + dir.x * along, y: from.y + dir.y * along };
-        const a = { x: center.x - nor.x * extent, y: center.y - nor.y * extent };
-        const b = { x: center.x + nor.x * extent, y: center.y + nor.y * extent };
-        const front = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
-        front.addColorStop(0, rgba(color, 0));
-        front.addColorStop(0.5, rgba(color, alphaAt(f) * 0.8));
-        front.addColorStop(1, rgba(color, 0));
-        ctx.beginPath();
-        ctx.moveTo(a.x - dir.x * 3, a.y - dir.y * 3);
-        ctx.quadraticCurveTo(center.x + dir.x * 5, center.y + dir.y * 5, b.x - dir.x * 3, b.y - dir.y * 3);
-        ctx.strokeStyle = front;
-        ctx.lineWidth = 1.6;
-        ctx.stroke();
-        if (params.pol === "TE" && index === 1) {
-          ctx.beginPath();
-          ctx.arc(center.x, center.y, 3.2, 0, TAU);
-          ctx.strokeStyle = rgba(color, alphaAt(f) * 0.9);
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          ctx.fillStyle = rgba(color, alphaAt(f));
-          ctx.fillRect(center.x - 0.8, center.y - 0.8, 1.6, 1.6);
-        }
-      }
-    }
-    const particles = Math.max(1, Math.floor(distance / 120));
-    const speed = 64 / Math.max(1, index);
-    for (let p = 0; p < particles; p++) {
-      const along = (time * speed + p * distance / particles) % distance;
-      const f = along / distance;
-      const edge = Math.min(1, along / 14, (distance - along) / 14);
-      const strength = alphaAt(f) * edge * Math.min(1, power(f) * 1.4 + 0.15);
-      const x = from.x + dir.x * along;
-      const y = from.y + dir.y * along;
-      const tail = Math.min(along, 30 / Math.max(1, index) + 10);
-      const trail = ctx.createLinearGradient(x - dir.x * tail, y - dir.y * tail, x, y);
-      trail.addColorStop(0, rgba(color, 0));
-      trail.addColorStop(1, rgba(color, 0.9 * strength));
-      path([{ x: x - dir.x * tail, y: y - dir.y * tail }, { x, y }]);
-      ctx.strokeStyle = trail;
-      ctx.lineWidth = 2.2;
-      ctx.stroke();
-      glow(x, y, 11, color, 0.5 * strength);
-      ctx.beginPath();
-      ctx.arc(x, y, 1.8, 0, TAU);
-      ctx.fillStyle = rgba(dark ? "#ffffff" : color, strength);
-      ctx.fill();
-    }
-    if (distance > 24) {
-      const along = distance * 0.86;
-      const c = { x: from.x + along * dir.x, y: from.y + along * dir.y };
-      path([{ x: c.x - dir.x * 7 + nor.x * 4, y: c.y - dir.y * 7 + nor.y * 4 }, c, { x: c.x - dir.x * 7 - nor.x * 4, y: c.y - dir.y * 7 - nor.y * 4 }]);
-      ctx.strokeStyle = rgba(color, alphaAt(0.86));
-      ctx.lineWidth = 1.6;
-      ctx.stroke();
-    }
-    ctx.restore();
-    return phase + k * distance;
-  };
+  const wave = (from: Point, to: Point, color: string, p0: number | null, p1: number | null, index: number, phase: number, opacity = 1) =>
+    drawWaveRibbon(ctx, from, to, color, p0, p1, index, phase, {
+      frequency: params.freq, time, compact, dark, display: options.display, pol: params.pol,
+    }, opacity);
 
   let phase = wave(source, entry, palette.inc, 1, 1, 1, 0);
   const reflectionPhase = phase;
@@ -691,30 +555,11 @@ export function drawWaveRays(
         if (len < 12) continue;
         const color = side === "R" ? palette.ref : palette.tra;
         const known = Number.isFinite(e);
-        const lw = known ? 1 + 5 * Math.sqrt(e) : 1.4;
-        const alpha = known ? 0.3 + 0.7 * Math.sqrt(e) : 0.65;
         const to = { x: from.x + dx * len, y: from.y + dy * len };
         ctx.save();
-        ctx.setLineDash([8, 6]);
-        ctx.lineDashOffset = -time * 40;
-        path([from, to]);
-        ctx.strokeStyle = rgba(color, alpha);
-        ctx.lineWidth = lw;
-        ctx.lineCap = "round";
-        ctx.stroke();
-        ctx.setLineDash([]);
-        const head = 5 + lw;
-        const ang = Math.atan2(dy, dx);
-        path(
-          [
-            to,
-            { x: to.x - head * Math.cos(ang - 0.4), y: to.y - head * Math.sin(ang - 0.4) },
-            { x: to.x - head * Math.cos(ang + 0.4), y: to.y - head * Math.sin(ang + 0.4) },
-          ],
-          true,
-        );
-        ctx.fillStyle = rgba(color, alpha);
-        ctx.fill();
+        // Shared wave language; unknown power uses a schematic envelope.
+        wave(from, to, color, known ? e : null, known ? e : null, 1,
+          side === "R" ? reflectionPhase + Math.PI : phase, 0.7);
         if (options.annotations) {
           const label = `${o.m > 0 ? "+" : ""}${o.m} · ${format(o.angleDeg, 1)}°${known ? ` · ${format(e * 100, e < 0.1 ? 1 : 0)} %` : ""}`;
           ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
