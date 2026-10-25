@@ -39,7 +39,11 @@ describe("lab state", () => {
       axis: "time",
       inclusions: { kind: "oil", fraction: 2 },
       fog: { lwc: -1, toWallM: 1e6 },
+      showInMain: "yes",
+      mainEfficiencies: 1,
     });
+    expect(s?.showInMain).toBe(true);
+    expect(s?.mainEfficiencies).toBe(false);
     expect(s?.profile.id).toBe(DEFAULT_LAB.profile.id);
     expect(s?.profile.period).toBe(30);
     expect(s?.profile.depth).toBe(0.05);

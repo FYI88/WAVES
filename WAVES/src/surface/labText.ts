@@ -104,6 +104,10 @@ const fr = {
   axisFreq: "f",
   csvTitle: "Télécharger les données du balayage en CSV",
   efficiency: "Efficacité par ordre",
+  showInMain: "Afficher le profil dans la vue principale",
+  mainEfficiencies: "Largeur des faisceaux : efficacités du labo",
+  showInMainNote: "Directions des ordres seulement (Λ, f, θ), valables quel que soit le mur. Les R/T principaux restent ceux du mur plan.",
+  mainEffNote: "Efficacités calculées pour le mur du labo en mode rigoureux, pas pour l’empilement principal.",
 };
 
 export type LabDict = typeof fr;
@@ -205,6 +209,10 @@ const en: LabDict = {
   axisFreq: "f",
   csvTitle: "Download the sweep data as CSV",
   efficiency: "Efficiency per order",
+  showInMain: "Show the profile in the main view",
+  mainEfficiencies: "Beam widths: lab efficiencies",
+  showInMainNote: "Order directions only (Λ, f, θ), valid whatever the wall. The main R/T stay those of the flat wall.",
+  mainEffNote: "Efficiencies computed for the lab wall in rigorous mode, not for the main stack.",
 };
 
 export const LAB_TEXT: Record<LabLang, LabDict> = { fr, en };

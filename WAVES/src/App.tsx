@@ -15,6 +15,7 @@ import { drawWaveRays } from "./waveRays";
 import { decodeShare, encodeShare, shareHashOf } from "./share";
 import { SurfaceLab } from "./surface/SurfaceLab";
 import { labForShare } from "./surface/labState";
+import { withSurface, type SceneSurface } from "./surface/sceneOverlay";
 import { recordFrame } from "./perf";
 import { PerfHud } from "./PerfHud";
 import { AIR_TINT } from "./render/util";
@@ -2161,6 +2162,7 @@ export function App() {
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [sceneSurface, setSceneSurface] = useState<SceneSurface | null>(null);
   const [perfOn, setPerfOn] = useState(() => {
     try {
       return localStorage.getItem("waves:perf") === "1" || new URLSearchParams(window.location.search).get("perf") === "1";
@@ -2611,7 +2613,7 @@ export function App() {
       <main className="om-layout">
         {/* ───────── Scene ───────── */}
         <section className="om-card om-scene om-enter" style={{ "--d": "60ms" } as CSSProperties}>
-          <RayScene params={sceneParams} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} />
+          <RayScene params={withSurface(sceneParams, sceneSurface)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} />
           <div className="om-hud om-hud-tl">
             <span className="om-hud-chip">
               <span className="om-stackdots">
@@ -3075,7 +3077,7 @@ export function App() {
             </div>
           </div>
         </section>
-        <SurfaceLab freq={sim.freq} angle={sim.angle} pol={sim.pol} lang={lang} pal={pal} playing={playing} fmtNum={fmt.num} onFreq={(f) => update("freq", f)} onAngle={(a) => update("angle", a)} />
+        <SurfaceLab freq={sim.freq} angle={sim.angle} pol={sim.pol} lang={lang} pal={pal} playing={playing} fmtNum={fmt.num} onFreq={(f) => update("freq", f)} onAngle={(a) => update("angle", a)} onSceneSurface={setSceneSurface} />
       </main>
 
       <footer className="om-foot">

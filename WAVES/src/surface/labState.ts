@@ -33,6 +33,10 @@ export interface LabState {
   harmonics: number;
   slices: number;
   axis: SweepAxis;
+  /** draw the lab profile and its order directions in the main cross-section */
+  showInMain: boolean;
+  /** use the lab wall's rigorous efficiencies for those beams (off by default) */
+  mainEfficiencies: boolean;
 }
 
 export const LAB_MAX_BELOW = 4;
@@ -51,6 +55,8 @@ export const DEFAULT_LAB: LabState = {
   harmonics: 10,
   slices: 16,
   axis: "angle",
+  showInMain: true,
+  mainEfficiencies: false,
 };
 
 type Obj = Record<string, unknown>;
@@ -59,6 +65,7 @@ const num = (v: unknown, lo: number, hi: number, d: number) =>
   typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
 const int = (v: unknown, lo: number, hi: number, d: number) => Math.round(num(v, lo, hi, d));
 const pick = <T extends string>(v: unknown, allowed: readonly T[], d: T): T => (allowed.includes(v as T) ? (v as T) : d);
+const bool = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
 
 const MODES: readonly LabMode[] = ["fast", "rigorous"];
 const AXES: readonly SweepAxis[] = ["angle", "freq"];
@@ -115,6 +122,8 @@ export function sanitizeLab(raw: unknown): LabState | null {
     harmonics: int(raw.harmonics, 2, 20, d.harmonics),
     slices: int(raw.slices, 4, 40, d.slices),
     axis: pick<SweepAxis>(raw.axis, AXES, d.axis),
+    showInMain: bool(raw.showInMain, d.showInMain),
+    mainEfficiencies: bool(raw.mainEfficiencies, d.mainEfficiencies),
   };
 }
 

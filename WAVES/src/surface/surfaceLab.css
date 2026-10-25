@@ -576,3 +576,21 @@
   inset: 0 auto 0 0;
   border-radius: 4px;
 }
+
+/* checkboxes */
+.sl-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--sl-ink);
+  cursor: pointer;
+}
+.sl-check input {
+  margin: 0;
+  accent-color: var(--sl-acc);
+}
+.sl-check:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

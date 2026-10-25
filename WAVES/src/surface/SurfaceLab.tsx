@@ -21,6 +21,7 @@ import {
 } from "./surfaceDetail";
 import { LAB_MAX_BELOW, labFromHash, loadLab, saveLab, setLabSnapshot, type LabLayer, type LabMode, type LabState, type SweepAxis } from "./labState";
 import { downloadText } from "../dom";
+import type { SceneSurface } from "./sceneOverlay";
 import { LAB_SCENARIOS, type LabScenario } from "./scenarios";
 import { NO_INCLUSIONS, inclusionValidity, type InclusionKind, type Inclusions } from "../media/mixing";
 import { FOG_PRESETS, NO_FOG, fogDbPerKm, withFog, type Fog, type FogPreset } from "../media/fog";
@@ -48,6 +49,8 @@ export interface SurfaceLabProps {
   fmtNum: (v: number, digits?: number) => string;
   onFreq: (f: number) => void;
   onAngle: (a: number) => void;
+  /** profile and order directions for the main cross-section (null: nothing to draw) */
+  onSceneSurface?: (surface: SceneSurface | null) => void;
 }
 
 const TABS: Tab[] = ["surface", "layers", "medium", "wave", "calc"];
@@ -165,7 +168,7 @@ function ProfileThumb({ profile, id }: { profile: ProfileParams; id: ProfileId }
 
 /* ───────── panel ───────── */
 
-export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFreq, onAngle }: SurfaceLabProps) {
+export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFreq, onAngle, onSceneSurface }: SurfaceLabProps) {
   const t = LAB_TEXT[lang];
   const matName = (id: SurfaceMaterialId) => MATERIAL_NAMES[id][lang];
   const pct = (v: number) => fmtNum(v * 100, v * 100 < 10 ? 2 : 1);
@@ -185,6 +188,8 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   const [harmonics, setHarmonics] = useState(init.harmonics);
   const [slices, setSlices] = useState(init.slices);
   const [axis, setAxis] = useState<SweepAxis>(init.axis);
+  const [showInMain, setShowInMain] = useState(init.showInMain);
+  const [mainEfficiencies, setMainEfficiencies] = useState(init.mainEfficiencies);
   const [scenario, setScenario] = useState<string | null>(null);
 
   const [point, setPoint] = useState<{ key: string; result: RcwaResult; ms: number } | null>(null);
@@ -236,16 +241,18 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
     setHarmonics(s.harmonics);
     setSlices(s.slices);
     setAxis(s.axis);
+    setShowInMain(s.showInMain);
+    setMainEfficiencies(s.mainEfficiencies);
     setScenario(null);
   };
 
   // saved locally and exposed to the share link (share codec v2)
   useEffect(() => {
-    const s: LabState = { profile, material, customEps, customSigma, below, inclusions, incTarget, fog, mode, harmonics, slices, axis };
+    const s: LabState = { profile, material, customEps, customSigma, below, inclusions, incTarget, fog, mode, harmonics, slices, axis, showInMain, mainEfficiencies };
     setLabSnapshot(s);
     const timer = window.setTimeout(() => saveLab(s), 250);
     return () => window.clearTimeout(timer);
-  }, [profile, material, customEps, customSigma, below, inclusions, incTarget, fog, mode, harmonics, slices, axis]);
+  }, [profile, material, customEps, customSigma, below, inclusions, incTarget, fog, mode, harmonics, slices, axis, showInMain, mainEfficiencies]);
 
   // a pasted share link replaces the lab setup, as it does for the main simulator
   useEffect(() => {
@@ -379,6 +386,25 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   const link = withFog(R, T, fog, freq);
   // never show an angle sweep on the frequency axis (or the reverse) while the new one runs
   const shownSweep = mode === "rigorous" ? (sweep && sweep.axis === axis ? sweep.sweep : null) : fastSweep;
+
+  // main cross-section overlay: directions by default, lab-wall efficiencies on request
+  useEffect(() => {
+    if (!onSceneSurface) return;
+    if (!showInMain || profile.id === "flat") {
+      onSceneSurface(null);
+      return;
+    }
+    const eff = mainEfficiencies && rigorous !== null && !stale;
+    onSceneSurface({
+      profile,
+      orders:
+        eff && rigorous
+          ? rigorous.orders.map((o) => ({ m: o.m, angleDeg: o.angleDeg, R: o.R, T: o.T }))
+          : geomOrders.map((o) => ({ m: o.m, angleDeg: o.angleDeg, R: NaN, T: NaN })),
+      efficiencies: eff,
+    });
+  }, [onSceneSurface, showInMain, mainEfficiencies, profile, rigorous, stale, geomOrders]);
+  useEffect(() => () => onSceneSurface?.(null), [onSceneSurface]);
 
   const hostEta =
     target < 0
@@ -546,6 +572,17 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
             {t.rms} {fmtNum(profileRms(profile), 2)} cm · λ₀/Λ {fmtNum(lambdaCm(freq) / profile.period, 2)}
           </p>
         )}
+      </div>
+      <div className="sl-group">
+        <label className="sl-check">
+          <input type="checkbox" checked={showInMain} onChange={(e) => setShowInMain(e.target.checked)} />
+          <span>{t.showInMain}</span>
+        </label>
+        <label className="sl-check">
+          <input type="checkbox" checked={mainEfficiencies} disabled={!showInMain} onChange={(e) => setMainEfficiencies(e.target.checked)} />
+          <span>{t.mainEfficiencies}</span>
+        </label>
+        <p className="sl-note">{showInMain && mainEfficiencies ? t.mainEffNote : t.showInMainNote}</p>
       </div>
       <div className="sl-group">
         <div className="sl-label">
