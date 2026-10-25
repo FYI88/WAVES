@@ -15,6 +15,7 @@ import { drawWaveRays } from "./waveRays";
 import { decodeShare, encodeShare, shareHashOf } from "./share";
 import { recordFrame } from "./perf";
 import { PerfHud } from "./PerfHud";
+import { SurfaceLab } from "./surface/SurfaceLab";
 import { AIR_TINT } from "./render/util";
 import {
   C0,
@@ -3073,6 +3074,7 @@ export function App() {
             </div>
           </div>
         </section>
+        <SurfaceLab freq={sim.freq} angle={sim.angle} pol={sim.pol} lang={lang} pal={pal} playing={playing} fmtNum={fmt.num} onFreq={(f) => update("freq", f)} onAngle={(a) => update("angle", a)} />
       </main>
 
       <footer className="om-foot">
