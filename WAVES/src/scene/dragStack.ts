@@ -182,14 +182,18 @@ export type StackCommand = { kind: "move" | "thickness"; dir: 1 | -1; factor: nu
 /**
  * Alt+←/→ move the selected layer in the stack, Alt+↑/↓ change its thickness
  * by one step (Shift: five steps). Not active in text fields (Alt+arrows are
- * word-navigation there).
+ * word-navigation there) but active on sliders and buttons.
  */
 export function stackKeyCommand(
   e: { key: string; altKey: boolean; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean },
   targetTag: string,
+  inputType = "text",
 ): StackCommand | null {
   if (!e.altKey || e.ctrlKey || e.metaKey) return null;
-  if (["INPUT", "TEXTAREA", "SELECT"].includes(targetTag.toUpperCase())) return null;
+  const tag = targetTag.toUpperCase();
+  // text fields keep Alt+arrows (word navigation); sliders, checkboxes and buttons do not use them
+  const textual = tag === "TEXTAREA" || tag === "SELECT" || (tag === "INPUT" && !["range", "checkbox", "radio", "button"].includes(inputType));
+  if (textual) return null;
   const factor = e.shiftKey ? 5 : 1;
   switch (e.key) {
     case "ArrowLeft": return { kind: "move", dir: -1, factor };

@@ -39,7 +39,7 @@ import {
   type LayerMat,
   type TemplateId,
 } from "./state/layers";
-import { applyMove, applyResize } from "./scene/dragStack";
+import { applyMove, applyResize, applyStackCommand, stackKeyCommand } from "./scene/dragStack";
 import { computeResults, stackSweepKey, type LayerRes, type Results, type SimState } from "./state/results";
 import { DEFAULT_STATE, presetState } from "./state/presets";
 import { STORAGE_KEY, STORAGE_VERSION, defaultPersisted, loadInitial, sanitizePersisted, type Persisted } from "./state/persistence";
@@ -677,6 +677,12 @@ export function App() {
         return;
       }
       const tag = (e.target as HTMLElement | null)?.tagName ?? "";
+      const stackCmd = stackKeyCommand(e, tag, (e.target as HTMLInputElement | null)?.type);
+      if (stackCmd) {
+        e.preventDefault();
+        setSim((s) => applyStackCommand(s, stackCmd));
+        return;
+      }
       if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag) || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.code === "Space") {
         e.preventDefault();
@@ -1373,6 +1379,8 @@ export function App() {
                   ["Space", t.scPlay],
                   ["← →", t.scAngle],
                   ["↑ ↓", t.scLayer],
+                  ["Alt + ← →", t.scMoveLayer],
+                  ["Alt + ↑ ↓", t.scThickness],
                   ["V", t.scView],
                   ["1 2 3", t.scDisplay],
                   ["P", t.present],

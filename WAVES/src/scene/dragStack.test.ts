@@ -235,6 +235,11 @@ describe("keyboard", () => {
     expect(stackKeyCommand(key("ArrowLeft", { ctrlKey: true }), "BODY")).toBeNull();
     expect(stackKeyCommand(key("ArrowLeft"), "INPUT")).toBeNull();
     expect(stackKeyCommand(key("a"), "BODY")).toBeNull();
+    expect(stackKeyCommand(key("ArrowLeft"), "INPUT", "text")).toBeNull();
+  });
+  it("still works while a slider or button has focus", () => {
+    expect(stackKeyCommand(key("ArrowUp"), "INPUT", "range")).toEqual({ kind: "thickness", dir: 1, factor: 1 });
+    expect(stackKeyCommand(key("ArrowUp"), "BUTTON")).toEqual({ kind: "thickness", dir: 1, factor: 1 });
   });
   it("moves the selected layer and the selection follows; edges are no-ops", () => {
     const s = state(1);
@@ -259,7 +264,7 @@ describe("nearestSlot (Spatial view)", () => {
   it("projects the pointer on the stack axis", () => {
     expect(nearestSlot({ x: 60, y: 80 }, slots)).toBe(0);
     expect(nearestSlot({ x: 118, y: 0 }, slots)).toBe(1);
-    expect(nearestSlot({ x: 162, y: 200 }, slots)).toBe(2);
+    expect(nearestSlot({ x: 162, y: 36 }, slots)).toBe(2);
     expect(nearestSlot({ x: 400, y: 0 }, slots)).toBe(3);
   });
   it("keeps stack order when the camera looks from the other side", () => {
