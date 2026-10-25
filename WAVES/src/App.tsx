@@ -3126,7 +3126,7 @@ export function App() {
       )}
 
       {showAbout && (
-        <div className="om-help-backdrop" onClick={() => setShowAbout(false)}>
+        <div className="om-help-backdrop om-about-backdrop" onClick={() => setShowAbout(false)}>
           <div
             className="om-about"
             role="dialog"
@@ -3139,7 +3139,6 @@ export function App() {
                 <Logo />
               </span>
               <div className="om-about-id">
-                <span className="om-about-kicker">{t.school}</span>
                 <h2>WaveS</h2>
                 <p>{t.tagline}</p>
               </div>
@@ -3155,56 +3154,50 @@ export function App() {
               </button>
             </div>
 
-            <div className="om-about-body">
-              <section className="om-about-info">
-              <dl className="om-about-facts">
-                <div>
-                  <dt>{t.authorLabel}</dt>
-                  <dd>{t.author}</dd>
-                </div>
-                <div>
-                  <dt>{t.schoolLabel}</dt>
-                  <dd>{t.school}</dd>
-                </div>
-              </dl>
-
-              <div className="om-about-block">
-                <span className="om-about-label">{t.contactLabel}</span>
-                <div className="om-mails">
-                  {CONTACT_EMAILS.map((c) => (
-                    <a key={c.address} className="om-mail" href={`mailto:${c.address}`} title={t.contactTitle}>
-                      <span className="om-mail-icon">{Icon.mail}</span>
-                      <span className="om-mail-addr">{c.address}</span>
-                      <span className="om-mail-tag">{t[c.labelKey]}</span>
-                    </a>
-                  ))}
-                </div>
+            <section className="om-about-sec" aria-label={t.modelLabel}>
+              <div className="om-about-sec-head">
+                <span className="om-about-label">{t.modelLabel}</span>
+                <span className="om-model-ref">ITU-R P.2040 § 3</span>
               </div>
-
-              <div className="om-about-foot">
-                <a className="om-about-repo" href={REPO_URL} target="_blank" rel="noopener noreferrer" title={t.repoTitle}>
-                  {Icon.github}
-                  <span>{t.repo}</span>
-                </a>
-                <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
-                  {buildInfo}
-                </button>
-              </div>
-              </section>
-
-              <section className="om-model" aria-label={t.modelLabel}>
-                <div className="om-model-head">
-                  <span className="om-about-label">{t.modelLabel}</span>
-                  <span className="om-model-ref">ITU-R P.2040 § 3</span>
-                </div>
-                <div className="om-eqs">
+              <div className="om-eqs">
                   <Eq tex={String.raw`\eta = \varepsilon' - j\,\frac{17.98\,\sigma}{f}`} />
                   <Eq tex={String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`} />
                   <Eq tex={String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`} />
+              </div>
+              <details className="om-model-more">
+                <summary>{lang === "fr" ? "Hypothèses du modèle" : "Model assumptions"}</summary>
+                <p>{t.modelNote}</p>
+              </details>
+            </section>
+
+            <section className="om-about-sec" aria-label={t.authorLabel}>
+              <div className="om-about-credit">
+                <div>
+                  <span className="om-about-label">{t.authorLabel}</span>
+                  <strong>{t.author}</strong>
                 </div>
-                <p className="om-model-note">{t.modelNote}</p>
-              </section>
-            </div>
+                <div>
+                  <span className="om-about-label">{t.schoolLabel}</span>
+                  <strong>{t.school}</strong>
+                </div>
+              </div>
+              <div className="om-about-links">
+                {CONTACT_EMAILS.map((c) => (
+                  <a key={c.address} className="om-about-link" href={`mailto:${c.address}`} title={`${t.contactTitle} · ${c.address}`}>
+                    {Icon.mail}
+                    <span>{t[c.labelKey]}</span>
+                  </a>
+                ))}
+                <a className="om-about-link" href={REPO_URL} target="_blank" rel="noopener noreferrer" title={t.repoTitle}>
+                  {Icon.github}
+                  <span>GitHub</span>
+                </a>
+              </div>
+            </section>
+
+            <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
+              {buildInfo}
+            </button>
           </div>
         </div>
       )}
