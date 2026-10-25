@@ -1,10 +1,12 @@
 import { solveStack, abs2, type Cx, type MaterialId, type PolMode } from "./physics";
 import { drawMaterialSurface } from "./materialSurfaces";
 import { TAU, DEG, MONO, SANS, clamp, rgba, mix, tintOf } from "./render/util";
+import { profileHeight } from "./surface/profiles";
+import type { SceneSurface } from "./surface/sceneOverlay";
 
 interface Point { x: number; y: number }
 interface Layer { mat: MaterialId | "air"; cm: number; thetaT: number; nRe: number; fluxIn: number; fluxOut: number; absorbed?: number; name: string }
-interface Parameters { layers: Layer[]; etas: Cx[]; ds: number[]; theta: number; freq: number; pol: PolMode; R: number; T: number; sel: number; hover: number }
+interface Parameters { layers: Layer[]; etas: Cx[]; ds: number[]; theta: number; freq: number; pol: PolMode; R: number; T: number; sel: number; hover: number; surface?: SceneSurface }
 interface Palette { dark: boolean; ink: string; muted: string; faint: string; inc: string; ref: string; tra: string; abs?: string; grid: string }
 export interface RayOptions { display: "field" | "fronts" | "both"; reflections: boolean; annotations: boolean; lang: "fr" | "en" }
 
@@ -635,6 +637,113 @@ export function drawWaveRays(
   dish(refEnd, Math.PI - theta, palette.ref, params.R);
   meter(receiver.x + 18 * scale, receiver.y - 14 * scale, params.T, palette.tra);
   meter(refEnd.x - 48 * scale, refEnd.y - 14 * scale, params.R, palette.ref);
+
+  /* ── Surface lab overlay: profile on the front face, diffracted orders ── */
+  const surface = params.surface;
+  if (surface && surface.profile.id !== "flat") {
+    const prof = surface.profile;
+    const faceTop = top + 4;
+    const faceBottom = bottom - 4;
+    const periods = clamp(Math.round((faceBottom - faceTop) / 28), 3, 14);
+    const periodPx = (faceBottom - faceTop) / periods;
+    // schematic: Λ is fitted to the face, h keeps its ratio to Λ
+    const depthPx = clamp((periodPx * prof.depth) / Math.max(prof.period, 1e-3), 3, compact ? 18 : 28);
+    const heightOf = profileHeight(prof);
+    const xAt = (y: number) => {
+      const u = ((((y - faceTop) / periodPx) % 1) + 1) % 1;
+      return left - depthPx * heightOf(u);
+    };
+    const tint = tintOf(params.layers[0]?.mat ?? "air");
+    const outlinePts: Point[] = [];
+    for (let y = faceTop; y <= faceBottom; y += 1) outlinePts.push({ x: xAt(y), y });
+    ctx.save();
+    path([{ x: left, y: faceTop }, ...outlinePts, { x: left, y: faceBottom }], true);
+    const fill = ctx.createLinearGradient(left - depthPx, 0, left, 0);
+    fill.addColorStop(0, rgba(mix(tint, "#ffffff", 0.25), 0.9));
+    fill.addColorStop(1, rgba(tint, 0.9));
+    ctx.fillStyle = fill;
+    ctx.fill();
+    path(outlinePts);
+    ctx.strokeStyle = dark ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.95)";
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    ctx.restore();
+
+    const reach = (from: Point, dx: number, dy: number) => {
+      let t = Infinity;
+      if (dx > 1e-9) t = Math.min(t, (width - 14 - from.x) / dx);
+      if (dx < -1e-9) t = Math.min(t, (14 - from.x) / dx);
+      if (dy > 1e-9) t = Math.min(t, (bottom + 10 - from.y) / dy);
+      if (dy < -1e-9) t = Math.min(t, (top - from.y) / dy);
+      return Math.max(0, t);
+    };
+    const face = { x: left - depthPx / 2, y: middle };
+    for (const o of surface.orders) {
+      if (o.m === 0) continue; // the specular beams are already drawn
+      const a = o.angleDeg * DEG;
+      for (const side of ["R", "T"] as const) {
+        const e = surface.efficiencies ? (side === "R" ? o.R : o.T) : NaN;
+        if (surface.efficiencies && !(e > 1e-4)) continue;
+        const from = side === "R" ? face : exit;
+        const dx = side === "R" ? -Math.cos(a) : Math.cos(a);
+        const dy = Math.sin(a);
+        const len = reach(from, dx, dy) * 0.88;
+        if (len < 12) continue;
+        const color = side === "R" ? palette.ref : palette.tra;
+        const known = Number.isFinite(e);
+        const lw = known ? 1 + 5 * Math.sqrt(e) : 1.4;
+        const alpha = known ? 0.3 + 0.7 * Math.sqrt(e) : 0.65;
+        const to = { x: from.x + dx * len, y: from.y + dy * len };
+        ctx.save();
+        ctx.setLineDash([8, 6]);
+        ctx.lineDashOffset = -time * 40;
+        path([from, to]);
+        ctx.strokeStyle = rgba(color, alpha);
+        ctx.lineWidth = lw;
+        ctx.lineCap = "round";
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const head = 5 + lw;
+        const ang = Math.atan2(dy, dx);
+        path(
+          [
+            to,
+            { x: to.x - head * Math.cos(ang - 0.4), y: to.y - head * Math.sin(ang - 0.4) },
+            { x: to.x - head * Math.cos(ang + 0.4), y: to.y - head * Math.sin(ang + 0.4) },
+          ],
+          true,
+        );
+        ctx.fillStyle = rgba(color, alpha);
+        ctx.fill();
+        if (options.annotations) {
+          const label = `${o.m > 0 ? "+" : ""}${o.m} · ${format(o.angleDeg, 1)}°${known ? ` · ${format(e * 100, e < 0.1 ? 1 : 0)} %` : ""}`;
+          ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
+          ctx.textBaseline = "middle";
+          ctx.textAlign = dx < 0 ? "left" : "right";
+          const tx = clamp(to.x + (dx < 0 ? 6 : -6), 6, width - 6);
+          const ty = clamp(to.y + (dy >= 0 ? -10 : 10), 10, height - 8);
+          const tw = ctx.measureText(label).width;
+          ctx.fillStyle = dark ? "rgba(8,14,24,.85)" : "rgba(255,255,255,.92)";
+          ctx.fillRect(dx < 0 ? tx - 3 : tx - tw - 3, ty - 7, tw + 6, 14);
+          ctx.fillStyle = dark ? color : mix(color, "#000000", 0.4);
+          ctx.fillText(label, tx, ty);
+        }
+        ctx.restore();
+      }
+    }
+    if (options.annotations && !compact) {
+      ctx.save();
+      ctx.font = `500 9.5px ${SANS}`;
+      ctx.fillStyle = palette.faint;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      const caption = french
+        ? `Profil du labo · Λ ${format(prof.period, 2)} cm · h ${format(prof.depth, 2)} cm · ${surface.efficiencies ? "efficacités du mur du labo" : "directions des ordres"} · R/T : mur plan`
+        : `Lab profile · Λ ${format(prof.period, 2)} cm · h ${format(prof.depth, 2)} cm · ${surface.efficiencies ? "lab wall efficiencies" : "order directions"} · R/T: flat wall`;
+      ctx.fillText(caption, 18, bottom + 52);
+      ctx.restore();
+    }
+  }
 
   if (options.annotations) {
     const polGlyph = params.pol === "TE" ? "E ⊙" : params.pol === "TM" ? "E ↕" : "TE+TM";

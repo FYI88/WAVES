@@ -13,6 +13,9 @@ import {
 import { drawSpatialScene, type SceneOptions } from "./spatialScene";
 import { drawWaveRays } from "./waveRays";
 import { decodeShare, encodeShare, shareHashOf } from "./share";
+import { SurfaceLab } from "./surface/SurfaceLab";
+import { labForShare } from "./surface/labState";
+import { withSurface, type SceneSurface } from "./surface/sceneOverlay";
 import { recordFrame } from "./perf";
 import { PerfHud } from "./PerfHud";
 import { AIR_TINT, clamp } from "./render/util";
@@ -437,6 +440,7 @@ export function App() {
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [sceneSurface, setSceneSurface] = useState<SceneSurface | null>(null);
   const [perfOn, setPerfOn] = useState(() => {
     try {
       return localStorage.getItem("waves:perf") === "1" || new URLSearchParams(window.location.search).get("perf") === "1";
@@ -597,7 +601,7 @@ export function App() {
   }, []);
 
   const shareUrl = () =>
-    `${window.location.origin}${window.location.pathname}#s=${encodeShare(sim, lang, theme)}`;
+    `${window.location.origin}${window.location.pathname}#s=${encodeShare(sim, lang, theme, labForShare())}`;
 
   const share = async () => {
     setCopied(await copyText(shareUrl()));
@@ -871,7 +875,7 @@ export function App() {
       <main className="om-layout">
         {/* ───────── Scene ───────── */}
         <section className="om-card om-scene om-enter" style={{ "--d": "60ms" } as CSSProperties}>
-          <RayScene params={sceneParams} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} />
+          <RayScene params={withSurface(sceneParams, sceneSurface)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} />
           <div className="om-hud om-hud-tl">
             <span className="om-hud-chip">
               <span className="om-stackdots">
@@ -1335,6 +1339,7 @@ export function App() {
             </div>
           </div>
         </section>
+        <SurfaceLab freq={sim.freq} angle={sim.angle} pol={sim.pol} lang={lang} pal={pal} playing={playing} fmtNum={fmt.num} onFreq={(f) => update("freq", f)} onAngle={(a) => update("angle", a)} onSceneSurface={setSceneSurface} />
       </main>
 
       <footer className="om-foot">
@@ -1383,7 +1388,7 @@ export function App() {
       )}
 
       {showAbout && (
-        <div className="om-help-backdrop" onClick={() => setShowAbout(false)}>
+        <div className="om-help-backdrop om-about-backdrop" onClick={() => setShowAbout(false)}>
           <div
             className="om-about"
             role="dialog"
@@ -1396,7 +1401,6 @@ export function App() {
                 <Logo />
               </span>
               <div className="om-about-id">
-                <span className="om-about-kicker">{t.school}</span>
                 <h2>WaveS</h2>
                 <p>{t.tagline}</p>
               </div>
@@ -1412,50 +1416,50 @@ export function App() {
               </button>
             </div>
 
-            <div className="om-about-body">
-              <div className="om-about-grid">
-                <div className="om-about-cell">
+            <section className="om-about-sec" aria-label={t.modelLabel}>
+              <div className="om-about-sec-head">
+                <span className="om-about-label">{t.modelLabel}</span>
+                <span className="om-model-ref">ITU-R P.2040 § 3</span>
+              </div>
+              <div className="om-eqs">
+                  <Eq tex={String.raw`\eta = \varepsilon' - j\,\frac{17.98\,\sigma}{f}`} />
+                  <Eq tex={String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`} />
+                  <Eq tex={String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`} />
+              </div>
+              <details className="om-model-more">
+                <summary>{lang === "fr" ? "Hypothèses du modèle" : "Model assumptions"}</summary>
+                <p>{t.modelNote}</p>
+              </details>
+            </section>
+
+            <section className="om-about-sec" aria-label={t.authorLabel}>
+              <div className="om-about-credit">
+                <div>
                   <span className="om-about-label">{t.authorLabel}</span>
                   <strong>{t.author}</strong>
                 </div>
-                <div className="om-about-cell">
+                <div>
                   <span className="om-about-label">{t.schoolLabel}</span>
                   <strong>{t.school}</strong>
                 </div>
               </div>
-
-              <div className="om-about-block">
-                <span className="om-about-label">{t.contactLabel}</span>
-                <div className="om-mails">
-                  {CONTACT_EMAILS.map((c) => (
-                    <a key={c.address} className="om-mail" href={`mailto:${c.address}`} title={t.contactTitle}>
-                      <span className="om-mail-icon">{Icon.mail}</span>
-                      <span className="om-mail-addr">{c.address}</span>
-                      <span className="om-mail-tag">{t[c.labelKey]}</span>
-                    </a>
-                  ))}
-                </div>
+              <div className="om-about-links">
+                {CONTACT_EMAILS.map((c) => (
+                  <a key={c.address} className="om-about-link" href={`mailto:${c.address}`} title={`${t.contactTitle} · ${c.address}`}>
+                    {Icon.mail}
+                    <span>{t[c.labelKey]}</span>
+                  </a>
+                ))}
+                <a className="om-about-link" href={REPO_URL} target="_blank" rel="noopener noreferrer" title={t.repoTitle}>
+                  {Icon.github}
+                  <span>GitHub</span>
+                </a>
               </div>
+            </section>
 
-              <div className="om-model">
-                <div className="om-model-head">
-                  <span className="om-about-label">{t.modelLabel}</span>
-                  <span className="om-model-ref">ITU-R P.2040 § 3</span>
-                </div>
-                <Eq tex={String.raw`\eta = \varepsilon' - j\,\frac{17.98\,\sigma}{f}`} />
-                <Eq tex={String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`} />
-                <Eq tex={String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`} />
-                <p className="om-model-note">{t.modelNote}</p>
-              </div>
-
-              <a className="om-about-repo" href={REPO_URL} target="_blank" rel="noopener noreferrer" title={t.repoTitle}>
-                {Icon.github}
-                <span>{t.repo}</span>
-              </a>
-              <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
-                {buildInfo}
-              </button>
-            </div>
+            <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
+              {buildInfo}
+            </button>
           </div>
         </div>
       )}

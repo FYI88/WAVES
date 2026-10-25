@@ -13,6 +13,9 @@ const SIM: ShareState = {
   pol: "TE",
 };
 
+const b64url = (o: unknown) =>
+  btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
 describe("share-link codec", () => {
   it("round-trips a full setup", () => {
     const hash = encodeShare(SIM, "fr", "dark");
@@ -23,18 +26,29 @@ describe("share-link codec", () => {
     expect(back?.sim).toEqual(SIM);
     expect(back?.lang).toBe("fr");
     expect(back?.theme).toBe("dark");
+    expect(back?.lab).toBeUndefined();
+  });
+
+  it("carries the lab state in v2 links", () => {
+    const lab = { profile: { id: "sine", period: 3 }, mode: "rigorous" };
+    const back = decodeShare(encodeShare(SIM, "en", "light", lab));
+    expect(back?.v).toBe(2);
+    expect(back?.lab).toEqual(lab);
+  });
+
+  it("still reads v1 links", () => {
+    const v1 = decodeShare(b64url({ v: 1, sim: SIM, lang: "en", theme: "dark" }));
+    expect(v1).not.toBeNull();
+    expect(v1?.sim).toEqual(SIM);
+    expect(v1?.lab).toBeUndefined();
   });
 
   it("rejects garbage, wrong versions and truncated payloads", () => {
     expect(decodeShare("")).toBeNull();
     expect(decodeShare("!!!not-base64!!!")).toBeNull();
     expect(decodeShare(encodeShare(SIM, "en", "light").slice(0, 24))).toBeNull();
-    // hand-made v999 payload, correctly encoded
-    const fake = btoa(JSON.stringify({ v: 999, sim: SIM, lang: "en", theme: "dark" }))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-    expect(decodeShare(fake)).toBeNull();
+    expect(decodeShare(b64url({ v: 999, sim: SIM, lang: "en", theme: "dark" }))).toBeNull();
+    expect(decodeShare(b64url({ v: "2", sim: SIM, lang: "en", theme: "dark" }))).toBeNull();
   });
 
   it("extracts #s= from a location hash", () => {
