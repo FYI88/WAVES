@@ -420,8 +420,8 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   /* ───────── drawing ───────── */
 
   const detailOrders: DetailOrder[] = useMemo(
-    () => (rigorous ? rigorous.orders : geomOrders.map((o) => ({ m: o.m, angleDeg: o.angleDeg, R: NaN, T: NaN }))),
-    [rigorous, geomOrders],
+    () => (rigorous && !stale ? rigorous.orders : geomOrders.map((o) => ({ m: o.m, angleDeg: o.angleDeg, R: NaN, T: NaN }))),
+    [rigorous, stale, geomOrders],
   );
 
   const detail: DetailParams = useMemo(
@@ -431,15 +431,17 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
       materialName: MATERIAL_NAMES[material][lang],
       below: below.map((l) => ({ tint: surfaceTint(l.material), cm: l.cm, name: MATERIAL_NAMES[l.material][lang] })),
       thetaDeg: angle,
+      frequency: freq,
+      pol,
       orders: detailOrders,
-      rigorous: Boolean(rigorous),
+      rigorous: Boolean(rigorous) && !stale,
       slices: tab === "calc" && profile.id !== "flat" ? profileSlices(profile, slices) : null,
       bubbles: hasBubbles ? { fraction: inclusions.fraction, water: inclusions.kind === "water", diameterMm: inclusions.diameterMm, target } : null,
       fog: fog.lwc,
       lang,
       normals: tab === "surface",
     }),
-    [profile, material, below, angle, detailOrders, rigorous, tab, slices, hasBubbles, inclusions, target, fog.lwc, lang],
+    [profile, material, below, angle, freq, pol, detailOrders, rigorous, stale, tab, slices, hasBubbles, inclusions, target, fog.lwc, lang],
   );
 
   const detailRef = useRef<HTMLCanvasElement>(null);

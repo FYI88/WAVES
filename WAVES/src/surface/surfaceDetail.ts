@@ -1,4 +1,5 @@
-import { DEG } from "../physics";
+import { DEG, type PolMode } from "../physics";
+import { drawWaveRibbon } from "../render/waveRibbon";
 import { MONO, SANS } from "../theme";
 import { profileHeight, type ProfileParams, type ProfileSlice } from "./profiles";
 import type { RcwaSweep } from "./rcwa";
@@ -35,6 +36,8 @@ export interface DetailParams {
   materialName: string;
   below: { tint: string; cm: number; name: string }[];
   thetaDeg: number;
+  frequency: number;
+  pol: PolMode;
   orders: DetailOrder[];
   rigorous: boolean;
   slices: ProfileSlice[] | null;
@@ -342,37 +345,14 @@ export function drawSurfaceDetail(
   /* beams */
   const theta = p.thetaDeg * DEG;
   const hit = { x: faceX, y: yc };
-  const dash = [10, 7];
-  const beam = (x0: number, y0b: number, dx: number, dy: number, color: string, width: number, alpha: number, len: number, label?: string) => {
+  const beam = (x0: number, y0b: number, dx: number, dy: number, color: string, power: number | null, len: number, label?: string) => {
     if (len < 4) return;
     const x1 = x0 + dx * len;
     const y1 = y0b + dy * len;
     ctx.save();
-    ctx.strokeStyle = hexA(color, alpha * 0.25);
-    ctx.lineWidth = width * 3.2;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(x0, y0b);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-    ctx.setLineDash(dash);
-    ctx.lineDashOffset = -time * 40;
-    ctx.strokeStyle = hexA(color, alpha);
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    ctx.moveTo(x0, y0b);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    const ah = 6 + width;
-    const ang = Math.atan2(dy, dx);
-    ctx.fillStyle = hexA(color, alpha);
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x1 - ah * Math.cos(ang - 0.4), y1 - ah * Math.sin(ang - 0.4));
-    ctx.lineTo(x1 - ah * Math.cos(ang + 0.4), y1 - ah * Math.sin(ang + 0.4));
-    ctx.closePath();
-    ctx.fill();
+    drawWaveRibbon(ctx, { x: x0, y: y0b }, { x: x1, y: y1 }, color, power, power, 1, 0, {
+      time, frequency: p.frequency, compact, dark: pal.dark, display: "both", pol: p.pol,
+    });
     if (label) {
       ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
       ctx.textAlign = dx < 0 ? "left" : "right";
@@ -400,7 +380,7 @@ export function drawSurfaceDetail(
   ctx.restore();
 
   const inLen = Math.min(rayLength(hit.x, hit.y, -Math.cos(theta), -Math.sin(theta), w, h, 14), faceX - 14);
-  beam(hit.x - Math.cos(theta) * inLen, hit.y - Math.sin(theta) * inLen, Math.cos(theta), Math.sin(theta), pal.inc, 2.6, 1, inLen);
+  beam(hit.x - Math.cos(theta) * inLen, hit.y - Math.sin(theta) * inLen, Math.cos(theta), Math.sin(theta), pal.inc, 1, inLen);
   if (p.thetaDeg >= 3) {
     ctx.save();
     ctx.strokeStyle = hexA(pal.inc, 0.8);
@@ -414,7 +394,6 @@ export function drawSurfaceDetail(
     ctx.restore();
   }
 
-  const weight = (e: number) => (Number.isFinite(e) ? { width: 1 + 6 * Math.sqrt(e), alpha: 0.25 + 0.75 * Math.sqrt(e) } : { width: 1.4, alpha: 0.55 });
   const pct = (e: number) => (Number.isFinite(e) ? ` · ${fmt(e * 100, e < 0.1 ? 1 : 0)}%` : "");
   for (const o of p.orders) {
     const a = o.angleDeg * DEG;
@@ -422,16 +401,14 @@ export function drawSurfaceDetail(
       const dx = -Math.cos(a);
       const dy = Math.sin(a);
       const len = Math.min(rayLength(hit.x, hit.y, dx, dy, w, h, 14), faceX - 14) * 0.92;
-      const { width, alpha } = weight(p.rigorous ? o.R : NaN);
-      beam(hit.x, hit.y, dx, dy, pal.ref, width, alpha, len, `${o.m > 0 ? "+" : ""}${o.m}${pct(p.rigorous ? o.R : NaN)}`);
+      beam(hit.x, hit.y, dx, dy, pal.ref, p.rigorous ? o.R : null, len, `${o.m > 0 ? "+" : ""}${o.m}${pct(p.rigorous ? o.R : NaN)}`);
     }
     if (!p.rigorous || o.T > 1e-4) {
       if (p.rigorous && !(o.T > 1e-4)) continue;
       const dx = Math.cos(a);
       const dy = Math.sin(a);
       const len = rayLength(backX, yc, dx, dy, w, h, 14) * 0.9;
-      const { width, alpha } = weight(p.rigorous ? o.T : NaN);
-      beam(backX, yc, dx, dy, pal.tra, width, alpha, len, `${o.m > 0 ? "+" : ""}${o.m}${pct(p.rigorous ? o.T : NaN)}`);
+      beam(backX, yc, dx, dy, pal.tra, p.rigorous ? o.T : null, len, `${o.m > 0 ? "+" : ""}${o.m}${pct(p.rigorous ? o.T : NaN)}`);
     }
   }
 
