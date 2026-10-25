@@ -13,9 +13,9 @@ import {
 import { drawSpatialScene, type SceneOptions } from "./spatialScene";
 import { drawWaveRays } from "./waveRays";
 import { decodeShare, encodeShare, shareHashOf } from "./share";
+import { SurfaceLab } from "./surface/SurfaceLab";
 import { recordFrame } from "./perf";
 import { PerfHud } from "./PerfHud";
-import { SurfaceLab } from "./surface/SurfaceLab";
 import { AIR_TINT } from "./render/util";
 import {
   C0,
