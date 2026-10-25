@@ -215,6 +215,9 @@ export function drawSpatialScene(
     polygons.push([top[0], top[1], top[2], front[1], front[0], face[0]].map(project));
   });
 
+  // screen position of each layer boundary along the stack axis (drop slots for drag-to-reorder)
+  const slots = boundaries.map(x => project({ x, y: 0, z: (wallTop + wallBottom) / 2 }));
+
   // painter's order: back-to-front by camera depth of each box centre
   // (ties, e.g. az = 0, keep the stack order)
   const centreDepth = boxes.map(({ start, end }) => depthOf({ x: (start + end) / 2, y: 0, z: (wallTop + wallBottom) / 2 }));
@@ -482,5 +485,5 @@ export function drawSpatialScene(
     : (options.lang === "fr" ? "VUE SCHÉMATIQUE · ÉCHELLES ADAPTÉES" : "SCHEMATIC VIEW · ADAPTED SCALES"), compact ? 18 : width - 20, height - (compact ? 99 : 66));
   ctx.restore();
   /** `order` is the back-to-front draw order: hit-tests walk it from the end. */
-  return { rects, polygons, order };
+  return { rects, polygons, order, slots };
 }

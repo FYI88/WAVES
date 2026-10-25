@@ -337,12 +337,25 @@ Added by the GitLab / Surface lab track (§15):
 - `src/surface/`: profiles, EMT, grating equation, RCWA + worker, metal, scenarios, Surface lab panel (`SurfaceLab.tsx`, `labText.ts`, `surfaceLab.css`, `surfaceDetail.ts`), lab state / share (`labState.ts`), main-view overlay (`sceneOverlay.ts`). On `main` since !2.
 - `src/media/`: bubbles (Maxwell Garnett), water permittivity, fog (P.840). On `main` since !2.
 
+Added by canvas drag (!5, #1):
+
+- `src/scene/dragStack.ts` (+ `dragStack.test.ts`): pure logic: thickness limits / clamp / keyboard nudge, thickness from a boundary drag, boundary hit band, drop slot (Section: nearest boundary; Spatial: `nearestSlot` along the projected stack axis), selection-preserving `moveInStack` / `applyMove` / `applyResize`, Alt+arrow `stackKeyCommand` / `applyStackCommand`.
+- `src/scene/hitTest.ts`: `SceneLayout` type (renderers' geometry incl. `boundaries`, `minWidth`, `slots`), `pointOf` (zoom-aware), `hitLayer`.
+- `src/scene/dragOverlay.ts`: drop indicator, ghost, thickness tooltip, boundary highlight (canvas palette only).
+- `RayScene.tsx` owns the gesture state machine (click / orbit / reorder / resize); `waveRays.ts` returns `boundaries` + `minWidth`, `spatialScene.ts` returns `slots` (no drawing change).
+
 Planned:
 
 - `.github/workflows/android-release.yml`
 - `THIRD_PARTY_NOTICES.md`
 
 ## 13. Journal
+
+### 2026-10-25 (GitLab / Surface lab track): canvas drag (#1, !5)
+
+- Branch `feature/canvas-drag` from `fix/sidebar-scroll` (!3); Draft MR !5 to `main`, depends on !3. `App.tsx` changes are small (3 callbacks, 1 import, keyboard branch, 2 help rows) so the merge with !4 (#7) stays easy; the logic is in `src/scene/`.
+- Commits: `dragStack.ts` + tests; renderers return boundary geometry + `hitTest.ts` + `dragOverlay.ts`; gestures in `RayScene.tsx`; keyboard + overlay + i18n.
+- The authoring sandbox could not reach the npm registry (403), so nothing ran locally; GitLab CI on !5 (`npm test`, `npm run build`) is green and was the first real type-check / vitest / build run. Before that, `dragStack.ts` was exercised type-stripped under plain Node (37 checks). **Not verified: any browser behaviour** (gestures, overlay, cursors, touch); see the checklist in !5.
 
 ### 2026-10-25 (GitLab / Surface lab track)
 
@@ -434,6 +447,7 @@ Run locally: `git checkout <branch> && cd WAVES && npm ci && npm run dev` (Vite 
 | #6 | bubbles, water, fog | !2 | merged except the Rayleigh roughness estimate |
 | #7 | UI / UX and design pass | - | not started; design brief on the issue |
 | #8 | 3D waves on profiled walls | - | not started |
+| #1 | Direct manipulation of the wall on the canvas (drag to reorder / resize) | !5 (draft, depends on !3) | implemented; CI green; browser check pending |
 
 !2 merged into `main` on 2026-10-25 (`253bd62c`) after the user's browser check.
 
@@ -449,6 +463,11 @@ Targets phones, laptops and teaching boards. Simple, minimal, premium; UI only (
 - Lab UI colours use the app theme tokens `--om-*` only; never the base `--fg-*` / `--surface-*` tokens (those follow the OS scheme, not the app toggle).
 - About: compact sheet, 440px card on laptops (500px on boards), bottom sheet on phones, model assumptions behind a disclosure, email addresses only in link tooltips.
 - 3D waves on profiled walls is a separate issue (#8), after #7.
+- Canvas drag (!5): all edits go through `setSim` with `applyMove` / `applyResize` / `applyStackCommand` (`scene/dragStack.ts`), i.e. the same state as the panel; results, charts, share links and `localStorage` follow. `physics.ts` untouched. A press that moves under 3 px is still a click (select). Grabbing a layer selects it.
+- Section view: drag a body to reorder (drop line between layers, lifted ghost), drag a boundary or the back face to resize the layer on its left (clamped / snapped to 0.1–100 cm, step 0.01, same as the panel; the boundary follows the pointer, the back face is relative: e per 160 px). Hit band 6 px mouse, 12 px touch / pen / coarse. Spatial view: dragging a layer reorders (slot from the pointer projected on the stack axis), dragging empty space orbits; no thickness drag there.
+- Touch: Pointer Events + pointer capture. `touch-action` stays `pan-y` on the Section canvas (set in CSS, so vertical swipes scroll the page and horizontal drags are ours; a browser-claimed scroll fires `pointercancel`, which reverts an unfinished resize) and `none` in Spatial (needed for orbit, unchanged from before, so the page does not scroll over the 3D canvas on phones).
+- Keyboard: Alt+Left/Right move the selected layer, Alt+Up/Down change its thickness by one step (1 % of the log range like the panel slider, at least one 0.01 cm step; Shift = ×5). Ignored in text fields. Escape cancels a drag (capture phase, before the global Escape handler).
+- Perf: nothing is drawn or re-rendered while idle; the overlay is painted only while a boundary is hovered or a drag is active, from the existing rAF loop (it redraws when the React state changes, i.e. on pointer moves).
 
 ### Open questions for the user
 

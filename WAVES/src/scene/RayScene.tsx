@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { drawSpatialScene, type SceneOptions } from "../spatialScene";
 import { drawWaveRays } from "../waveRays";
 import { recordFrame } from "../perf";
 import { clamp } from "../render/util";
 import type { Cx, PolMode } from "../physics";
-import type { Lang } from "../i18n";
+import { DICTS, type Lang } from "../i18n";
 import type { Palette } from "../theme";
 import type { LayerMat } from "../state/layers";
 import { cssZoom, prepCanvas, useCanvasSize } from "./canvas";
+import { DRAG_THRESHOLD, EDGE_BAND, dropSlot, hitBoundary, isNoopDrop, nearestSlot, slotToIndex, thicknessFromBoundaryDrag, type Pt } from "./dragStack";
+import { drawDragOverlay, type DragUi } from "./dragOverlay";
+import { hitLayer, inWallBand, pointOf, type SceneLayout } from "./hitTest";
 
 /* ════════════════════════════════════════════════════════════════════════
    Ray scene: animation loop + view switching (Section / Spatial)
@@ -38,12 +41,24 @@ export interface SceneParams {
   labels: { normal: string; tx: string; rx: string; refl: string };
 }
 
-interface SceneLayout {
-  rects: { x0: number; x1: number; y0: number; y1: number }[];
-  polygons?: { x: number; y: number }[][];
-  /** back-to-front draw order of `polygons` (spatial view) */
-  order?: number[];
-  tiles?: { x0: number; x1: number; y0: number; y1: number; index: number }[];
+/** One pointer gesture on the canvas: click, orbit (Spatial), reorder or boundary resize. */
+interface Gesture {
+  id: number;
+  /** client coordinates at the last orbit step / at the start */
+  x: number;
+  y: number;
+  moved: boolean;
+  mode: "click" | "orbit" | "reorder" | "resize";
+  /** layer being moved, or layer on the left of the dragged boundary */
+  index: number;
+  start: Pt;
+  startCm: number;
+  cms: number[];
+  boundaries: number[];
+  minWidth: number;
+  lastCm: number;
+  /** reorder: insertion slot under the pointer (kept here, React state may lag behind pointerup) */
+  slot: number;
 }
 
 export function RayScene(props: {
@@ -53,6 +68,10 @@ export function RayScene(props: {
   lang: Lang;
   fmtNum: (v: number, d?: number) => string;
   onSelect: (i: number) => void;
+  /** reorder: move layer `from` to position `to` (same state update as the panel) */
+  onMove: (from: number, to: number) => void;
+  /** set the thickness (cm) of layer `index` (same state update as the panel) */
+  onResize: (index: number, cm: number) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const size = useCanvasSize(ref);
@@ -63,11 +82,15 @@ export function RayScene(props: {
   const [annotations, setAnnotations] = useState(true);
   const [orbit, setOrbit] = useState({ az: 0.45, el: 0.45 });
   const [speed, setSpeed] = useState(1);
-  const live = useRef({ ...props, view, display, annotations, orbit, speed, hover, reflections });
-  live.current = { ...props, view, display, annotations, orbit, speed, hover, reflections };
+  // drag affordances: `edge` = hovered boundary (Section), `dragUi` = active reorder / resize
+  const [edge, setEdge] = useState(0);
+  const [cursor, setCursor] = useState("");
+  const [dragUi, setDragUi] = useState<DragUi | null>(null);
+  const live = useRef({ ...props, view, display, annotations, orbit, speed, hover, reflections, edge, dragUi });
+  live.current = { ...props, view, display, annotations, orbit, speed, hover, reflections, edge, dragUi };
   const clock = useRef(0);
   const introStart = useRef<number | null>(null);
-  const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const drag = useRef<Gesture | null>(null);
   const layout = useRef<SceneLayout>({ rects: [] });
   const french = props.lang === "fr";
 
@@ -117,75 +140,158 @@ export function RayScene(props: {
       layout.current = cur.view === "spatial"
         ? drawSpatialScene(ctx, size.w, size.h, clock.current, intro, parameters, cur.pal, cur.fmtNum, { display: cur.display, annotations: cur.annotations, az: cur.orbit.az, el: cur.orbit.el, lang: cur.lang })
         : drawWaveRays(ctx, size.w, size.h, clock.current, parameters, cur.pal, cur.fmtNum, { display: cur.display, reflections: cur.reflections, annotations: cur.annotations, lang: cur.lang });
+      // drag affordances: only while a boundary is hovered or a drag is active
+      if (cur.dragUi || cur.edge > 0) {
+        ctx.save();
+        drawDragOverlay(ctx, cur.view, layout.current, cur.dragUi, cur.edge, cur.params.layers, cur.pal, cur.fmtNum, size.w);
+        ctx.restore();
+      }
       recordFrame(elapsed, { dpr: size.dpr, width: canvas.width, height: canvas.height });
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
   }, [size]);
 
-  const hit = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const z = cssZoom();
-    const point = { x: (event.clientX - bounds.left) / z, y: (event.clientY - bounds.top) / z };
-    const tile = layout.current.tiles?.find(item => point.x >= item.x0 && point.x <= item.x1 && point.y >= item.y0 && point.y <= item.y1);
-    if (tile) return tile.index;
-    const polygons = layout.current.polygons;
-    if (polygons) {
-      // topmost first: walk the draw order backwards
-      const order = layout.current.order ?? polygons.map((_, index) => index);
-      for (let rank = order.length - 1; rank >= 0; rank--) {
-        const index = order[rank];
-        const polygon = polygons[index];
-        let inside = false;
-        for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current++) {
-          const left = polygon[current];
-          const right = polygon[previous];
-          if ((left.y > point.y) !== (right.y > point.y) && point.x < (right.x - left.x) * (point.y - left.y) / (right.y - left.y) + left.x) inside = !inside;
-        }
-        if (inside) return index;
-      }
-      return -1;
-    }
-    return layout.current.rects.findIndex(rect => point.x >= rect.x0 - 3 && point.x <= rect.x1 + 3 && point.y >= rect.y0 - 6 && point.y <= rect.y1 + 4);
+  // wider grab band for touch / pen and on coarse-pointer devices
+  const coarse = useRef<MediaQueryList | null>(null);
+  const bandOf = (event: { pointerType: string }) => {
+    coarse.current ??= window.matchMedia("(pointer: coarse)");
+    return event.pointerType !== "mouse" || coarse.current.matches ? EDGE_BAND.coarse : EDGE_BAND.fine;
+  };
+
+  /** end the gesture; `revert` restores the thickness a resize started from */
+  const cancelDrag = useCallback((revert: boolean) => {
+    const g = drag.current;
+    drag.current = null;
+    if (g?.mode === "resize" && g.moved && revert && g.lastCm !== g.startCm) live.current.onResize(g.index, g.startCm);
+    setDragUi(null);
+    setCursor("");
+  }, []);
+
+  // Escape cancels an active drag (capture phase, so App's own Escape handling,
+  // e.g. leaving present mode, does not also fire)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || !drag.current?.moved || drag.current.mode === "orbit") return;
+      e.stopPropagation();
+      e.preventDefault();
+      cancelDrag(true);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [cancelDrag]);
+
+  /** hover feedback: boundary highlight and cursor (no gesture running) */
+  const hoverAt = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const point = pointOf(event);
+    const lay = layout.current;
+    let nextEdge = 0;
+    if (view === "wave" && lay.boundaries && inWallBand(lay, point)) nextEdge = Math.max(0, hitBoundary(point.x, lay.boundaries, bandOf(event)));
+    const h = hitLayer(lay, point);
+    setHover(h.index);
+    setEdge(nextEdge);
+    setCursor(nextEdge > 0 ? "is-resize" : h.index < 0 ? "" : h.tile ? "is-pointer" : "is-grab");
   };
 
   return <>
     <canvas
       ref={ref}
-      className={`om-canvas ${hover >= 0 ? "is-pointer" : ""}`}
-      aria-label={french ? "Simulation : onde incidente, milieux, réflexion et transmission. Sélectionnez un milieu dans la liste pour le modifier." : "Simulation: incident wave, media, reflection and transmission. Select a medium in the layer list to edit it."}
+      className={`om-canvas ${cursor}`}
+      aria-label={DICTS[props.lang].canvasAria}
       role="img"
       onPointerMove={event => {
-        setHover(hit(event));
-        const d = drag.current;
-        if (d && view === "spatial") {
-          const dx = (event.clientX - d.x) / cssZoom();
-          const dy = (event.clientY - d.y) / cssZoom();
-          if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
-          if (d.moved) {
+        const g = drag.current;
+        if (!g) { hoverAt(event); return; }
+        if (g.id !== event.pointerId) return;
+        const z = cssZoom();
+        const dx = (event.clientX - g.x) / z;
+        const dy = (event.clientY - g.y) / z;
+        if (g.mode === "orbit") {
+          if (Math.abs(dx) + Math.abs(dy) > DRAG_THRESHOLD) g.moved = true;
+          if (g.moved) {
             setOrbit(o => ({
               // bounded orbit range kept as before (no behaviour change)
               az: clamp(o.az + dx * 0.005, -0.35, 1.15),
               el: clamp(o.el + dy * 0.004, 0.15, 0.85),
             }));
-            d.x = event.clientX;
-            d.y = event.clientY;
+            g.x = event.clientX;
+            g.y = event.clientY;
           }
+          return;
         }
+        if (g.mode === "click") return;
+        // reorder / resize: totals since the press, in layout px
+        const tx = pointOf(event).x - g.start.x;
+        const ty = pointOf(event).y - g.start.y;
+        if (!g.moved) {
+          if (Math.hypot(tx, ty) <= DRAG_THRESHOLD) return;
+          g.moved = true;
+          setCursor(g.mode === "resize" ? "is-resize" : "is-grabbing");
+          // the panel edits the selected layer: grabbing a layer selects it
+          props.onSelect(g.index);
+        }
+        const lay = layout.current;
+        if (g.mode === "resize") {
+          const cm = thicknessFromBoundaryDrag({ cms: g.cms, index: g.index, boundaries: g.boundaries, minWidth: g.minWidth, dx: tx });
+          if (cm !== g.lastCm) {
+            g.lastCm = cm;
+            live.current.onResize(g.index, cm);
+          }
+          setDragUi({ kind: "resize", index: g.index, slot: 0, dx: tx, dy: ty });
+          return;
+        }
+        const point = pointOf(event);
+        const slot = view === "spatial" && lay.slots ? nearestSlot(point, lay.slots) : dropSlot(point.x, lay.boundaries ?? []);
+        g.slot = slot;
+        setDragUi({ kind: "reorder", index: g.index, slot, dx: tx, dy: ty });
       }}
-      onPointerLeave={() => { setHover(-1); drag.current = null; }}
+      onPointerLeave={() => {
+        if (drag.current?.moved) return; // captured: the gesture keeps going outside the canvas
+        setHover(-1);
+        setEdge(0);
+        setCursor("");
+        drag.current = null;
+      }}
       onPointerDown={event => {
         event.currentTarget.setPointerCapture(event.pointerId);
-        drag.current = { x: event.clientX, y: event.clientY, moved: false };
+        const point = pointOf(event);
+        const lay = layout.current;
+        const g: Gesture = {
+          id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, mode: view === "spatial" ? "orbit" : "click",
+          index: -1, start: point, startCm: 0, cms: [], boundaries: [], minWidth: 0, lastCm: 0, slot: -1,
+        };
+        if (event.button === 0 || event.pointerType !== "mouse") {
+          if (view === "wave" && lay.boundaries && inWallBand(lay, point)) {
+            const j = hitBoundary(point.x, lay.boundaries, bandOf(event));
+            if (j > 0) {
+              const cms = live.current.params.layers.map(l => l.cm);
+              Object.assign(g, { mode: "resize", index: j - 1, cms, boundaries: lay.boundaries.slice(), minWidth: lay.minWidth ?? 0, startCm: cms[j - 1], lastCm: cms[j - 1] });
+            }
+          }
+          if (g.mode !== "resize") {
+            const h = hitLayer(lay, point);
+            if (h.index >= 0 && !h.tile) Object.assign(g, { mode: "reorder", index: h.index });
+          }
+        }
+        drag.current = g;
       }}
       onPointerUp={event => {
-        const d = drag.current;
+        const g = drag.current;
+        if (!g || g.id !== event.pointerId) return;
         drag.current = null;
-        if (d && !d.moved) {
-          const index = hit(event);
-          if (index >= 0) props.onSelect(index);
+        setDragUi(null);
+        setCursor("");
+        if (g.mode === "reorder" && g.moved) {
+          if (g.slot >= 0 && !isNoopDrop(g.index, g.slot)) props.onMove(g.index, slotToIndex(g.index, g.slot));
+          return;
+        }
+        if (g.mode === "resize" && g.moved) return;
+        if (!g.moved) {
+          const h = hitLayer(layout.current, pointOf(event));
+          if (h.index >= 0) props.onSelect(h.index);
         }
       }}
+      onPointerCancel={() => cancelDrag(true)}
     />
     <div className="om-scene-toolbar" data-view={view} aria-label={french ? "Affichage de la simulation" : "Simulation display"}>
       <div className="om-view-modes" role="group" aria-label={french ? "Vue" : "View"}>
