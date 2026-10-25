@@ -4,7 +4,7 @@ Last updated: 2026-10-24
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
-Head at handoff: `e4b1a8b` (Phase 2.4.2) - latest release tag `v1.0.0-debug.7` points at `e4b1a8b`
+Head at handoff: `a4ef410` (Phase 2.4.3, launcher icon and splash) - latest release tag `v1.0.0-debug.8` points at `a4ef410`
 
 ## 1. Mission
 
@@ -77,9 +77,9 @@ Do not change the physics or the chart semantics.
 
 ### Repository
 
-- Head: `e4b1a8b` (Phase 2.4.2, canvas selection and incident label fixed).
-- Recent commits: `e4b1a8b` canvas selection + emoji glyph + touch-hover repaints, `bb4ac1a` Phase 2.4.1 docs, `8741636` bordered GitHub button, `00e9bf3` About card without the model block, `1776c4f` phone-sized About card.
-- Phases 0–2.4.2 are committed and pushed. The current debug APK is pre-release `v1.0.0-debug.7`.
+- Head: `a4ef410` (Phase 2.4.3, app emblem as launcher icon and splash).
+- Recent commits: `a4ef410` launcher icon + splash, `cfd5b71` Phase 3 plugin note, `35d6e7f` Phase 2.4.2 docs, `e4b1a8b` canvas selection + emoji glyph + touch-hover repaints, `8741636` bordered GitHub button.
+- Phases 0–2.4.3 are committed and pushed. The current debug APK is pre-release `v1.0.0-debug.8`.
 - `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
 ### Test and build status
@@ -93,6 +93,7 @@ Do not change the physics or the chart semantics.
 - GitHub Actions `Android debug APK`: green on `00e9bf3` (run [`40114195190`](https://github.com/FYI88/WAVES/actions/runs/40114195190), artifact `waves-debug-apk` 5,288,051 bytes zipped / 5,768,915 bytes APK).
 - GitHub Actions `Android debug APK`: green on `8741636` (run [`40115210963`](https://github.com/FYI88/WAVES/actions/runs/40115210963), artifact `waves-debug-apk` 5,288,093 bytes zipped / 5,768,947 bytes APK).
 - GitHub Actions `Android debug APK`: green on `e4b1a8b` (run [`40117554972`](https://github.com/FYI88/WAVES/actions/runs/40117554972), artifact `waves-debug-apk` 5,288,057 bytes zipped / 5,768,927 bytes APK).
+- GitHub Actions `Android debug APK`: green on `a4ef410` (run [`40149614351`](https://github.com/FYI88/WAVES/actions/runs/40149614351), artifact `waves-debug-apk` 5,573,773 bytes zipped / 6,010,168 bytes APK).
 - Production output: 1,897,330 bytes across 35 files. Dropping KaTeX removed ~1.2 MB and 61 files (was ~3.1 MB / 96 files).
 
 ### Releases
@@ -104,8 +105,9 @@ Do not change the physics or the chart semantics.
 - **`v1.0.0-debug.5`** (pre-release, tag on `00e9bf3`) — asset `WaveS-1.0.0-debug.5.apk`, 5,768,915 bytes, SHA-256 `B6B1CB30110B6331E049824CA2FB0BE5CE45B5546FB663EC0859B793060D8113`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.5>
 - **`v1.0.0-debug.6`** (pre-release, tag on `8741636`) — asset `WaveS-1.0.0-debug.6.apk`, 5,768,947 bytes, SHA-256 `BA41D2BFF832CEF97AB0ECDDB03D263FB638AB97B41D6098402487475C555363`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.6>
 - **`v1.0.0-debug.7`** (pre-release, tag on `e4b1a8b`) — asset `WaveS-1.0.0-debug.7.apk`, 5,768,927 bytes, SHA-256 `5AF7EB700BCA441B3532660ACBFBDB08EB719CBBCE77201B7D31FEEBC9857899`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.7>
+- **`v1.0.0-debug.8`** (pre-release, tag on `a4ef410`) — asset `WaveS-1.0.0-debug.8.apk`, 6,010,168 bytes, SHA-256 `C0B4B90ABA5591593576DD06CEF30FECBA751BD241C90BCB95C3BCAC4F0526E0`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.8>
 - Debug-signed. Uninstall a previous debug build before installing this one; each CI run uses a different debug key.
-- Verified each asset is publicly downloadable without authentication (debug.5–debug.7: HTTP 206 on a range GET, HEAD 200 with the right `Content-Length`, and a full unauthenticated download matched the local SHA-256).
+- Verified each asset is publicly downloadable without authentication (debug.5–debug.8: HTTP 206 on a range GET, HEAD 200 with the right `Content-Length`, and a full unauthenticated download matched the local SHA-256).
 
 ### Phase 0 changes (committed as `d3614b6`)
 
@@ -217,6 +219,19 @@ Three regressions reported after debug.6. None of them came from the About card 
    - `sceneParams` is memoised on `[res, sim, t]`; before this, every App render created a fresh object and forced a full scenery repaint on unrelated state changes.
    - Verified with synthetic pointer events at desktop size (789.6x412.4, 3 layers, 150 px tiles) and compact phone size (349.6 px wide, 100.5 px tiles): clicking tiles 0, 1 and 2 selects the matching layer. A `fillText` probe during a theme repaint captured `INCIDENT` + `TE` and no `⊙`/`↕`; no other canvas label uses those glyphs. `tsc --noEmit` clean, 16/16 tests, build green.
 
+### Phase 2.4.3 changes (launcher icon and splash, committed as `a4ef410`)
+
+The installed app still showed the stock Capacitor launcher icon and the stock Capacitor X splash. Both now use the app's own emblem (`public/logo.png`), which is also the circular logo in the header and About card.
+
+- Measured the artwork bounds in `logo.png` (1254x1254): x 170..1079, y 216..1102, i.e. 910x887 centred at (624.5, 659). Every icon is cut from a 956 px square centred on that artwork, so the emblem is optically centred rather than canvas-centred.
+- Legacy icons per density (mdpi 48, hdpi 72, xhdpi 96, xxhdpi 144, xxxhdpi 192): `ic_launcher.png` is a white rounded square (20% corner radius) with the emblem at 80% of the tile; `ic_launcher_round.png` is a white circle with the emblem at 72% of the diameter. Transparent outside the shape.
+- Adaptive foreground per density (108, 162, 216, 324, 432): white full-bleed with the emblem at 60% of the canvas, inside the 66/108 dp safe zone. The adaptive background stays `#FFFFFF`, so every mask shape (circle, squircle, rounded square) reads as a white tile with the emblem.
+- Verified the 432 px foreground through a 72/108 circular mask: the wave and the network dots are fully inside, no clipping, ~3 dp of margin.
+- Splash: the 11 stock `splash.png` bitmaps were deleted. `drawable/splash.xml` is a layer-list with a white background and `@drawable/splash_logo` centred at intrinsic size (560 px in `drawable-xxxhdpi`, ~367 px on the M20), so the emblem cannot stretch on a 19.5:9 screen. `AppTheme.NoActionBarLaunch` still points at `@drawable/splash`.
+- All XML is well-formed; `tsc --noEmit` clean, 16/16 tests, build green. This pulls the Phase 4 "adaptive icons and splash assets" item forward.
+- CI run [`40149614351`](https://github.com/FYI88/WAVES/actions/runs/40149614351) green; artifact 5,573,773 bytes zipped / 6,010,168 bytes APK. The APK contains the 15 regenerated `ic_launcher*` bitmaps (the 432 px foreground matches the generated file byte-for-byte), `drawable/splash.xml`, `drawable-xxxhdpi-v4/splash_logo.png`, and none of the old `splash.png` bitmaps. The APK grew 241 KB from the higher-quality icons and is still 6.01 MB, well under the 10 MiB guard.
+- Published **`v1.0.0-debug.8`** on `a4ef410` with `WaveS-1.0.0-debug.8.apk` (6,010,168 bytes); range GET 206, HEAD 200, and a full unauthenticated download matched SHA-256 `C0B4B90A…526E0`.
+
 ### What Phase 2.3 does not include
 
 - The keyboard shortcuts sheet (`.om-help`) still scrolls; it is desktop-only and its content is a key list.
@@ -262,7 +277,7 @@ Status: committed and pushed (`c835e4e`), awaiting real-device smoke test.
 
 ### Phase 2 - Debug CI
 
-Status: done. Runs `40091642446`, `40098152879`, `40107959365`, `40111884605`, `40114195190`, `40115210963` and `40117554972` are green; artifact `waves-debug-apk` is 5.3–6.3 MB zipped, published as `v1.0.0-debug.1` through `v1.0.0-debug.7`.
+Status: done. Runs `40091642446`, `40098152879`, `40107959365`, `40111884605`, `40114195190`, `40115210963`, `40117554972` and `40149614351` are green; artifact `waves-debug-apk` is 5.3–6.3 MB zipped, published as `v1.0.0-debug.1` through `v1.0.0-debug.8`.
 
 - [x] Add `.github/workflows/android-debug.yml`.
 - [x] Node 22, JDK 21, Android SDK 36.
@@ -290,7 +305,7 @@ Status: not started.
 - Generate the keystore, base64-encode it and store it in GitHub Secrets.
 - Secrets: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
 - Build `assembleRelease`, run `apksigner verify`, create the GitHub Release, upload the APK.
-- Add adaptive icons and splash assets.
+- [x] Adaptive icons and splash assets (done ahead of the release workflow in `a4ef410`).
 - Add `THIRD_PARTY_NOTICES.md`.
 - Run the full performance acceptance on the M20.
 
@@ -488,6 +503,12 @@ Planned:
 - Verified: tiles 0/1/2 select correctly at 789.6x412.4 and at 349.6 px compact width; `fillText` probe captured `INCIDENT` + `TE`, no `⊙`/`↕`; `tsc --noEmit`, 16/16 tests, build green. Pushed as `e4b1a8b`.
 - CI run [`40117554972`](https://github.com/FYI88/WAVES/actions/runs/40117554972) green; artifact 5,288,057 bytes zipped / 5,768,927 bytes APK. The APK contains the `e4b1a8b` stamp, two `layout.current` assignments, the coarse-pointer hover guard and plain `TE+TM`, with no `⊙`/`↕` code points.
 - Published **`v1.0.0-debug.7`** on `e4b1a8b` with `WaveS-1.0.0-debug.7.apk` (5,768,927 bytes); range GET 206, HEAD 200, and a full unauthenticated download matched SHA-256 `5AF7EB70…57899`.
+- User asked for the app's own emblem as the launcher icon before installing.
+- Phase 2.4.3: measured the artwork in `public/logo.png` (910x887 at 624.5, 659), cut every icon from a 956 px square centred on it, and regenerated all 15 `ic_launcher*` bitmaps: white rounded-square legacy icons at 48–192 px, white circular round icons, and adaptive foregrounds at 108–432 px with the emblem at 60% (inside the 66/108 dp safe zone). Checked the 432 px foreground through a 72/108 circular mask: no clipping.
+- Replaced the stock Capacitor X splash: deleted the 11 `splash.png` bitmaps, added `drawable/splash.xml` (white layer-list with `@drawable/splash_logo` centred at intrinsic size) and a 560 px `drawable-xxxhdpi/splash_logo.png`. The emblem shows at ~368 px on the M20 and cannot stretch on 19.5:9.
+- `tsc --noEmit`, 16/16 tests and the production build are green. Pushed as `a4ef410`.
+- CI run [`40149614351`](https://github.com/FYI88/WAVES/actions/runs/40149614351) green; artifact 5,573,773 bytes zipped / 6,010,168 bytes APK. Verified the APK contains the regenerated icon bitmaps, the splash layer-list and the splash logo, and no stock splash bitmaps.
+- Published **`v1.0.0-debug.8`** on `a4ef410` with `WaveS-1.0.0-debug.8.apk` (6,010,168 bytes); range GET 206, HEAD 200, and a full unauthenticated download matched SHA-256 `C0B4B90A…526E0`.
 
 ### 2026-10-22
 
@@ -502,9 +523,10 @@ Planned:
 
 ## 14. Next actions
 
-1. Install `WaveS-1.0.0-debug.7.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.7> on the M20 (uninstall debug.6 first).
-2. Tap the three material tiles drawn inside the canvas and confirm each selects the matching layer in the list below; tap the slabs themselves as well.
-3. Confirm the incident-wave label reads `INCIDENT` with a plain `TE` underneath and no emoji-like symbol.
-4. Check the build line shows `e4b1a8b`, tick **Performance HUD**, play for 30 s and report fps, p95, DPR, buffer size, and whether text/graphics look sharp. Note whether the freeze still happens and what you were doing at the time (dragging, rotating the spatial view, opening About).
-5. If p95 is still above 22 ms at DPR 1, cut the internal-reflection wavefronts on coarse pointers (perf lever 5) and re-measure.
-6. Then Phase 3 native integration: PNG/CSV share, back button, splash; Phase 4: signed release.
+1. Install `WaveS-1.0.0-debug.8.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.8> on the M20 (uninstall debug.7 or any earlier debug build first).
+2. Confirm the launcher icon and the launch splash both show the blue wave emblem, and that the icon is not clipped by the launcher's mask.
+3. Tap the three material tiles drawn inside the canvas and confirm each selects the matching layer in the list below; tap the slabs themselves as well.
+4. Confirm the incident-wave label reads `INCIDENT` with a plain `TE` underneath and no emoji-like symbol.
+5. Check the build line shows `a4ef410`, tick **Performance HUD**, play for 30 s and report fps, p95, DPR, buffer size, and whether text/graphics look sharp. Note whether the freeze still happens and what you were doing at the time (dragging, rotating the spatial view, opening About).
+6. If p95 is still above 22 ms at DPR 1, cut the internal-reflection wavefronts on coarse pointers (perf lever 5) and re-measure.
+7. Then Phase 3 native integration: PNG/CSV share, back button, splash plugin; Phase 4: signed release.
