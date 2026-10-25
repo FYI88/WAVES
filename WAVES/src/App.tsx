@@ -15,7 +15,31 @@ import { drawWaveRays } from "./waveRays";
 import { decodeShare, encodeShare, shareHashOf } from "./share";
 import { recordFrame } from "./perf";
 import { PerfHud } from "./PerfHud";
-import { AIR_TINT } from "./render/util";
+import { AIR_TINT, clamp } from "./render/util";
+import { MONO, PALETTES, SANS, withAlpha, type Palette, type Theme } from "./theme";
+import { DICTS, type Dict, type Lang } from "./i18n";
+import { bandName, makeFmt, superscript, tpl } from "./i18n/format";
+import {
+  AIR_SWATCH,
+  LAYER_MATS,
+  MAX_LAYERS,
+  TEMPLATES,
+  epsSigmaOfNK,
+  layerEpsSigma,
+  matSwatch,
+  matTint,
+  mkLayer,
+  newId,
+  nkOf,
+  type CustomMode,
+  type Layer,
+  type LayerMat,
+  type TemplateId,
+} from "./state/layers";
+import { computeResults, stackSweepKey, type LayerRes, type Results, type SimState } from "./state/results";
+import { DEFAULT_STATE, presetState } from "./state/presets";
+import { STORAGE_KEY, STORAGE_VERSION, defaultPersisted, loadInitial, sanitizePersisted, type Persisted } from "./state/persistence";
+import { copyText, downloadFile } from "./dom";
 import {
   C0,
   CUSTOM_SWATCH,
@@ -39,566 +63,11 @@ import {
   type Sweep,
 } from "./physics";
 
-/* ════════════════════════════════════════════════════════════════════════
-   Layer model — air | L1 … LN | air
-   ════════════════════════════════════════════════════════════════════════ */
-
-type LayerMat = MaterialId | "air";
-const LAYER_MATS: LayerMat[] = ["air", ...MATERIAL_IDS];
-const AIR_SWATCH = "linear-gradient(135deg, rgba(150,220,255,.55), rgba(150,220,255,.12) 60%, rgba(255,255,255,.35))";
-const MAX_LAYERS = 6;
-
-interface Layer {
-  id: string;
-  mat: LayerMat;
-  thickness: number; // cm
-  eps: number; // custom ε′
-  sigma: number; // custom σ
-  customMode: CustomMode; // how the custom medium is edited
-}
-
-type CustomMode = "eps" | "nk";
-
-const newId = () => Math.random().toString(36).slice(2, 10);
-const mkLayer = (mat: LayerMat, thickness: number, eps = 4, sigma = 0.05): Layer => ({ id: newId(), mat, thickness, eps, sigma, customMode: "eps" });
-
-/** refractive index n − jκ from custom ε′, σ at f */
-function nkOf(eps: number, sigma: number, f: number): { n: number; k: number } {
-  const epp = (17.98 * sigma) / f;
-  const mod = Math.hypot(eps, epp);
-  const n = Math.sqrt((mod + eps) / 2);
-  return { n, k: n > 1e-12 ? epp / (2 * n) : 0 };
-}
-
-/** custom ε′, σ from refractive index n − jκ at f */
-function epsSigmaOfNK(n: number, k: number, f: number): { eps: number; sigma: number } {
-  return { eps: n * n - k * k, sigma: (2 * n * k * f) / 17.98 };
-}
-
-function layerEpsSigma(l: Layer, f: number) {
-  if (l.mat === "air") return { epsR: 1, sigma: 0 };
-  return materialProps(l.mat, f, l.eps, l.sigma);
-}
-const matTint = (m: LayerMat) => (m === "air" ? AIR_TINT : m === "custom" ? CUSTOM_TINT : MATERIALS[m].tint);
-const matSwatch = (m: LayerMat) => (m === "air" ? AIR_SWATCH : m === "custom" ? CUSTOM_SWATCH : MATERIALS[m].swatch);
-
-interface SimState {
-  layers: Layer[];
-  sel: number;
-  freq: number; // GHz
-  angle: number; // deg
-  pol: PolMode;
-}
-
-interface LayerRes {
-  eta: Cx;
-  epsR: number;
-  sigma: number;
-  epsI: number;
-  tanD: number;
-  thetaT: number;
-  nRe: number;
-  alphaDbM: number;
-  lossDb: number;
-  lambda: number;
-  brewster: number;
-  brewsterLossless: number;
-  inRange: boolean;
-  absorbed: number;
-  fluxIn: number;
-}
-
-interface Results {
-  R: number;
-  T: number;
-  A: number;
-  RdB: number;
-  TdB: number;
-  layers: LayerRes[];
-  etas: Cx[];
-  ds: number[];
-  totalCm: number;
-  lambda0: number;
-}
-
-function computeResults(s: SimState): Results {
-  const th = s.angle * DEG;
-  const sn = Math.sin(th);
-  const k0 = k0Of(s.freq);
-  const lambda0 = C0 / (s.freq * 1e9);
-  const etas: Cx[] = [];
-  const ds: number[] = [];
-  const pre = s.layers.map((l) => {
-    const { epsR, sigma } = layerEpsSigma(l, s.freq);
-    const eta = complexPermittivity(epsR, sigma, s.freq);
-    etas.push(eta);
-    ds.push(l.thickness / 100);
-    return { l, epsR, sigma, eta };
-  });
-  const st = stackMode(etas, ds, s.freq, th, s.pol);
-  const layers: LayerRes[] = pre.map(({ l, epsR, sigma, eta }, i) => {
-    const root = sqrtC(sub(eta, cx(sn * sn)));
-    const nC = sqrtC(eta);
-    const def = l.mat === "air" || l.mat === "custom" ? null : MATERIALS[l.mat];
-    return {
-      eta,
-      epsR,
-      sigma,
-      epsI: -eta.im,
-      tanD: -eta.im / epsR,
-      thetaT: Math.atan2(sn, Math.abs(root.re)) / DEG,
-      nRe: nC.re,
-      alphaDbM: 20 * Math.LOG10E * k0 * Math.abs(nC.im),
-      lossDb: 20 * Math.LOG10E * k0 * Math.abs(root.im) * (l.thickness / 100),
-      lambda: lambda0 / nC.re,
-      brewster: l.mat === "air" ? NaN : brewsterDeg(eta),
-      brewsterLossless: Math.atan(Math.sqrt(epsR)) / DEG,
-      inRange: def ? s.freq >= def.fMin && s.freq <= def.fMax : true,
-      absorbed: st.absorb[i] ?? 0,
-      fluxIn: st.fluxIn[i] ?? 0,
-    };
-  });
-  return {
-    R: st.R,
-    T: st.T,
-    A: st.A,
-    RdB: 10 * Math.log10(Math.max(st.R, 1e-30)),
-    TdB: 10 * Math.log10(Math.max(st.T, 1e-30)),
-    layers,
-    etas,
-    ds,
-    totalCm: s.layers.reduce((a, l) => a + l.thickness, 0),
-    lambda0,
-  };
-}
-
-type TemplateId = "single" | "glazing" | "partition" | "cavity" | "plastered" | "door";
-const TEMPLATES: Record<TemplateId, () => Layer[]> = {
-  single: () => [mkLayer("concrete", 20)],
-  glazing: () => [mkLayer("glass", 0.4), mkLayer("air", 1.6), mkLayer("glass", 0.4)],
-  partition: () => [mkLayer("plasterboard", 1.3), mkLayer("air", 7), mkLayer("plasterboard", 1.3)],
-  cavity: () => [mkLayer("brick", 10), mkLayer("air", 5), mkLayer("brick", 10)],
-  plastered: () => [mkLayer("plasterboard", 1.3), mkLayer("concrete", 18), mkLayer("plasterboard", 1.3)],
-  door: () => [mkLayer("plywood", 0.6), mkLayer("wood", 2.8), mkLayer("plywood", 0.6)],
-};
-
-/* ════════════════════════════════════════════════════════════════════════
-   i18n
-   ════════════════════════════════════════════════════════════════════════ */
-
-type Lang = "fr" | "en";
-
-const en = {
-  sub: "Wave & Wall Simulator",
-  school: "ENSA · GSR1",
-  madeBy: "Made by",
-  author: "CHETAINE YOUNES",
-  tagline: "EM reflection & transmission through multilayer walls",
-  parameters: "Parameters",
-  material: "Wall material",
-  thickness: "Thickness",
-  frequency: "Frequency",
-  angle: "Incidence angle",
-  polarization: "Polarization",
-  avg: "Average",
-  teHint: "⊥ · s",
-  tmHint: "∥ · p",
-  avgHint: "unpolarized",
-  play: "Play",
-  pause: "Pause",
-  present: "Present",
-  exitPresent: "Exit",
-  helpTitle: "Keyboard shortcuts",
-  helpClose: "Close",
-  scPlay: "Play / pause",
-  scAngle: "Incidence angle ±0.5°",
-  scLayer: "Select layer",
-  scView: "Section / Spatial view",
-  scDisplay: "Curves / Crests / Both",
-  scHelp: "This shortcuts panel",
-  share: "Share",
-  shareTitle: "Copy a link to this exact setup",
-  copied: "Copied ✓",
-  exportCsv: "CSV",
-  exportCsvTitle: "Download this chart's data as CSV",
-  brewsterJump: "θ → θB",
-  brewsterJumpTitle: "Set the angle to Brewster (TM only)",
-  brewsterNa: "Brewster exists in TM polarization only",
-  reflected: "Reflected",
-  transmitted: "Transmitted",
-  absorbed: "Absorbed",
-  incident: "Incident",
-  energy: "Energy budget",
-  energyNote: "R + T + A = 100 %",
-  thetaT: "Angle in layer",
-  thetaTSub: "in the wall · exits at {v}° (Snell)",
-  brewster: "Brewster angle",
-  brewsterSub: "TM only · lossless √ε′ → {v}°",
-  epsR: "Permittivity ε′",
-  epsRSub: "ε″ = {v}",
-  sigma: "Conductivity σ",
-  tanD: "Loss tangent",
-  tanDSub: "tan δ = ε″ / ε′",
-  atten: "Attenuation",
-  attenSub: "{v} dB across this layer",
-  tdb: "Transmission",
-  tdbSub: "reflection {v} dB",
-  index: "Refractive index",
-  indexSub: "λ wall {a} · λ₀ {b}",
-  chartAngle: "R / T vs incidence angle",
-  chartAngleHint: "Click or drag to set the angle",
-  chartField: "Field profile |E(z)|",
-  chartFieldHint: "Tangential field, normalized to the incident wave",
-  reset: "Reset",
-  air: "AIR",
-  wallLabel: "WALL",
-  outOfRange: "Outside ITU-R validity ({a}–{b} GHz) · extrapolated",
-  inRange: "ITU-R P.2040 · valid {a}–{b} GHz",
-  customRange: "User-defined constants",
-  presets: "Scenarios",
-  epsCustom: "Permittivity ε′",
-  modeEps: "ε′ · σ",
-  modeNK: "n · κ",
-  sigmaCustom: "Conductivity σ",
-  model:
-    "Model: ITU-R P.2040 §3 — stack of homogeneous layers in free space (stable transfer recursion), complex permittivity η = ε′ − j·17.98·σ/f, Snell’s law and complex Fresnel coefficients with multiple internal reflections.",
-  shortcuts: "Space play/pause · ←/→ angle · ↑↓ layer · V view · 1/2/3 display · P present · L language · T theme · ? shortcuts",
-  theme: "Toggle theme",
-  language: "Language",
-  about: "About",
-  aboutTitle: "About WaveS",
-  repo: "Source code on GitHub",
-  repoTitle: "Open the GitHub repository in a new tab",
-  contactTitle: "Send an email",
-  authorLabel: "Author",
-  schoolLabel: "School",
-  contactLabel: "Contact",
-  modelLabel: "Model",
-  emailSchool: "Institutional",
-  emailPersonal: "Personal",
-  modelNote:
-    "Stack of homogeneous layers in free space, solved with a stable transfer recursion. Complex permittivity, Snell’s law and complex Fresnel coefficients with multiple internal reflections.",
-  linear: "Lin",
-  db: "dB",
-  angleShort: "θ",
-  normal: "normal",
-  layersN: "{n} layers",
-  layer1: "1 layer",
-  reflShort: "Refl.",
-  clickLayer: "Click a layer to edit it",
-  tabStack: "Layers",
-  tabWave: "Wave",
-  stack: "Layer stack · air on both sides",
-  airShort: "AIR",
-  moveUp: "Move left (towards source)",
-  moveDown: "Move right (towards receiver)",
-  duplicate: "Duplicate layer",
-  remove: "Remove layer",
-  maxLayers: "Maximum {n} layers",
-  addLayer: "Add a layer",
-  editing: "Selected layer",
-  airNote: "Free space · ε′ = 1, σ = 0",
-  statsFor: "Layer · {m} · {d} cm",
-  moreProps: "Material properties",
-  templateNames: {
-    single: "Concrete wall",
-    glazing: "Double glazing",
-    partition: "Stud partition",
-    cavity: "Cavity brick",
-    plastered: "Plastered concrete",
-    door: "Wooden door",
-  } as Record<TemplateId, string>,
-  materials: {
-    concrete: "Concrete",
-    brick: "Brick",
-    plasterboard: "Plasterboard",
-    wood: "Wood",
-    glass: "Glass",
-    chipboard: "Chipboard",
-    plywood: "Plywood",
-    marble: "Marble",
-    custom: "Custom",
-    air: "Air gap",
-  } as Record<LayerMat, string>,
-  presetNames: {
-    wifi24: "Wi-Fi 2.4 GHz · cavity brick",
-    wifi5: "Wi-Fi 5 GHz · stud partition",
-    lte: "5G 3.5 GHz · plastered concrete",
-    mmw: "5G 28 GHz · double glazing",
-    brewster: "Brewster · glass, TM",
-  } as Record<string, string>,
-};
-
-type Dict = typeof en;
-
-const fr: Dict = {
-  sub: "Simulateur onde & paroi",
-  school: "ENSA · GSR1",
-  madeBy: "Réalisé par",
-  author: "CHETAINE YOUNES",
-  tagline: "Réflexion et transmission EM à travers des parois multicouches",
-  parameters: "Paramètres",
-  material: "Matériau du mur",
-  thickness: "Épaisseur",
-  frequency: "Fréquence",
-  angle: "Angle d’incidence",
-  polarization: "Polarisation",
-  avg: "Moyenne",
-  teHint: "⊥ · s",
-  tmHint: "∥ · p",
-  avgHint: "non polarisée",
-  play: "Lecture",
-  pause: "Pause",
-  present: "Présenter",
-  exitPresent: "Quitter",
-  helpTitle: "Raccourcis clavier",
-  helpClose: "Fermer",
-  scPlay: "Lecture / pause",
-  scAngle: "Angle d'incidence ±0,5°",
-  scLayer: "Choisir la couche",
-  scView: "Vue Coupe / Spatial",
-  scDisplay: "Courbes / Crêtes / Les deux",
-  scHelp: "Ce panneau",
-  share: "Partager",
-  shareTitle: "Copier un lien vers ce réglage exact",
-  copied: "Copié ✓",
-  exportCsv: "CSV",
-  exportCsvTitle: "Télécharger les données du graphique en CSV",
-  brewsterJump: "θ → θB",
-  brewsterJumpTitle: "Régler l'angle sur Brewster (TM uniquement)",
-  brewsterNa: "Brewster n'existe qu'en polarisation TM",
-  reflected: "Réfléchie",
-  transmitted: "Transmise",
-  absorbed: "Absorbée",
-  incident: "Incidente",
-  energy: "Bilan d’énergie",
-  energyNote: "R + T + A = 100 %",
-  thetaT: "Angle dans la couche",
-  thetaTSub: "dans le mur · ressort à {v}° (Snell)",
-  brewster: "Angle de Brewster",
-  brewsterSub: "TM uniquement · sans pertes √ε′ → {v}°",
-  epsR: "Permittivité ε′",
-  epsRSub: "ε″ = {v}",
-  sigma: "Conductivité σ",
-  tanD: "Tangente de pertes",
-  tanDSub: "tan δ = ε″ / ε′",
-  atten: "Atténuation",
-  attenSub: "{v} dB dans cette couche",
-  tdb: "Transmission",
-  tdbSub: "réflexion {v} dB",
-  index: "Indice de réfraction",
-  indexSub: "λ mur {a} · λ₀ {b}",
-  chartAngle: "R / T selon l’angle d’incidence",
-  chartAngleHint: "Cliquez ou glissez pour régler l’angle",
-  chartField: "Profil du champ |E(z)|",
-  chartFieldHint: "Champ tangentiel, normalisé à l’onde incidente",
-  reset: "Réinitialiser",
-  air: "AIR",
-  wallLabel: "MUR",
-  outOfRange: "Hors validité ITU-R ({a}–{b} GHz) · extrapolé",
-  inRange: "ITU-R P.2040 · valide {a}–{b} GHz",
-  customRange: "Constantes définies par l’utilisateur",
-  presets: "Scénarios",
-  epsCustom: "Permittivité ε′",
-  modeEps: "ε′ · σ",
-  modeNK: "n · κ",
-  sigmaCustom: "Conductivité σ",
-  model:
-    "Modèle : ITU-R P.2040 §3 — empilement de couches homogènes dans l’air (récursion de transfert stable), permittivité complexe η = ε′ − j·17,98·σ/f, loi de Snell et coefficients de Fresnel complexes avec réflexions internes multiples.",
-  shortcuts: "Espace lecture/pause · ←/→ angle · ↑↓ couche · V vue · 1/2/3 affichage · P présentation · L langue · T thème · ? raccourcis",
-  theme: "Changer de thème",
-  language: "Langue",
-  about: "À propos",
-  aboutTitle: "À propos de WaveS",
-  repo: "Code source sur GitHub",
-  repoTitle: "Ouvrir le dépôt GitHub dans un nouvel onglet",
-  contactTitle: "Envoyer un email",
-  authorLabel: "Auteur",
-  schoolLabel: "École",
-  contactLabel: "Contact",
-  modelLabel: "Modèle",
-  emailSchool: "Institutionnel",
-  emailPersonal: "Personnel",
-  modelNote:
-    "Empilement de couches homogènes dans l’air, résolu par une récursion de transfert stable. Permittivité complexe, loi de Snell et coefficients de Fresnel complexes avec réflexions internes multiples.",
-  linear: "Lin",
-  db: "dB",
-  angleShort: "θ",
-  normal: "normale",
-  layersN: "{n} couches",
-  layer1: "1 couche",
-  reflShort: "Réfl.",
-  clickLayer: "Cliquez une couche pour l’éditer",
-  tabStack: "Couches",
-  tabWave: "Onde",
-  stack: "Empilement · air des deux côtés",
-  airShort: "AIR",
-  moveUp: "Déplacer à gauche (vers la source)",
-  moveDown: "Déplacer à droite (vers le récepteur)",
-  duplicate: "Dupliquer la couche",
-  remove: "Supprimer la couche",
-  maxLayers: "Maximum {n} couches",
-  addLayer: "Ajouter une couche",
-  editing: "Couche sélectionnée",
-  airNote: "Vide · ε′ = 1, σ = 0",
-  statsFor: "Couche · {m} · {d} cm",
-  moreProps: "Propriétés du matériau",
-  templateNames: {
-    single: "Mur béton",
-    glazing: "Double vitrage",
-    partition: "Cloison placo",
-    cavity: "Brique à lame d’air",
-    plastered: "Béton enduit",
-    door: "Porte en bois",
-  } as Record<TemplateId, string>,
-  materials: {
-    concrete: "Béton",
-    brick: "Brique",
-    plasterboard: "Plaque de plâtre",
-    wood: "Bois",
-    glass: "Verre",
-    chipboard: "Aggloméré",
-    plywood: "Contreplaqué",
-    marble: "Marbre",
-    custom: "Personnalisé",
-    air: "Lame d’air",
-  },
-  presetNames: {
-    wifi24: "Wi-Fi 2,4 GHz · brique à lame d’air",
-    wifi5: "Wi-Fi 5 GHz · cloison placo",
-    lte: "5G 3,5 GHz · béton enduit",
-    mmw: "5G 28 GHz · double vitrage",
-    brewster: "Brewster · verre, TM",
-  },
-};
-
-const DICTS: Record<Lang, Dict> = { fr, en };
-
 const REPO_URL = "https://github.com/FYI88/WAVES";
 const CONTACT_EMAILS = [
   { labelKey: "emailSchool", address: "chetaine.younes@etu.uae.ac.ma" },
   { labelKey: "emailPersonal", address: "youneschetaine@gmail.com" },
 ] as const;
-
-const tpl = (s: string, vars: Record<string, string>) =>
-  s.replace(/\{(\w+)\}/g, (_, k: string) => vars[k] ?? "");
-
-function makeFmt(lang: Lang) {
-  const loc = lang === "fr" ? "fr-FR" : "en-US";
-  const num = (v: number, digits = 1) =>
-    Number.isFinite(v)
-      ? v.toLocaleString(loc, { minimumFractionDigits: digits, maximumFractionDigits: digits })
-      : "∞";
-  const sig = (v: number, digits = 3) => {
-    if (!Number.isFinite(v)) return "∞";
-    if (v === 0) return "0";
-    const abs = Math.abs(v);
-    if (abs >= 1e4 || abs < 1e-3) {
-      const e = Math.floor(Math.log10(abs));
-      const m = v / Math.pow(10, e);
-      return `${m.toLocaleString(loc, { maximumFractionDigits: 2 })}×10${superscript(e)}`;
-    }
-    return v.toLocaleString(loc, { maximumSignificantDigits: digits });
-  };
-  const len = (m: number) => {
-    if (!Number.isFinite(m)) return "∞";
-    if (m < 0.01) return `${num(m * 1000, m < 0.001 ? 2 : 1)} mm`;
-    if (m < 1) return `${num(m * 100, m < 0.1 ? 2 : 1)} cm`;
-    if (m < 1000) return `${num(m, m < 10 ? 2 : 1)} m`;
-    return `${num(m / 1000, 1)} km`;
-  };
-  const pct = (v: number) => {
-    const p = v * 100;
-    return num(p, p < 0.1 && p > 0 ? 3 : p < 10 ? 2 : 1);
-  };
-  return { num, sig, len, pct };
-}
-
-function superscript(n: number): string {
-  const map: Record<string, string> = {
-    "-": "⁻", "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴",
-    "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹",
-  };
-  return String(n).split("").map((c) => map[c] ?? c).join("");
-}
-
-/* ════════════════════════════════════════════════════════════════════════
-   Theme palette (canvas)
-   ════════════════════════════════════════════════════════════════════════ */
-
-type Theme = "dark" | "light";
-
-interface Palette {
-  dark: boolean;
-  bg0: string;
-  bg1: string;
-  dot: string;
-  grid: string;
-  gridStrong: string;
-  ink: string;
-  muted: string;
-  faint: string;
-  inc: string;
-  ref: string;
-  tra: string;
-  abs: string;
-  acc: string;
-  label: string;
-  labelBorder: string;
-}
-
-const PALETTES: Record<Theme, Palette> = {
-  dark: {
-    dark: true,
-    bg0: "#0a1420",
-    bg1: "#080e17",
-    dot: "rgba(180,205,225,0.06)",
-    grid: "rgba(180,205,225,0.07)",
-    gridStrong: "rgba(180,205,225,0.16)",
-    ink: "#edf4fc",
-    muted: "#b4c3d5",
-    faint: "#94a6bc",
-    inc: "#55dbf5",
-    ref: "#ff9586",
-    tra: "#79e2bc",
-    abs: "#edc17f",
-    acc: "#55dbf5",
-    label: "rgba(12,21,33,0.94)",
-    labelBorder: "rgba(180,205,225,0.16)",
-  },
-  light: {
-    dark: false,
-    bg0: "#f6f9fc",
-    bg1: "#edf2f6",
-    dot: "rgba(22,41,57,0.08)",
-    grid: "rgba(22,41,57,0.07)",
-    gridStrong: "rgba(22,41,57,0.16)",
-    ink: "#162939",
-    muted: "#40596e",
-    faint: "#50687c",
-    inc: "#55dbf5",
-    ref: "#ff9586",
-    tra: "#79e2bc",
-    abs: "#8d5b13",
-    acc: "#006b86",
-    label: "rgba(255,255,255,0.94)",
-    labelBorder: "rgba(22,41,57,0.12)",
-  },
-};
-
-const withAlpha = (hex: string, a: number) => {
-  const h = hex.replace("#", "");
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, a))})`;
-};
-
-/* Canvas palette: the scene draws from these per-theme constants only.
-   DOM accents live in the CSS --om-* tokens; the two are kept in sync by
-   hand, but the canvas must never depend on a stale DOM read. */
-const MONO = '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace';
-const SANS = '"Inter Tight", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif';
 
 /* ════════════════════════════════════════════════════════════════════════
    Procedural wall textures
@@ -825,41 +294,6 @@ function cssZoom(): number {
   return z > 0 && Number.isFinite(z) ? z : 1;
 }
 
-/** Best-effort clipboard write with a legacy fallback (non-secure contexts). */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    /* fall through to the legacy path */
-  }
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand("copy");
-    ta.remove();
-    return ok;
-  } catch {
-    return false;
-  }
-}
-
-/** Download helper for generated files (PNG snapshots, CSV tables). */
-function downloadFile(href: string, filename: string): void {
-  const a = document.createElement("a");
-  a.href = href;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
-
 function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>): CanvasSize {
   const [size, setSize] = useState<CanvasSize>({ w: 0, h: 0, dpr: 1 });
   useEffect(() => {
@@ -939,8 +373,6 @@ function pill(
   ctx.fillText(text, px + 8, y + 0.5);
   ctx.restore();
 }
-
-const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
 /* ════════════════════════════════════════════════════════════════════════
    Ray scene renderer
@@ -1958,115 +1390,6 @@ function Stat(props: { label: string; value: string; unit?: string; sub?: string
    App
    ════════════════════════════════════════════════════════════════════════ */
 
-const DEFAULT_STATE: SimState = {
-  layers: TEMPLATES.glazing(),
-  sel: 0,
-  freq: 5,
-  angle: 35,
-  pol: "TE",
-};
-
-const STORAGE_KEY = "onde-mur:v2";
-const STORAGE_VERSION = 1;
-
-interface Persisted {
-  /** payload version; absent on payloads saved before versioning (treated as v1) */
-  v?: number;
-  sim: SimState;
-  lang: Lang;
-  theme: Theme;
-}
-
-function defaultPersisted(): Persisted {
-  const sysTheme: Theme =
-    typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  const sysLang: Lang =
-    typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("fr") ? "fr" : "en";
-  return { sim: DEFAULT_STATE, lang: sysLang, theme: sysTheme };
-}
-
-/** Clamp/validate an untrusted payload (storage or share-link) into shape. */
-function sanitizePersisted(p: Partial<Persisted>, fallback: Persisted): Persisted {
-  const s = (p.sim ?? {}) as Partial<SimState>;
-  const num = (v: unknown, lo: number, hi: number, d: number) =>
-    typeof v === "number" && Number.isFinite(v) ? clamp(v, lo, hi) : d;
-  const layers = Array.isArray(s.layers)
-    ? s.layers
-        .slice(0, MAX_LAYERS)
-        .filter((l) => l && LAYER_MATS.includes(l.mat))
-        .map((l) => ({
-          id: typeof l.id === "string" && l.id ? l.id : newId(),
-          mat: l.mat,
-          thickness: num(l.thickness, 0.1, 100, 10),
-          eps: num(l.eps, 1, 30, 4),
-          sigma: num(l.sigma, 0.0001, 10, 0.05),
-          customMode: (l.customMode === "nk" ? "nk" : "eps") as CustomMode,
-        }))
-    : [];
-  const ls = layers.length ? layers : fallback.sim.layers;
-  return {
-    sim: {
-      layers: ls,
-      sel: Math.round(num(s.sel, 0, ls.length - 1, 0)),
-      freq: num(s.freq, 0.5, 40, fallback.sim.freq),
-      angle: num(s.angle, 0, 89, fallback.sim.angle),
-      pol: s.pol === "TE" || s.pol === "TM" || s.pol === "AVG" ? s.pol : fallback.sim.pol,
-    },
-    lang: p.lang === "fr" || p.lang === "en" ? p.lang : fallback.lang,
-    theme: p.theme === "dark" || p.theme === "light" ? p.theme : fallback.theme,
-  };
-}
-
-function loadPersisted(): Persisted {
-  const fallback = defaultPersisted();
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return fallback;
-    const p = JSON.parse(raw) as Partial<Persisted>;
-    // payloads stamped with an unknown future version are rejected outright —
-    // silently mis-loading a newer shape would corrupt the simulation state
-    if (typeof p.v === "number" && p.v !== STORAGE_VERSION) return fallback;
-    return sanitizePersisted(p, fallback);
-  } catch {
-    return fallback;
-  }
-}
-
-/** Boot state: a `#s=` share-link wins over saved storage. */
-function loadInitial(): Persisted {
-  try {
-    const hash = shareHashOf(window.location.hash);
-    if (hash) {
-      const shared = decodeShare(hash);
-      if (shared) {
-        return sanitizePersisted(
-          {
-            v: shared.v,
-            sim: shared.sim as unknown as SimState,
-            lang: shared.lang as Lang,
-            theme: shared.theme as Theme,
-          },
-          defaultPersisted(),
-        );
-      }
-    }
-  } catch {
-    /* malformed hash — fall through to storage */
-  }
-  return loadPersisted();
-}
-
-function bandName(f: number): string {
-  if (f < 1) return "UHF";
-  if (f < 2) return "L";
-  if (f < 4) return "S";
-  if (f < 8) return "C";
-  if (f < 12) return "X";
-  if (f < 18) return "Ku";
-  if (f < 27) return "K";
-  return "Ka";
-}
-
 /* ── Crash guard: a render error must never leave a blank page ──────────
    Catches anything thrown below it (broken persisted state shapes, canvas
    failures, …) and offers reload + saved-state reset. Self-styled inline so
@@ -2422,7 +1745,11 @@ export function App() {
   }, [showHelp, showAbout, setPresentFull]);
 
   const res = useMemo(() => computeResults(sim), [sim]);
-  const sweep = useMemo(() => computeStackSweep(res.etas, res.ds, sim.freq), [res.etas, res.ds, sim.freq]);
+  // keyed on values: res arrays are rebuilt on every state change, so angle,
+  // polarization and selection changes reuse the previous 181-point sweep
+  const sweepKey = stackSweepKey(res.etas, res.ds, sim.freq);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sweep = useMemo(() => computeStackSweep(res.etas, res.ds, sim.freq), [sweepKey]);
 
   const selL = sim.layers[sim.sel] ?? sim.layers[0];
   const selR = res.layers[sim.sel] ?? res.layers[0];
@@ -2459,27 +1786,7 @@ export function App() {
   );
 
   const applyPreset = (key: string) => {
-    let next: SimState;
-    switch (key) {
-      case "wifi24":
-        next = { ...sim, layers: TEMPLATES.cavity(), sel: 0, freq: 2.4, angle: 0, pol: "AVG" };
-        break;
-      case "wifi5":
-        next = { ...sim, layers: TEMPLATES.partition(), sel: 0, freq: 5.5, angle: 30, pol: "AVG" };
-        break;
-      case "lte":
-        next = { ...sim, layers: TEMPLATES.plastered(), sel: 1, freq: 3.5, angle: 20, pol: "TE" };
-        break;
-      case "mmw":
-        next = { ...sim, layers: TEMPLATES.glazing(), sel: 0, freq: 28, angle: 45, pol: "AVG" };
-        break;
-      default: {
-        const base: SimState = { ...sim, layers: [mkLayer("glass", 1)], sel: 0, freq: 5, pol: "TM" };
-        const b = computeResults(base).layers[0].brewster;
-        next = { ...base, angle: Math.round(b * 2) / 2 };
-      }
-    }
-    setSim(next);
+    setSim(presetState(key, sim));
     setFlash((f) => f + 1);
   };
 
