@@ -1,10 +1,10 @@
 # WaveS - Android packaging handoff
 
-Last updated: 2026-10-24
+Last updated: 2026-10-25
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
 Branch: `main`
-Head at handoff: `a4ef410` (Phase 2.4.3, launcher icon and splash) - latest release tag `v1.0.0-debug.8` points at `a4ef410`
+Head at handoff: `a63bfc5` (Phase 3, native exports and back button) - latest release tag `v1.0.0-debug.9` points at `a63bfc5`
 
 ## 1. Mission
 
@@ -77,10 +77,11 @@ Do not change the physics or the chart semantics.
 
 ### Repository
 
-- Head: `a4ef410` (Phase 2.4.3, app emblem as launcher icon and splash).
-- Recent commits: `a4ef410` launcher icon + splash, `cfd5b71` Phase 3 plugin note, `35d6e7f` Phase 2.4.2 docs, `e4b1a8b` canvas selection + emoji glyph + touch-hover repaints, `8741636` bordered GitHub button.
-- Phases 0–2.4.3 are committed and pushed. The current debug APK is pre-release `v1.0.0-debug.8`.
+- Head: `a63bfc5` (Phase 3, native PNG/CSV share and Android back button).
+- Recent commits: `a63bfc5` native exports + back button, `bd1b93d` Phase 2 device gate docs, `a4ef410` launcher icon + splash, `8741636` bordered GitHub button, `e4b1a8b` canvas selection + emoji glyph + touch-hover repaints.
+- Phases 0–3 are committed and pushed. The current debug APK is pre-release `v1.0.0-debug.9`.
 - Device check: the user confirmed debug.8 is all good on the M20 — launcher icon, splash, canvas layer selection, incident label and performance. Exact HUD numbers were not reported.
+- Device check pending on debug.9: PNG and both CSV share sheets, and the back-button order.
 - `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
 ### Test and build status
@@ -95,7 +96,8 @@ Do not change the physics or the chart semantics.
 - GitHub Actions `Android debug APK`: green on `8741636` (run [`40115210963`](https://github.com/FYI88/WAVES/actions/runs/40115210963), artifact `waves-debug-apk` 5,288,093 bytes zipped / 5,768,947 bytes APK).
 - GitHub Actions `Android debug APK`: green on `e4b1a8b` (run [`40117554972`](https://github.com/FYI88/WAVES/actions/runs/40117554972), artifact `waves-debug-apk` 5,288,057 bytes zipped / 5,768,927 bytes APK).
 - GitHub Actions `Android debug APK`: green on `a4ef410` (run [`40149614351`](https://github.com/FYI88/WAVES/actions/runs/40149614351), artifact `waves-debug-apk` 5,573,773 bytes zipped / 6,010,168 bytes APK).
-- Production output: 1,897,330 bytes across 35 files. Dropping KaTeX removed ~1.2 MB and 61 files (was ~3.1 MB / 96 files).
+- GitHub Actions `Android debug APK`: green on `a63bfc5` (run [`40151111273`](https://github.com/FYI88/WAVES/actions/runs/40151111273), artifact `waves-debug-apk` 5,715,794 bytes zipped / 6,154,192 bytes APK).
+- Production output: 1,919,180 bytes across 38 files. Dropping KaTeX removed ~1.2 MB and 61 files (was ~3.1 MB / 96 files); the three Phase 3 plugins added ~22 KB to the web bundle.
 
 ### Releases
 
@@ -107,8 +109,9 @@ Do not change the physics or the chart semantics.
 - **`v1.0.0-debug.6`** (pre-release, tag on `8741636`) — asset `WaveS-1.0.0-debug.6.apk`, 5,768,947 bytes, SHA-256 `BA41D2BFF832CEF97AB0ECDDB03D263FB638AB97B41D6098402487475C555363`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.6>
 - **`v1.0.0-debug.7`** (pre-release, tag on `e4b1a8b`) — asset `WaveS-1.0.0-debug.7.apk`, 5,768,927 bytes, SHA-256 `5AF7EB700BCA441B3532660ACBFBDB08EB719CBBCE77201B7D31FEEBC9857899`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.7>
 - **`v1.0.0-debug.8`** (pre-release, tag on `a4ef410`) — asset `WaveS-1.0.0-debug.8.apk`, 6,010,168 bytes, SHA-256 `C0B4B90ABA5591593576DD06CEF30FECBA751BD241C90BCB95C3BCAC4F0526E0`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.8>
+- **`v1.0.0-debug.9`** (pre-release, tag on `a63bfc5`) — asset `WaveS-1.0.0-debug.9.apk`, 6,154,192 bytes, SHA-256 `599346331D561A8B72F10AD136220E9F4D82EB2AF66552477F3641E0792918D3`. Public download (no login): <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.9>
 - Debug-signed. Uninstall a previous debug build before installing this one; each CI run uses a different debug key.
-- Verified each asset is publicly downloadable without authentication (debug.5–debug.8: HTTP 206 on a range GET, HEAD 200 with the right `Content-Length`, and a full unauthenticated download matched the local SHA-256).
+- Verified each asset is publicly downloadable without authentication (debug.5–debug.9: HTTP 206 on a range GET, HEAD 200 with the right `Content-Length`, and a full unauthenticated download matched the local SHA-256).
 
 ### Phase 0 changes (committed as `d3614b6`)
 
@@ -233,6 +236,23 @@ The installed app still showed the stock Capacitor launcher icon and the stock C
 - CI run [`40149614351`](https://github.com/FYI88/WAVES/actions/runs/40149614351) green; artifact 5,573,773 bytes zipped / 6,010,168 bytes APK. The APK contains the 15 regenerated `ic_launcher*` bitmaps (the 432 px foreground matches the generated file byte-for-byte), `drawable/splash.xml`, `drawable-xxxhdpi-v4/splash_logo.png`, and none of the old `splash.png` bitmaps. The APK grew 241 KB from the higher-quality icons and is still 6.01 MB, well under the 10 MiB guard.
 - Published **`v1.0.0-debug.8`** on `a4ef410` with `WaveS-1.0.0-debug.8.apk` (6,010,168 bytes); range GET 206, HEAD 200, and a full unauthenticated download matched SHA-256 `C0B4B90A…526E0`.
 
+### Phase 3 changes (native exports and back button, committed as `a63bfc5`)
+
+On Android a WebView ignores `<a download>`, so the PNG and both CSV buttons did nothing on the phone. They now write the file into the app cache and open the Android share sheet, which covers saving to Files/Drive, sending and printing. The web build keeps its anchor download.
+
+- Installed `@capacitor/filesystem@8.1.5`, `@capacitor/share@8.0.3` and `@capacitor/app@8.1.2`; `npx cap sync android` registered them in `android/capacitor.settings.gradle` and `android/app/capacitor.build.gradle`.
+- New `src/native.ts`:
+  - `shareDataUrl(dataUrl, filename)` strips the `data:image/png;base64,` prefix and writes the base64 payload with no `encoding` option, which is the plugin's binary/base64 path.
+  - `shareText(text, filename)` writes with `Encoding.UTF8`, so French CSV semicolons and accents survive.
+  - Both write to `Directory.Cache` under `exports/<safe-name>` with `recursive: true`, resolve the URI with `Filesystem.getUri`, then call `Share.share({ files: [uri], title, dialogTitle })`. The share plugin's `FileProvider` (merged into the manifest) grants the receiving app read access; cache files need no storage permission.
+  - Both return `false` on the web, so the caller uses the existing download path; `Capacitor.isNativePlatform()` is the only native gate.
+- `RayScene`: the inline PNG handler became `exportPng()`, which awaits the share and falls back to `downloadFile(dataUrl, filename)` if native sharing throws or returns false. The composition is unchanged: scenery + animated canvas over `pal.bg0`, sized by the sharper scenery layer.
+- `App`: `downloadBlob` became `exportText`; both `downloadSweepCsv` and `downloadFieldCsv` call it. It tries `shareText` first and falls back to the same `Blob` + object-URL anchor download, revoked after 5 s.
+- Back button: a native-only `useEffect` registers `App.addListener("backButton", ...)` and removes the handle on unmount (including when the listener resolves after unmount). It mirrors Escape exactly — close About, else close Help, else leave Present — and otherwise calls `App.exitApp()`. Registering the listener disables Capacitor's default back behaviour, so the explicit exit is required.
+- `tsc --noEmit` clean, 16/16 tests, production build green, `npx cap sync android` green. No physics or layout changes.
+- CI run [`40151111273`](https://github.com/FYI88/WAVES/actions/runs/40151111273) green; artifact 5,715,794 bytes zipped / 6,154,192 bytes APK. The APK contains `capacitor.plugins.json` with all three plugins, the `a63bfc5` build stamp, the FileProvider `cache-path`, the branded icon and splash, and the share/back-button code in the bundle.
+- Published **`v1.0.0-debug.9`** on `a63bfc5` with `WaveS-1.0.0-debug.9.apk` (6,154,192 bytes); range GET 206, HEAD 200, and a full unauthenticated download matched SHA-256 `59934633…2918D3`.
+
 ### What Phase 2.3 does not include
 
 - The keyboard shortcuts sheet (`.om-help`) still scrolls; it is desktop-only and its content is a key list.
@@ -245,7 +265,6 @@ The installed app still showed the stock Capacitor launcher icon and the stock C
 ### What Phase 2 does not include
 
 - No release/signed workflow yet (Phase 4).
-- No native file/share/back-button integration yet (Phase 3); status bar and immersive mode are already done.
 - No local Gradle build: this machine has no JDK 21 and no Android SDK.
 
 ## 5. Roadmap
@@ -289,14 +308,14 @@ Status: done and device-verified. Runs `40091642446`, `40098152879`, `4010795936
 
 ### Phase 3 - Native features
 
-Status: partially done ahead of schedule in `51b238f` (immersive fullscreen + dark system bars). Exports, back button and splash remain.
+Status: done in `a63bfc5`, published as `v1.0.0-debug.9`, awaiting the device check.
 
-- [ ] PNG and CSV exports go through `@capacitor/filesystem` and `@capacitor/share` on native, while keeping the web download path.
+- [x] PNG and CSV exports go through `@capacitor/filesystem` and `@capacitor/share` on native, while keeping the web download path.
 - [x] Status bar colour `#061018`, dark content.
 - [x] Immersive mode (always on; bars hidden, swipe from an edge to reveal them).
-- [ ] Android back button closes overlays first, then leaves present mode.
-- [ ] Splash screen with the existing logo.
-- [ ] Do not call native plugins on web without a guard.
+- [x] Android back button closes overlays first, then leaves present mode, then exits the app.
+- [x] Splash screen with the existing logo.
+- [x] Do not call native plugins on web without a guard.
 
 ### Phase 4 - Signed release
 
@@ -314,15 +333,15 @@ Status: not started.
 
 ### Versions
 
-Planned for Phase 3 — only `@capacitor/core`, `@capacitor/android` and `@capacitor/cli` are installed today; the rest are pinned targets, not dependencies yet.
+Installed for Phase 3: `@capacitor/core`, `@capacitor/android`, `@capacitor/cli` 8.5.3, `@capacitor/filesystem` 8.1.5, `@capacitor/share` 8.0.3 and `@capacitor/app` 8.1.2. `@capacitor/status-bar`, `@capacitor/splash-screen` and `@capacitor/assets` remain pinned targets, not dependencies: the status bar and splash are native resources, so the plugins are not needed.
 
 - `@capacitor/core`, `@capacitor/android`, `@capacitor/cli`: `8.5.3`.
 - `@capacitor/filesystem`: `8.1.5`.
 - `@capacitor/share`: `8.0.3`.
 - `@capacitor/app`: `8.1.2`.
-- `@capacitor/status-bar`: `8.0.4`.
-- `@capacitor/splash-screen`: `8.0.2`.
-- `@capacitor/assets`: `3.0.5`.
+- `@capacitor/status-bar`: `8.0.4` (planned, not installed).
+- `@capacitor/splash-screen`: `8.0.2` (planned, not installed).
+- `@capacitor/assets`: `3.0.5` (planned, not installed).
 - `@fontsource/inter-tight`: `5.3.0`.
 - `@fontsource/jetbrains-mono`: `5.3.0`.
 
@@ -512,6 +531,14 @@ Planned:
 - Published **`v1.0.0-debug.8`** on `a4ef410` with `WaveS-1.0.0-debug.8.apk` (6,010,168 bytes); range GET 206, HEAD 200, and a full unauthenticated download matched SHA-256 `C0B4B90A…526E0`.
 - User installed debug.8 and confirmed everything is good on the M20. Phase 2 is closed; the device gate for Phase 0 and Phase 1 is also satisfied. No HUD numbers were reported, so the 60 fps contract rests on the user's acceptance rather than a recorded p95.
 
+### 2026-10-25
+
+- Phase 3: installed `@capacitor/filesystem` 8.1.5, `@capacitor/share` 8.0.3 and `@capacitor/app` 8.1.2. Added `src/native.ts`: both helpers write into `Directory.Cache/exports`, resolve the URI and open the share sheet, with a `Capacitor.isNativePlatform()` guard so the web keeps its download path. PNG payloads use the plugin's base64 binary path; CSVs are explicit UTF-8.
+- Refactored the inline PNG handler into `exportPng()` and renamed `downloadBlob` to `exportText`; both try the native share first and fall back to the anchor download. Added a native-only back-button listener that closes About, then Help, then Present, then calls `App.exitApp()`; it removes its handle on unmount.
+- `tsc --noEmit` clean, 16/16 tests, production build and `npx cap sync android` green. Pushed as `a63bfc5`.
+- CI run [`40151111273`](https://github.com/FYI88/WAVES/actions/runs/40151111273) green; artifact 5,715,794 bytes zipped / 6,154,192 bytes APK. Verified `capacitor.plugins.json` lists app/filesystem/share, the bundled JS carries the `a63bfc5` stamp, `file_paths.xml` includes the cache path, and the branded icon/splash survived the plugin merge.
+- Published **`v1.0.0-debug.9`** on `a63bfc5` with `WaveS-1.0.0-debug.9.apk` (6,154,192 bytes); range GET 206, HEAD 200, and a full unauthenticated download matched SHA-256 `59934633…2918D3`.
+
 ### 2026-10-22
 
 - Closed the device gate: the user confirmed the M20 is updated, sideloading is open and performance is acceptable.
@@ -525,10 +552,10 @@ Planned:
 
 ## 14. Next actions
 
-1. Install `WaveS-1.0.0-debug.8.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.8> on the M20 (uninstall debug.7 or any earlier debug build first).
-2. Confirm the launcher icon and the launch splash both show the blue wave emblem, and that the icon is not clipped by the launcher's mask.
-3. Tap the three material tiles drawn inside the canvas and confirm each selects the matching layer in the list below; tap the slabs themselves as well.
-4. Confirm the incident-wave label reads `INCIDENT` with a plain `TE` underneath and no emoji-like symbol.
-5. Check the build line shows `a4ef410`, tick **Performance HUD**, play for 30 s and report fps, p95, DPR, buffer size, and whether text/graphics look sharp. Note whether the freeze still happens and what you were doing at the time (dragging, rotating the spatial view, opening About).
-6. If p95 is still above 22 ms at DPR 1, cut the internal-reflection wavefronts on coarse pointers (perf lever 5) and re-measure.
-7. Then Phase 3 native integration: PNG/CSV share, back button, splash plugin; Phase 4: signed release.
+1. Install `WaveS-1.0.0-debug.9.apk` from <https://github.com/FYI88/WAVES/releases/tag/v1.0.0-debug.9> on the M20 (uninstall debug.8 or any earlier debug build first).
+2. Confirm the About build line shows `a63bfc5`.
+3. Tap **PNG**: the Android share sheet should open with `waves-<freq>GHz-<angle>deg-<pol>-<view>.png`. Save it to Files or send it to yourself and check the image matches the current scene.
+4. Tap the sweep CSV and the field CSV buttons: both should open the share sheet with a `.csv` file. Open one and check the header row and that decimals use the language's separator (comma in English, semicolon in French).
+5. Back button: open About → back closes it; open Help → back closes it; enter Present → back leaves Present; on the main screen → back exits the app.
+6. Report any step that fails, with the screen and the action you took.
+7. Then Phase 4: signed release workflow, keystore secrets, `THIRD_PARTY_NOTICES.md`, and the final performance acceptance.
