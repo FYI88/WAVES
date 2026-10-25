@@ -1,93 +1,143 @@
-# WAVES
+<div align="center">
 
+# WaveS 
+## Wave & Wall Simulator
 
+**Propagation, réflexion et transmission des ondes EM à travers des parois multicouches.**
+**EM wave propagation, reflection and transmission through multilayer walls.**
 
-## Getting started
+**Physique exacte ITU-R P.2040 · React + Vite + TypeScript · zéro dépendance runtime.**
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+**Live demo : https://waves-pearl.vercel.app/**
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+![QR code — live demo](public/qr-code.png)
 
-## Add your files
+![Vite](https://img.shields.io/badge/Vite-6.x-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Physics](https://img.shields.io/badge/Physics-ITU--R%20P.2040-ff6b35?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-16%2F16%20passing-107c41?style=for-the-badge)
+![Lang](https://img.shields.io/badge/Lang-FR%20%7C%20EN-1f6feb?style=for-the-badge)
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+Réalisé par **CHETAINE YOUNES** · ENSA GSR1
 
+</div>
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/FYI88/WAVES.git
+cd WAVES
+npm install
+npm run dev      # → http://localhost:5173
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/42105243/waves.git
-git branch -M main
-git push -uf origin main
+
+| Script          | Action                                              |
+|-----------------|-----------------------------------------------------|
+| `npm run dev`   | Dev server + hot reload                             |
+| `npm run build` | Typecheck (`tsc`) + production build → `dist/`     |
+| `npm test`      | Physics + share-codec regression suite (vitest)     |
+| `npm run preview` | Serve the production build locally                |
+| `npm start`     | Dev server, opens the browser                       |
+
+---
+
+## Android / APK
+
+WaveS ships as an offline Android APK through Capacitor 8 (`io.github.fyi88.waves`, minSdk 24, targetSdk 36).
+
+- **CI build** — every push to `main` runs `.github/workflows/android-debug.yml` (Node 22, JDK 21, Android SDK 36, Gradle cache) and publishes the `waves-debug-apk` artifact on the Actions run page. The workflow also verifies the APK signature and enforces the 10 MB budget.
+- **Local build** — needs Node 22, JDK 21 and Android SDK 36:
+
+```bash
+npm ci
+npm test
+npm run build
+npx cap sync android
+cd android && ./gradlew assembleDebug
+# → android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Integrate with your tools
+- **Install** — sideload the APK. Each CI run generates a fresh debug keystore, so uninstall a previous debug build before installing a newer one.
+- **Fonts** — Inter Tight and JetBrains Mono are bundled with Fontsource (Latin + Greek subsets); the app makes no network request at runtime.
+- **Version** — `package.json` is the single source of truth: `versionName` in `android/app/build.gradle` is read from it. Bump `versionCode` manually in that file for each release.
 
-* [Set up project integrations](https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/42105243/waves/-/settings/integrations)
+## Features
 
-## Collaborate with your team
+- **Multilayer walls** — up to 6 layers, air gaps included; add, duplicate, reorder, remove; 8 ITU-R materials (concrete, brick, plasterboard, wood, glass, chipboard, plywood, marble) + fully custom media (ε′/σ or n/κ).
+- **Full wave control** — frequency 0.5–40 GHz (log slider), incidence 0–89° (slider or drag directly on the R/T curve), polarization TE / TM / average.
+- **Live views** — cross-section scene (field, crests, or both, with internal reflections and labels), R/T-vs-angle chart with Brewster marker, |E(z)| field profile (Lin/dB), energy budget bar (R + T + A = 100 %).
+- **Scenarios** — one-click presets: Wi-Fi 2.4 GHz cavity brick, Wi-Fi 5 GHz stud partition, 5G 3.5 GHz plastered concrete, 5G 28 GHz double glazing, Brewster glass TM.
+- **Share & export** — PNG snapshot of the scene, CSV export of both charts (Excel-ready, `;`-separated in FR), copy-link sharing (`#s=` URL encodes the exact setup), θ → θB Brewster jump (TM).
+- **Present mode** — decluttered projector view with its own control bar, auto fullscreen (P to enter, Esc to exit).
+- **Comfort** — FR/EN toggle (L), dark/light theme (T), Space play/pause, ←→ incidence angle, ↑↓ layer select, V section/spatial view, 1/2/3 curves/crests/both, P present, `?` shortcuts overlay, persistent state (localStorage), responsive layout (3-column desktop at 80 % default scale, stacked phone/tablet untouched).
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+---
 
-## Test and Deploy
+## Physics Engine
 
-Use the built-in continuous integration in GitLab.
+`src/physics.ts` — pure, DOM-free, reusable as-is (PWA, Tauri, Capacitor):
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+- Complex arithmetic in `exp(jωt)` convention; η = ε′ − j·17.98·σ/f (ITU-R P.2040 eq. 9b); Table 3 materials as ε′ = a·fᵇ, σ = c·fᵈ.
+- Complex Fresnel (§2.2.1), single lossy slab (§3.4), stable N-layer transfer recursion (air | L1…LN | air), exact tangential |E(z)| field solver, pseudo-Brewster search, 0–90° angular sweep.
+- Honest warnings: out-of-ITU-range extrapolation + tan δ > 0.5 flagged in the UI.
 
-***
+### Regression lock (`npm test`)
 
-# Editing this README
+| Check | Result |
+|-------|--------|
+| Glazing TE 5 GHz 35° | R = 0.865404 · T = 0.101251 · A = 0.0333447 |
+| Cavity brick AVG 2.4 GHz 0° | R = 0.186401 · T = 0.220373 · A = 0.593226 |
+| Concrete TM 68.5° (near-Brewster) | R = 0.00223008 · T = 0.00287356 · A = 0.994896 |
+| R + T + A = 1, per-layer absorption sums, bounds | 5 configs |
+| Recursion = closed-form slab, stack field = direct solver, AVG = mean(TE, TM) | cross-path |
+| 181-point sweep finite + bounded, Brewster = TM minimum | sweep sanity |
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+> `src/physics.ts` must never change without updating these numbers deliberately. Any silent drift fails the suite.
 
-## Suggestions for a good README
+---
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## Repository Structure
 
-## Name
-Choose a self-explaining name for your project.
+```text
+./
+├── index.html            # title, splash boot screen, mount #root
+├── package.json          # dev / build / test scripts, version
+├── capacitor.config.ts   # Capacitor app id / name / webDir
+├── android/              # generated Capacitor Android project
+├── .github/workflows/    # debug APK CI
+├── src/
+│   ├── main.tsx          # React root + crash boundary wiring
+│   ├── App.tsx           # entire UI (state, views, charts, i18n, persistence)
+│   ├── physics.ts        # pure engine (see above — do not alter lightly)
+│   ├── physics.test.ts   # regression lock (vitest)
+│   ├── share.ts          # share-link codec (pure, tested)
+│   ├── share.test.ts     # codec round-trip + rejection tests
+│   ├── waveRays.ts       # cross-section canvas renderer
+│   ├── spatialScene.ts   # spatial-view canvas renderer
+│   ├── materialSurfaces.ts # procedural wall textures shared by both renderers
+│   └── styles.css        # theming + responsive (desktop ≥1040px, stacked ≤1039px)
+├── public/
+│   ├── logo.png          # app icon / favicon
+│   └── qr-code.png       # QR to the live demo
+└── dist/                 # production build (gitignored)
+```
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+Local physics references (parent folder, outside git): `chapitre-1-.pdf` (Snell, Fresnel, Brewster), `chapitre-2.pdf` (dispersive plasma, planned V3), `ETU 2025.pdf` (= ITU-R P.2040-4).
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+---
 
 ## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+- **Phase 2 — done** — shortcuts overlay (`?`) with the full key map, angle/view/display/present keys, fullscreen present mode.
+- **Android (Phases 0–2) — done** — mobile/safe-area hardening and perf HUD, Capacitor 8 wrap, bundled Inter Tight + JetBrains Mono, debug APK CI.
+- **Android next** — native PNG/CSV share, status bar and back-button handling, signed GitHub Release.
+- **V3** — Chapitre 2 dispersive plasma, k² = (ω² − ωp²)/c² (not implemented).
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+---
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+No `LICENSE` file yet — all rights reserved by default.

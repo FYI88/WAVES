@@ -773,5 +773,6 @@ export function drawWaveRays(
   ctx.fillText(`${format(total, total < 10 ? 2 : 1)} cm${count > 1 ? ` · ${count} ${french ? "milieux" : "media"}` : ""}`, width / 2, ruler + 8);
   ctx.restore();
 
-  return { rects, tiles };
+  /** `boundaries` / `minWidth`: geometry for edge hit-testing (thickness drag) */
+  return { rects, tiles, boundaries: bx, minWidth };
 }
