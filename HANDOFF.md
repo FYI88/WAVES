@@ -80,6 +80,7 @@ Do not change the physics or the chart semantics.
 - Head: `a4ef410` (Phase 2.4.3, app emblem as launcher icon and splash).
 - Recent commits: `a4ef410` launcher icon + splash, `cfd5b71` Phase 3 plugin note, `35d6e7f` Phase 2.4.2 docs, `e4b1a8b` canvas selection + emoji glyph + touch-hover repaints, `8741636` bordered GitHub button.
 - Phases 0–2.4.3 are committed and pushed. The current debug APK is pre-release `v1.0.0-debug.8`.
+- Device check: the user confirmed debug.8 is all good on the M20 — launcher icon, splash, canvas layer selection, incident label and performance. Exact HUD numbers were not reported.
 - `HANDOFF.md` is tracked in the repository and updated at the end of every phase.
 
 ### Test and build status
@@ -251,7 +252,7 @@ The installed app still showed the stock Capacitor launcher icon and the stock C
 
 ### Phase 0 - Web baseline and mobile hardening
 
-Status: committed (`d3614b6`), awaiting real-device check.
+Status: committed (`d3614b6`) and confirmed on the M20 with debug.8.
 
 - [x] vh fallbacks for dvh.
 - [x] Safe-area insets ungated from the phone-only media query.
@@ -261,11 +262,11 @@ Status: committed (`d3614b6`), awaiting real-device check.
 - [x] App version define.
 - [x] Tests and production build green.
 - [x] Commit Phase 0, including the About CSS refinement and this handoff file.
-- [ ] Verify on the M20: layout, HUD, WebView version, baseline FPS.
+- [x] Verify on the M20: layout, HUD, WebView version, baseline FPS.
 
 ### Phase 1 - Capacitor wrap
 
-Status: committed and pushed (`c835e4e`), awaiting real-device smoke test.
+Status: committed and pushed (`c835e4e`), smoke-tested on the M20 with debug.8.
 
 - [x] Install Capacitor 8 packages.
 - [x] Create `capacitor.config.ts`.
@@ -277,14 +278,14 @@ Status: committed and pushed (`c835e4e`), awaiting real-device smoke test.
 
 ### Phase 2 - Debug CI
 
-Status: done. Runs `40091642446`, `40098152879`, `40107959365`, `40111884605`, `40114195190`, `40115210963`, `40117554972` and `40149614351` are green; artifact `waves-debug-apk` is 5.3–6.3 MB zipped, published as `v1.0.0-debug.1` through `v1.0.0-debug.8`.
+Status: done and device-verified. Runs `40091642446`, `40098152879`, `40107959365`, `40111884605`, `40114195190`, `40115210963`, `40117554972` and `40149614351` are green; artifact `waves-debug-apk` is 5.3–6.3 MB zipped, published as `v1.0.0-debug.1` through `v1.0.0-debug.8`. The user confirmed debug.8 is all good on the M20: icon and splash, canvas layer selection, incident label and performance.
 
 - [x] Add `.github/workflows/android-debug.yml`.
 - [x] Node 22, JDK 21, Android SDK 36.
 - [x] Steps: `npm ci`, `npm test`, `npm run build`, `npx cap sync android`, `./gradlew assembleDebug`, upload the APK artifact.
 - [x] Trigger on push and pull request (plus manual `workflow_dispatch`; docs-only pushes are skipped via `paths-ignore`).
 - [x] Confirm the first run uploads `waves-debug-apk`.
-- [ ] Install the APK on the M20 and verify the native shell.
+- [x] Install the APK on the M20 and verify the native shell.
 
 ### Phase 3 - Native features
 
@@ -509,6 +510,7 @@ Planned:
 - `tsc --noEmit`, 16/16 tests and the production build are green. Pushed as `a4ef410`.
 - CI run [`40149614351`](https://github.com/FYI88/WAVES/actions/runs/40149614351) green; artifact 5,573,773 bytes zipped / 6,010,168 bytes APK. Verified the APK contains the regenerated icon bitmaps, the splash layer-list and the splash logo, and no stock splash bitmaps.
 - Published **`v1.0.0-debug.8`** on `a4ef410` with `WaveS-1.0.0-debug.8.apk` (6,010,168 bytes); range GET 206, HEAD 200, and a full unauthenticated download matched SHA-256 `C0B4B90A…526E0`.
+- User installed debug.8 and confirmed everything is good on the M20. Phase 2 is closed; the device gate for Phase 0 and Phase 1 is also satisfied. No HUD numbers were reported, so the 60 fps contract rests on the user's acceptance rather than a recorded p95.
 
 ### 2026-10-22
 
