@@ -2256,3 +2256,23 @@ a:hover {
   .om-layout { grid-template-areas: "controls scene results" "controls charts results" "controls lab lab"; }
 }
 .om[data-present="true"] .om-layout > .sl-lab { display: none; }
+
+/* ═══ Sidebar scroll (desktop) ═══
+   The controls area now spans every row down to the lab, so the earlier
+   `max-height: 100%` resolved against the whole page and stopped capping the
+   sidebar: its lower sections were only reachable by scrolling the scene out
+   of view. Cap it at the visible frame instead (viewport minus the 86px
+   header, plus 2px for its border and rounding; dvh x1.25 under the desktop
+   zoom 0.8, see "Desktop 80%" above) so it scrolls on its own. */
+@media (min-width: 1040px) {
+  .om .om-controls {
+    position: sticky; top: 0; align-self: start;
+    max-height: calc(125vh - 88px);
+    max-height: calc(125dvh - 88px);
+    /* measured frame height (scene/frameHeight.ts); the estimate above is
+       only the fallback before the first measurement */
+    max-height: var(--om-frame-h, calc(125dvh - 88px));
+    overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: thin; scrollbar-gutter: stable;
+  }
+}

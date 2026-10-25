@@ -45,6 +45,7 @@ import { STORAGE_KEY, STORAGE_VERSION, defaultPersisted, loadInitial, sanitizePe
 import { copyText, downloadFile } from "./dom";
 import { cssZoom, prepCanvas, useCanvasSize, type CanvasSize } from "./scene/canvas";
 import { RayScene, type SceneLayer, type SceneParams } from "./scene/RayScene";
+import { frameHeightRef } from "./scene/frameHeight";
 import { PAD, dot, drawAxes, mixHex, pill, roundRect, strokeCurve, tooltip } from "./charts/draw";
 import { AngleChart } from "./charts/AngleChart";
 import { FieldChart } from "./charts/FieldChart";
@@ -872,7 +873,7 @@ export function App() {
         </div>
       </header>
 
-      <main className="om-layout">
+      <main className="om-layout" ref={frameHeightRef}>
         {/* ───────── Scene ───────── */}
         <section className="om-card om-scene om-enter" style={{ "--d": "60ms" } as CSSProperties}>
           <RayScene params={withSurface(sceneParams, sceneSurface)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} />
