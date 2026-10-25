@@ -26,7 +26,7 @@ export interface Palette {
 export const PALETTES: Record<Theme, Palette> = {
   dark: {
     dark: true,
-    bg0: "#0a1420",
+    bg0: "#0b0d12",
     bg1: "#080e17",
     dot: "rgba(180,205,225,0.06)",
     grid: "rgba(180,205,225,0.07)",
@@ -44,7 +44,7 @@ export const PALETTES: Record<Theme, Palette> = {
   },
   light: {
     dark: false,
-    bg0: "#f6f9fc",
+    bg0: "#f4f5f7",
     bg1: "#edf2f6",
     dot: "rgba(22,41,57,0.08)",
     grid: "rgba(22,41,57,0.07)",
@@ -52,11 +52,12 @@ export const PALETTES: Record<Theme, Palette> = {
     ink: "#162939",
     muted: "#40596e",
     faint: "#50687c",
-    inc: "#55dbf5",
-    ref: "#ff9586",
-    tra: "#79e2bc",
+    // deeper tones: AA contrast on the light stage, same hues as dark
+    inc: "#0b7fa6",
+    ref: "#c8432e",
+    tra: "#0f7a55",
     abs: "#8d5b13",
-    acc: "#006b86",
+    acc: "#0b7fa6",
     label: "rgba(255,255,255,0.94)",
     labelBorder: "rgba(22,41,57,0.12)",
   },

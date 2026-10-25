@@ -2281,3 +2281,73 @@ a:hover {
     scrollbar-width: thin; scrollbar-gutter: stable;
   }
 }
+
+/* ═══ Design tokens (#7) ═══
+   One neutral surface per theme, hairline separators, and the four wave
+   colours (incident / reflected / transmitted / absorbed) as the only
+   accents. The wave colours match the canvas palettes in src/theme.ts
+   (kept in sync by hand). Kept last so it overrides the earlier layers. */
+.om {
+  --om-fs-1: 12px;   /* captions, units, notes */
+  --om-fs-2: 13.5px; /* labels, body */
+  --om-fs-3: 16px;   /* section titles, values */
+  --om-fs-4: 22px;   /* main readouts */
+  --om-lh: 1.45;
+}
+/* teaching boards / projectors: larger type */
+@media (min-width: 1600px) and (min-height: 900px) {
+  .om { --om-fs-1: 13px; --om-fs-2: 15px; --om-fs-3: 18px; --om-fs-4: 26px; }
+}
+.om[data-theme="dark"] {
+  --om-bg: #0b0d12;
+  --om-card: #11141a;
+  --om-card-hi: #161a21;
+  --om-line: rgba(255, 255, 255, 0.075);
+  --om-line-2: rgba(255, 255, 255, 0.14);
+  --om-ink: #eceef3;
+  --om-ink-2: #a6abb8;
+  --om-ink-3: #7d8393;
+  --om-track: rgba(255, 255, 255, 0.09);
+  --om-chip: rgba(255, 255, 255, 0.05);
+  --om-chip-hover: rgba(255, 255, 255, 0.09);
+  --om-inc: #55dbf5;
+  --om-ref: #ff9586;
+  --om-tra: #79e2bc;
+  --om-abs: #edc17f;
+  --om-acc: #55dbf5;
+  --om-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 16px 40px -24px rgba(0, 0, 0, 0.8);
+}
+.om[data-theme="light"] {
+  --om-bg: #f4f5f7;
+  --om-card: #ffffff;
+  --om-card-hi: #ffffff;
+  --om-line: rgba(16, 20, 28, 0.08);
+  --om-line-2: rgba(16, 20, 28, 0.15);
+  --om-ink: #11141a;
+  --om-ink-2: #4a5060;
+  --om-ink-3: #6b7180;
+  --om-track: rgba(16, 20, 28, 0.09);
+  --om-chip: rgba(16, 20, 28, 0.04);
+  --om-chip-hover: rgba(16, 20, 28, 0.07);
+  --om-inc: #0b7fa6;
+  --om-ref: #c8432e;
+  --om-tra: #0f7a55;
+  --om-abs: #8d5b13;
+  --om-acc: #0b7fa6;
+  --om-shadow: 0 1px 2px rgba(16, 20, 28, 0.06), 0 12px 32px -18px rgba(16, 20, 28, 0.18);
+}
+/* less chrome: opaque panels, no glass blur */
+.om-layout .om-card,
+.om-controls,
+.om-top { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.om-top { background: var(--om-bg); }
+/* the UI sans everywhere, the mono only for numbers (tabular figures) */
+.om { font-size: var(--om-fs-2); line-height: var(--om-lh); }
+.om-mono,
+.om-value-input,
+.om-stat-value,
+.om-hero-value,
+.sl-mono { font-family: var(--om-mono); font-variant-numeric: tabular-nums; }
+/* visible keyboard focus, never on mouse clicks */
+.om :focus-visible { outline: 2px solid var(--om-acc); outline-offset: 2px; }
+.om :focus:not(:focus-visible) { outline: none; }
