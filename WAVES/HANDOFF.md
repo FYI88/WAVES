@@ -402,6 +402,20 @@ Surface lab track (§15): browser-check !2 (layout, light/dark, About sheet), me
 
 Runs in parallel with the Android track above. Project: <https://gitlab.com/gitlab-ai-hackathon/transcend-october-2026/42105243/waves>.
 
+### Resume here (new session)
+
+Agreed order: **finish the app first, then the APK** (the APK only wraps the web build, so device checks are redone after the redesign).
+
+1. Read this section, then #1 (tracking issue), #7 (design brief in the comments) and #8.
+2. User browser-checks !2 (`feature/profiled-walls`): lab placement beside the controls, light / dark (OS dark + app light is the case that was broken), About sheet on phone and laptop, main-view overlay with a non-flat lab profile.
+3. On the user's OK: mark !2 ready, merge it (closes #3, #4, #5), then update this section.
+4. #7 UI / design pass on a new branch from `main` (see brief below).
+5. #8 3D waves on profiled walls on a branch from `main`, after #7.
+6. #6 Rayleigh roughness estimate; performance check of the new features against §3 on the M20.
+7. Then the Android track (§14): device check, Phase 3 native features, Phase 4 signed release.
+
+Run locally: `git checkout <branch> && cd WAVES && npm ci && npm run dev` (Vite prints the URL, usually <http://localhost:5173>).
+
 ### Rules
 
 - `physics.ts` stays untouched; every new physics module has tests; flat profiles must reproduce `solveStack`.
@@ -426,6 +440,28 @@ Runs in parallel with the Android track above. Project: <https://gitlab.com/gitl
 ### Design brief (#7)
 
 Targets phones, laptops and teaching boards. Simple, minimal, premium; UI only (canvas graphics out of scope). Neutral surfaces, wave colours as the only accents, one control system shared by the main panel and the lab, lab folded into the controls panel, bottom sheet for controls on phones, 44 px targets and large type on boards, WCAG AA.
+
+### Decisions
+
+- Surface lab is a separate model (own profile, materials, layers); it shares only f, θ and polarization with the main simulator.
+- Main-view overlay (#3): default draws the lab profile and the order **directions** only (grating equation, valid for any wall); lab-wall **efficiencies** are an opt-in checkbox and labelled as such. Main R/T always stay the flat-stack result.
+- Lab state persists in `localStorage` (`waves:lab:v1`) and travels in share links (codec v2, optional `lab`, omitted while the lab is untouched); v1 links must keep decoding.
+- Lab UI colours use the app theme tokens `--om-*` only; never the base `--fg-*` / `--surface-*` tokens (those follow the OS scheme, not the app toggle).
+- About: compact sheet, 440px card on laptops (500px on boards), bottom sheet on phones, model assumptions behind a disclosure, email addresses only in link tooltips.
+- 3D waves on profiled walls is a separate issue (#8), after #7.
+
+### Open questions for the user
+
+- APK builds run on **GitHub Actions** (`.github/workflows/android-debug.yml`) from the GitHub upstream, not from GitLab. Decide: push the finished app to GitHub, or move the APK job to GitLab CI.
+- About sheet: show the email addresses as visible text, or keep them in tooltips only?
+- #7: confirm the phone bottom sheet for the main controls before implementing.
+
+### Working notes
+
+- Very large single commits through the GitLab API were sometimes interrupted; split big edits into several smaller commits (each must still build).
+- `App.tsx` on `feature/profiled-walls` is the pre-split version (~3200 lines); on `main` it is ~1470 lines with `RayScene`, charts, dictionaries and palettes in modules. After !2 merges, `main` has both the split and the lab.
+- Lab text strings live in `surface/labText.ts`; the main dictionaries in `i18n/` on `main`.
+- The perf HUD five-tap toggle is still on the About build line (`.om-about-build`).
 
 ### Known gaps
 
