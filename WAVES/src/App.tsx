@@ -39,6 +39,7 @@ import {
   type LayerMat,
   type TemplateId,
 } from "./state/layers";
+import { applyMove, applyResize } from "./scene/dragStack";
 import { computeResults, stackSweepKey, type LayerRes, type Results, type SimState } from "./state/results";
 import { DEFAULT_STATE, presetState } from "./state/presets";
 import { STORAGE_KEY, STORAGE_VERSION, defaultPersisted, loadInitial, sanitizePersisted, type Persisted } from "./state/persistence";
@@ -553,6 +554,9 @@ export function App() {
       [layers[i], layers[j]] = [layers[j], layers[i]];
       return { ...s, layers, sel: s.sel === i ? j : s.sel === j ? i : s.sel };
     });
+  // canvas drag (src/scene/dragStack.ts): same state, same results / share / storage path as the panel
+  const dragMove = useCallback((from: number, to: number) => setSim((s) => applyMove(s, from, to)), []);
+  const dragResize = useCallback((i: number, cm: number) => setSim((s) => applyResize(s, i, cm)), []);
   const applyTemplate = (id: TemplateId) => {
     setSim((s) => ({ ...s, layers: TEMPLATES[id](), sel: 0 }));
     setFlash((f) => f + 1);
@@ -876,7 +880,7 @@ export function App() {
       <main className="om-layout" ref={frameHeightRef}>
         {/* ───────── Scene ───────── */}
         <section className="om-card om-scene om-enter" style={{ "--d": "60ms" } as CSSProperties}>
-          <RayScene params={withSurface(sceneParams, sceneSurface)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} />
+          <RayScene params={withSurface(sceneParams, sceneSurface)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} onMove={dragMove} onResize={dragResize} />
           <div className="om-hud om-hud-tl">
             <span className="om-hud-chip">
               <span className="om-stackdots">
