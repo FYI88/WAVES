@@ -334,8 +334,8 @@ Added by the GitLab / Surface lab track (§15):
 - `src/render/util.ts`: shared renderer helpers (`rgba`, `mix`, `clamp`, `tintOf`, single `AIR_TINT`).
 - `src/theme.ts`, `src/i18n/` (dictionaries, `format.ts`), `src/state/` (layers, results, presets, persistence), `src/dom.ts`: extracted from `App.tsx` (on `main` since !1).
 - `src/scene/` (`canvas.ts`, `RayScene.tsx`) and `src/charts/` (`draw.ts`, `AngleChart.tsx`, `FieldChart.tsx`): extracted from `App.tsx` (on `main` since !1). `App.tsx` is about 1470 lines on `main`.
-- `src/surface/`: profiles, EMT, grating equation, RCWA + worker, metal, scenarios, Surface lab panel (`SurfaceLab.tsx`, `labText.ts`, `surfaceLab.css`, `surfaceDetail.ts`), lab state / share (`labState.ts`), main-view overlay (`sceneOverlay.ts`). On `feature/profiled-walls` (!2).
-- `src/media/`: bubbles (Maxwell Garnett), water permittivity, fog (P.840). On `feature/profiled-walls` (!2).
+- `src/surface/`: profiles, EMT, grating equation, RCWA + worker, metal, scenarios, Surface lab panel (`SurfaceLab.tsx`, `labText.ts`, `surfaceLab.css`, `surfaceDetail.ts`), lab state / share (`labState.ts`), main-view overlay (`sceneOverlay.ts`). On `main` since !2.
+- `src/media/`: bubbles (Maxwell Garnett), water permittivity, fog (P.840). On `main` since !2.
 
 Planned:
 
@@ -346,6 +346,7 @@ Planned:
 
 ### 2026-10-25 (GitLab / Surface lab track)
 
+- !2 browser-checked by the user (lab placement, OS dark + app light, About sheet, main-view overlay) and merged into `main` as `253bd62c`; closes #3, #4, #5. MR description updated (verification section, follow-ups #6 / #7 / #8).
 - !1 finished and merged into `main`: `App.tsx` now imports the modules extracted in Phase 1 (theme, i18n, state, dom, scene, charts) instead of keeping copies (3205 → 1467 lines); angle sweep memoized on `stackSweepKey`. Intermediate commit `3df9e23a` failed CI by design, `1d0d978b` fixed it.
 - !2: Phase 4 (#5) done: θ / f sweep axis, order efficiency bars, CSV export, local normals, lab state in `localStorage` and in share links (share codec v2, v1 links still decode).
 - !2: main cross-section overlay (#3): lab profile on the wall face plus diffracted order directions; lab-wall efficiencies as an opt-in.
@@ -396,7 +397,7 @@ Planned:
 3. Start Phase 3 native integration: PNG/CSV share, status bar, back button, splash.
 4. Start Phase 4 once the device check is clean: signed release workflow and branded icons/splash.
 
-Surface lab track (§15): browser-check !2 (layout, light/dark, About sheet), merge it, then #7 (UI pass) and #8 (3D) on branches from `main`.
+Surface lab track (§15): !2 is merged; next #7 (UI pass), then #8 (3D), each on a branch from `main`.
 
 ## 15. GitLab / Surface lab track
 
@@ -407,12 +408,11 @@ Runs in parallel with the Android track above. Project: <https://gitlab.com/gitl
 Agreed order: **finish the app first, then the APK** (the APK only wraps the web build, so device checks are redone after the redesign).
 
 1. Read this section, then #1 (tracking issue), #7 (design brief in the comments) and #8.
-2. User browser-checks !2 (`feature/profiled-walls`): lab placement beside the controls, light / dark (OS dark + app light is the case that was broken), About sheet on phone and laptop, main-view overlay with a non-flat lab profile.
-3. On the user's OK: mark !2 ready, merge it (closes #3, #4, #5), then update this section.
-4. #7 UI / design pass on a new branch from `main` (see brief below).
-5. #8 3D waves on profiled walls on a branch from `main`, after #7.
-6. #6 Rayleigh roughness estimate; performance check of the new features against §3 on the M20.
-7. Then the Android track (§14): device check, Phase 3 native features, Phase 4 signed release.
+2. ~~User browser-checks !2~~ done 2026-10-25. ~~Merge !2~~ merged as `253bd62c` (closes #3, #4, #5).
+3. #7 UI / design pass on a new branch from `main` (see brief below). The phone bottom sheet for the main controls still needs the user's confirmation before it is built.
+4. #8 3D waves on profiled walls on a branch from `main`, after #7.
+5. #6 Rayleigh roughness estimate; performance check of the new features against §3 on the M20.
+6. Then the Android track (§14): device check, Phase 3 native features, Phase 4 signed release.
 
 Run locally: `git checkout <branch> && cd WAVES && npm ci && npm run dev` (Vite prints the URL, usually <http://localhost:5173>).
 
@@ -428,14 +428,14 @@ Run locally: `git checkout <branch> && cd WAVES && npm ci && npm run dev` (Vite 
 | Issue | Phase | Where | Status |
 | --- | --- | --- | --- |
 | #2 | CI, renderer cleanup, App.tsx split | !1 | merged |
-| #3 | profiles, EMT, grating, main-view overlay | !2 | done, closes with !2 |
-| #4 | RCWA + worker | !2 | done, closes with !2 |
-| #5 | lab views, sweep θ / f, bars, CSV, normals, share v2 | !2 | done, closes with !2 |
-| #6 | bubbles, water, fog | !2 | done except the Rayleigh roughness estimate |
+| #3 | profiles, EMT, grating, main-view overlay | !2 | merged |
+| #4 | RCWA + worker | !2 | merged |
+| #5 | lab views, sweep θ / f, bars, CSV, normals, share v2 | !2 | merged |
+| #6 | bubbles, water, fog | !2 | merged except the Rayleigh roughness estimate |
 | #7 | UI / UX and design pass | - | not started; design brief on the issue |
 | #8 | 3D waves on profiled walls | - | not started |
 
-!2 is still a draft on `feature/profiled-walls`, no conflicts with `main`, pipeline green.
+!2 merged into `main` on 2026-10-25 (`253bd62c`) after the user's browser check.
 
 ### Design brief (#7)
 
@@ -459,14 +459,14 @@ Targets phones, laptops and teaching boards. Simple, minimal, premium; UI only (
 ### Working notes
 
 - Very large single commits through the GitLab API were sometimes interrupted; split big edits into several smaller commits (each must still build).
-- `App.tsx` on `feature/profiled-walls` is the pre-split version (~3200 lines); on `main` it is ~1470 lines with `RayScene`, charts, dictionaries and palettes in modules. After !2 merges, `main` has both the split and the lab.
+- Since !2, `main` has both the `App.tsx` split (`RayScene`, charts, dictionaries and palettes in modules) and the Surface lab. Start every new branch from `main`.
 - Lab text strings live in `surface/labText.ts`; the main dictionaries in `i18n/` on `main`.
 - The perf HUD five-tap toggle is still on the About build line (`.om-about-build`).
 
 ### Known gaps
 
 - Nothing in !2 has been measured against the performance contract (§3) yet.
-- The lab is still a separate card below the charts (#7 folds it into the panel).
+- The lab is still a separate card (own grid area beside the controls); #7 folds it into the controls panel.
 - DOM accents (`--om-*`) and canvas palettes (`theme.ts`) use different wave colours; unify in #7.
 - Rayleigh roughness estimate (#6) not implemented.
 - A few imports in `App.tsx` on `main` are unused (left to keep !2 mergeable).
