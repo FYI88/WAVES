@@ -2269,6 +2269,9 @@ a:hover {
     position: sticky; top: 0; align-self: start;
     max-height: calc(125vh - 88px);
     max-height: calc(125dvh - 88px);
+    /* measured frame height (scene/frameHeight.ts); the estimate above is
+       only the fallback before the first measurement */
+    max-height: var(--om-frame-h, calc(125dvh - 88px));
     overflow-y: auto; overscroll-behavior: contain;
     scrollbar-width: thin; scrollbar-gutter: stable;
   }
