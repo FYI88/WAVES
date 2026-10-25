@@ -561,7 +561,7 @@ export function drawWaveRays(
         wave(from, to, color, known ? e : null, known ? e : null, 1,
           side === "R" ? reflectionPhase + Math.PI : phase, 0.7);
         if (options.annotations) {
-          const label = `${o.m > 0 ? "+" : ""}${o.m} · ${format(o.angleDeg, 1)}°${known ? ` · ${format(e * 100, e < 0.1 ? 1 : 0)} %` : ""}`;
+          const label = `${o.m > 0 ? "+" : ""}${o.m} · ${format(o.angleDeg, 1)}°${known ? ` · ${format(e * 100, e < 0.1 ? 1 : 0)} %` : (french ? " · schém." : " · schematic")}`;
           ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
           ctx.textBaseline = "middle";
           ctx.textAlign = dx < 0 ? "left" : "right";

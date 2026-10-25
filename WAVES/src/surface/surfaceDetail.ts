@@ -394,7 +394,7 @@ export function drawSurfaceDetail(
     ctx.restore();
   }
 
-  const pct = (e: number) => (Number.isFinite(e) ? ` · ${fmt(e * 100, e < 0.1 ? 1 : 0)}%` : "");
+  const pct = (e: number) => (Number.isFinite(e) ? ` · ${fmt(e * 100, e < 0.1 ? 1 : 0)}%` : (fr ? " · schém." : " · schematic"));
   for (const o of p.orders) {
     const a = o.angleDeg * DEG;
     if (!p.rigorous || o.R > 1e-4) {
