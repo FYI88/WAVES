@@ -14,6 +14,7 @@ import { drawSpatialScene, type SceneOptions } from "./spatialScene";
 import { drawWaveRays } from "./waveRays";
 import { decodeShare, encodeShare, shareHashOf } from "./share";
 import { SurfaceLab } from "./surface/SurfaceLab";
+import { labForShare } from "./surface/labState";
 import { recordFrame } from "./perf";
 import { PerfHud } from "./PerfHud";
 import { AIR_TINT } from "./render/util";
@@ -2320,7 +2321,7 @@ export function App() {
   }, []);
 
   const shareUrl = () =>
-    `${window.location.origin}${window.location.pathname}#s=${encodeShare(sim, lang, theme)}`;
+    `${window.location.origin}${window.location.pathname}#s=${encodeShare(sim, lang, theme, labForShare())}`;
 
   const share = async () => {
     setCopied(await copyText(shareUrl()));

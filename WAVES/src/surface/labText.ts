@@ -97,6 +97,13 @@ const fr = {
   detailTitle: "Coupe détaillée",
   sweepTitle: "Réponse en fonction de l’angle",
   sweepHint: "R₀, T₀, A et ordres diffractés · cliquer pour régler θ",
+  sweepTitleFreq: "Réponse en fonction de la fréquence",
+  sweepHintFreq: "R₀, T₀, A et ordres diffractés à θ fixé · cliquer pour régler f",
+  sweepAxis: "Axe du balayage",
+  axisAngle: "θ",
+  axisFreq: "f",
+  csvTitle: "Télécharger les données du balayage en CSV",
+  efficiency: "Efficacité par ordre",
 };
 
 export type LabDict = typeof fr;
@@ -191,6 +198,13 @@ const en: LabDict = {
   detailTitle: "Detail section",
   sweepTitle: "Response versus angle",
   sweepHint: "R₀, T₀, A and diffracted orders · click to set θ",
+  sweepTitleFreq: "Response versus frequency",
+  sweepHintFreq: "R₀, T₀, A and diffracted orders at fixed θ · click to set f",
+  sweepAxis: "Sweep axis",
+  axisAngle: "θ",
+  axisFreq: "f",
+  csvTitle: "Download the sweep data as CSV",
+  efficiency: "Efficiency per order",
 };
 
 export const LAB_TEXT: Record<LabLang, LabDict> = { fr, en };

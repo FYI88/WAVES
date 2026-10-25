@@ -524,3 +524,55 @@
     animation: none;
   }
 }
+
+/* sweep tools */
+.sl-view-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sl-view-tools .sl-seg {
+  padding: 2px;
+}
+.sl-view-tools .sl-seg button,
+.sl-btn-sm {
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
+/* order efficiency bars */
+.sl-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sl-bar-row {
+  display: grid;
+  grid-template-columns: 34px 1fr 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--sl-muted);
+}
+.sl-bar-row.is-spec {
+  color: var(--sl-ink);
+  font-weight: 700;
+}
+.sl-bar-head {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sl-faint);
+}
+.sl-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--sl-chip);
+  overflow: hidden;
+}
+.sl-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 4px;
+}
