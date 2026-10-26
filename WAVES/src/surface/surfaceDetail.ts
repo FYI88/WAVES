@@ -479,9 +479,9 @@ export function drawSurfaceDetail(
   );
   if (segs.length && !compact) {
     ctx.fillText(
-      fr ? "Dans le mur : ordre 0 et réflexions partielles par interface (illustratif) · R/T = somme cohérente" : "Inside the wall: order 0 and partial reflections per interface (illustrative) · R/T = coherent sum",
+      fr ? "réflexions partielles : illustratif" : "partial reflections: illustrative",
       14,
-      30,
+      29,
     );
   }
   if (!p.rigorous) {

@@ -4,6 +4,7 @@ import { DEFAULT_PROFILE, PROFILE_IDS, profileRms, profileSlices, sampleProfile,
 import { METAL, SURFACE_MATERIAL_IDS, surfaceEta, surfaceTint, type SurfaceMaterialId } from "./materials";
 import { emtSolve, emtValidity } from "./emt";
 import { lambdaCm, littrowDeg, propagatingOrders } from "./grating";
+import { detailPaths } from "./detailPaths";
 import { wallAt, type WallSpec } from "./rcwaJobs";
 import { rcwaPoint, rcwaSweep } from "./rcwaClient";
 import type { RcwaResult, RcwaSweep } from "./rcwa";
@@ -425,8 +426,11 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
     [rigorous, stale, geomOrders],
   );
 
+  const paths = useMemo(() => detailPaths(profile, wall.eta, wall.below, freq, angle, pol, slices), [profile, wall, freq, angle, pol, slices]);
+
   const detail: DetailParams = useMemo(
     () => ({
+      paths,
       profile,
       tint: surfaceTint(material),
       materialName: MATERIAL_NAMES[material][lang],
@@ -442,7 +446,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
       lang,
       normals: tab === "surface",
     }),
-    [profile, material, below, angle, freq, pol, detailOrders, rigorous, stale, tab, slices, hasBubbles, inclusions, target, fog.lwc, lang],
+    [paths, profile, material, below, angle, freq, pol, detailOrders, rigorous, stale, tab, slices, hasBubbles, inclusions, target, fog.lwc, lang],
   );
 
   const detailRef = useRef<HTMLCanvasElement>(null);
