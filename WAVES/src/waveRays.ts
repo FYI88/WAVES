@@ -582,9 +582,19 @@ export function drawWaveRays(
       ctx.fillStyle = palette.faint;
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
+      const rt = surface.rt;
+      const mainEff = rt?.source === "rcwa";
+      const effText = french
+        ? mainEff ? "efficacités du mur principal" : surface.efficiencies ? "efficacités du mur du labo" : "directions des ordres"
+        : mainEff ? "main wall efficiencies" : surface.efficiencies ? "lab wall efficiencies" : "order directions";
+      const rtText = !rt || rt.source === "flat"
+        ? (french ? "R/T : mur plan" : "R/T: flat wall")
+        : rt.source === "rcwa"
+          ? (french ? "R/T : mur profilé · RCWA · faisceaux : ordre 0" : "R/T: profiled wall · RCWA · beams: order 0")
+          : (french ? `R/T : mur profilé · EMT${rt.busy ? " · RCWA en cours…" : ""}` : `R/T: profiled wall · EMT${rt.busy ? " · RCWA running…" : ""}`);
       const caption = french
-        ? `Profil du labo · Λ ${format(prof.period, 2)} cm · h ${format(prof.depth, 2)} cm · ${surface.efficiencies ? "efficacités du mur du labo" : "directions des ordres"} · R/T : mur plan`
-        : `Lab profile · Λ ${format(prof.period, 2)} cm · h ${format(prof.depth, 2)} cm · ${surface.efficiencies ? "lab wall efficiencies" : "order directions"} · R/T: flat wall`;
+        ? `Profil du labo · Λ ${format(prof.period, 2)} cm · h ${format(prof.depth, 2)} cm · ${effText} · ${rtText}`
+        : `Lab profile · Λ ${format(prof.period, 2)} cm · h ${format(prof.depth, 2)} cm · ${effText} · ${rtText}`;
       ctx.fillText(caption, 18, bottom + 52);
       ctx.restore();
     }
