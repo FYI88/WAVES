@@ -16,6 +16,7 @@ import { decodeShare, encodeShare, shareHashOf } from "./share";
 import { SurfaceLab } from "./surface/SurfaceLab";
 import { labForShare } from "./surface/labState";
 import { withSurface, type SceneSurface } from "./surface/sceneOverlay";
+import { loadRtView, saveRtView, useProfiledMain, type RtView } from "./surface/useProfiledMain";
 import { recordFrame } from "./perf";
 import { PerfHud } from "./PerfHud";
 import { AIR_TINT, clamp } from "./render/util";
@@ -228,6 +229,8 @@ export function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [sceneSurface, setSceneSurface] = useState<SceneSurface | null>(null);
+  const [rtView, setRtView] = useState<RtView>(loadRtView);
+  useEffect(() => saveRtView(rtView), [rtView]);
   const [perfOn, setPerfOn] = useState(() => {
     try {
       return localStorage.getItem("waves:perf") === "1" || new URLSearchParams(window.location.search).get("perf") === "1";
@@ -500,6 +503,18 @@ export function App() {
   }, [showHelp, showAbout, setPresentFull]);
 
   const res = useMemo(() => computeResults(sim), [sim]);
+  // profiled main wall (lab profile on the first layer) when the profile is drawn and the view asks for it
+  const profiled = useProfiledMain(sceneSurface, sim.layers, sim.freq, sim.angle, sim.pol, rtView);
+  const shown = profiled
+    ? { R: profiled.R, T: profiled.T, A: Math.max(0, profiled.A) }
+    : { R: res.R, T: res.T, A: res.A };
+  const shownRdB = 10 * Math.log10(Math.max(shown.R, 1e-30));
+  const shownTdB = 10 * Math.log10(Math.max(shown.T, 1e-30));
+  const sceneSurfaceShown: SceneSurface | null = sceneSurface
+    ? profiled?.orders
+      ? { ...sceneSurface, orders: profiled.orders, efficiencies: true, rt: { source: "rcwa", busy: false } }
+      : { ...sceneSurface, rt: { source: profiled ? profiled.source : "flat", busy: profiled?.busy ?? false } }
+    : null;
   // keyed on values: res arrays are rebuilt on every state change, so angle,
   // polarization and selection changes reuse the previous 181-point sweep
   const sweepKey = stackSweepKey(res.etas, res.ds, sim.freq);
