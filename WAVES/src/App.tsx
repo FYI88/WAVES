@@ -1033,25 +1033,25 @@ export function App() {
         {/* ───────── Results ───────── */}
         <section className="om-results" key={`flash-${flash}`}>
           <div className="om-card om-hero om-enter" style={{ "--d": "180ms", "--tone": "var(--om-ref)" } as CSSProperties}>
-            <Ring value={res.R} color="var(--om-ref)" />
+            <Ring value={shown.R} color="var(--om-ref)" />
             <div>
               <div className="om-hero-label">{t.reflected} · R</div>
               <div className="om-hero-value">
-                {fmt.pct(res.R)}
+                {fmt.pct(shown.R)}
                 <small>%</small>
               </div>
-              <div className="om-hero-sub om-mono">{fmt.num(res.RdB, 2)} dB</div>
+              <div className="om-hero-sub om-mono">{fmt.num(shownRdB, 2)} dB</div>
             </div>
           </div>
           <div className="om-card om-hero om-enter" style={{ "--d": "230ms", "--tone": "var(--om-tra)" } as CSSProperties}>
-            <Ring value={res.T} color="var(--om-tra)" />
+            <Ring value={shown.T} color="var(--om-tra)" />
             <div>
               <div className="om-hero-label">{t.transmitted} · T</div>
               <div className="om-hero-value">
-                {fmt.pct(res.T)}
+                {fmt.pct(shown.T)}
                 <small>%</small>
               </div>
-              <div className="om-hero-sub om-mono">{res.TdB < -150 ? "< −150" : fmt.num(res.TdB, 2)} dB</div>
+              <div className="om-hero-sub om-mono">{shownTdB < -150 ? "< −150" : fmt.num(shownTdB, 2)} dB</div>
             </div>
           </div>
           <div className="om-card om-budget om-enter" style={{ "--d": "280ms" } as CSSProperties}>
@@ -1059,9 +1059,11 @@ export function App() {
               <span className="om-hero-label">{t.energy}</span>
               <span className="om-budget-note om-mono">{t.energyNote}</span>
             </div>
-            <div className="om-bar" role="img" aria-label={`R ${fmt.pct(res.R)}%, A ${fmt.pct(res.A)}%, T ${fmt.pct(res.T)}%`}>
-              <span style={{ width: `${res.R * 100}%`, background: "var(--om-ref)" }} />
-              {res.layers.map((r, i) => (
+            <div className="om-bar" role="img" aria-label={`R ${fmt.pct(shown.R)}%, A ${fmt.pct(shown.A)}%, T ${fmt.pct(shown.T)}%`}>
+              <span style={{ width: `${shown.R * 100}%`, background: "var(--om-ref)" }} />
+              {/* profiled wall: only the total absorption is known */}
+              {profiled && <span style={{ width: `${shown.A * 100}%`, background: "var(--om-abs)" }} />}
+              {!profiled && res.layers.map((r, i) => (
                 <span
                   key={sim.layers[i].id}
                   className="om-bar-abs"
@@ -1069,14 +1071,14 @@ export function App() {
                   style={{ width: `${r.absorbed * 100}%`, "--tint": matTint(sim.layers[i].mat) } as CSSProperties}
                 />
               ))}
-              <span style={{ width: `${res.T * 100}%`, background: "var(--om-tra)" }} />
+              <span style={{ width: `${shown.T * 100}%`, background: "var(--om-tra)" }} />
             </div>
             <div className="om-budget-legend">
-              <div><i style={{ background: "var(--om-ref)" }} />{t.reflected}<b>{fmt.pct(res.R)} %</b></div>
-              <div><i style={{ background: "var(--om-abs)" }} />{t.absorbed}<b>{fmt.pct(res.A)} %</b></div>
-              <div><i style={{ background: "var(--om-tra)" }} />{t.transmitted}<b>{fmt.pct(res.T)} %</b></div>
+              <div><i style={{ background: "var(--om-ref)" }} />{t.reflected}<b>{fmt.pct(shown.R)} %</b></div>
+              <div><i style={{ background: "var(--om-abs)" }} />{t.absorbed}<b>{fmt.pct(shown.A)} %</b></div>
+              <div><i style={{ background: "var(--om-tra)" }} />{t.transmitted}<b>{fmt.pct(shown.T)} %</b></div>
             </div>
-            {sim.layers.length > 1 && (
+            {sim.layers.length > 1 && !profiled && (
               <div className="om-budget-layers">
                 {res.layers.map((r, i) => (
                   <button key={sim.layers[i].id} type="button" className={i === sim.sel ? "is-on" : ""} onClick={() => select(i)}
@@ -1110,8 +1112,8 @@ export function App() {
               sub={tpl(t.attenSub, { v: fmt.sig(selR.lossDb, 3) })} />
               </div>
             </details>
-            <Stat delay={500} label={t.tdb} value={res.TdB < -150 ? "< −150" : fmt.num(res.TdB, 2)} unit="dB" tone="var(--om-tra)"
-              sub={tpl(t.tdbSub, { v: fmt.num(res.RdB, 2) })} />
+            <Stat delay={500} label={t.tdb} value={shownTdB < -150 ? "< −150" : fmt.num(shownTdB, 2)} unit="dB" tone="var(--om-tra)"
+              sub={tpl(t.tdbSub, { v: fmt.num(shownRdB, 2) })} />
             <Stat delay={530} label={t.index} value={fmt.num(selR.nRe, 3)} tone="var(--om-inc)"
               sub={tpl(t.indexSub, { a: fmt.len(selR.lambda), b: fmt.len(res.lambda0) })} />
           </div>
@@ -1123,7 +1125,7 @@ export function App() {
             <div className="om-chart-head">
               <div>
                 <h2>{t.chartAngle}</h2>
-                <p>{t.chartAngleHint}</p>
+                <p>{t.chartAngleHint}{profiled ? (lang === "fr" ? " · mur plan" : " · flat wall") : ""}</p>
               </div>
               <div className="om-chart-legend">
                 <span className="om-leg"><i style={{ background: "var(--om-ref)" }} />R</span>
@@ -1151,7 +1153,7 @@ export function App() {
             <div className="om-chart-head">
               <div>
                 <h2>{t.chartField}</h2>
-                <p>{t.chartFieldHint} · {polLabel}</p>
+                <p>{t.chartFieldHint} · {polLabel}{profiled ? (lang === "fr" ? " · mur plan" : " · flat wall") : ""}</p>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <Segmented<"lin" | "db">
