@@ -584,6 +584,30 @@ export function App() {
         : `ε′ = ${fmt.sig(selL.eps, 4)} · σ = ${fmt.sig(selL.sigma, 3)} S/m`;
 
   const polLabel = sim.pol === "AVG" ? t.avg : sim.pol;
+
+  // which model gives the R / T on screen, and the switch between flat and profiled
+  const fr = lang === "fr";
+  const emtWarn = profiled !== null && profiled.source === "emt" && profiled.validity === "invalid";
+  const rtChip = profiled
+    ? `R/T · ${fr ? "profilé" : "profiled"} · ${profiled.source === "rcwa" ? "RCWA" : profiled.busy ? "EMT…" : "EMT"}${emtWarn ? " ⚠" : ""}`
+    : `R/T · ${fr ? "mur plan" : "flat wall"}`;
+  const rtTitle = emtWarn
+    ? fr
+      ? "EMT hors validité pour cette période : passez le labo en mode rigoureux (RCWA)."
+      : "EMT is not valid for this period: switch the lab to rigorous mode (RCWA)."
+    : fr
+      ? "Plan : empilement exact (ITU-R P.2040). Profilé : profil du labo sur la 1re couche, calcul du labo (EMT ou RCWA)."
+      : "Flat: exact stack (ITU-R P.2040). Profiled: lab profile on the first layer, lab calculation (EMT or RCWA).";
+  const rtTools = sceneSurface ? (
+    <div className="om-view-modes" role="group" aria-label={fr ? "Valeurs R/T" : "R/T values"} title={rtTitle}>
+      <button type="button" aria-pressed={rtView === "flat"} className={rtView === "flat" ? "is-on" : ""} onClick={() => setRtView("flat")}>
+        {fr ? "R/T plan" : "Flat R/T"}
+      </button>
+      <button type="button" aria-pressed={rtView === "profiled"} className={rtView === "profiled" ? "is-on" : ""} onClick={() => setRtView("profiled")}>
+        {fr ? "R/T profilé" : "Profiled R/T"}
+      </button>
+    </div>
+  ) : null;
   const full = sim.layers.length >= MAX_LAYERS;
 
   const setMaterial = (m: LayerMat) => {
@@ -687,7 +711,7 @@ export function App() {
       <main className="om-layout" ref={frameHeightRef}>
         {/* ───────── Scene ───────── */}
         <section className="om-card om-scene om-enter" style={{ "--d": "60ms" } as CSSProperties}>
-          <RayScene params={withSurface(sceneParams, sceneSurfaceShown)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} onMove={dragMove} onResize={dragResize} />
+          <RayScene params={withSurface(sceneParams, sceneSurfaceShown)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} onMove={dragMove} onResize={dragResize} tools={rtTools} />
           <div className="om-hud om-hud-tl">
             <span className="om-hud-chip">
               <span className="om-stackdots">
@@ -697,6 +721,7 @@ export function App() {
               </span>
               {tpl(sim.layers.length > 1 ? t.layersN : t.layer1, { n: String(sim.layers.length) })}
             </span>
+            {sceneSurface && <span className="om-hud-chip om-mono" title={rtTitle}>{rtChip}</span>}
             <span className="om-hud-chip om-mono">{fmt.num(sim.freq, sim.freq < 10 ? 2 : 1)} GHz</span>
             <span className="om-hud-chip om-mono">{polLabel}</span>
           </div>
