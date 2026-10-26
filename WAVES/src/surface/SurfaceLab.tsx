@@ -402,8 +402,9 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
           ? rigorous.orders.map((o) => ({ m: o.m, angleDeg: o.angleDeg, R: o.R, T: o.T }))
           : geomOrders.map((o) => ({ m: o.m, angleDeg: o.angleDeg, R: NaN, T: NaN })),
       efficiencies: eff,
+      calc: { mode, harmonics, slices },
     });
-  }, [onSceneSurface, showInMain, mainEfficiencies, profile, rigorous, stale, geomOrders]);
+  }, [onSceneSurface, showInMain, mainEfficiencies, profile, rigorous, stale, geomOrders, mode, harmonics, slices]);
   useEffect(() => () => onSceneSurface?.(null), [onSceneSurface]);
 
   const hostEta =
