@@ -741,41 +741,7 @@ export function App() {
             <span className="om-leg"><i style={{ background: "var(--om-tra)" }} />{t.transmitted}</span>
             {shown.A > 0.005 && <span className="om-leg"><i style={{ background: "var(--om-abs)" }} />{t.absorbed}</span>}
           </div>
-          <div className="om-hud om-hud-br">
-            {sceneSurface && (
-              <div
-                className="om-rt-switch"
-                title={
-                  profiled && profiled.source === "emt" && profiled.validity === "invalid"
-                    ? lang === "fr"
-                      ? "EMT hors validité pour cette période : passez le labo en mode rigoureux (RCWA)."
-                      : "EMT is not valid for this period: switch the lab to rigorous mode (RCWA)."
-                    : lang === "fr"
-                      ? "Plan : empilement exact (ITU-R P.2040). Profilé : profil du labo sur la 1re couche, calcul du labo (EMT ou RCWA)."
-                      : "Flat: exact stack (ITU-R P.2040). Profiled: lab profile on the first layer, lab calculation (EMT or RCWA)."
-                }
-              >
-                <Segmented<RtView>
-                  size="sm"
-                  ariaLabel={lang === "fr" ? "Valeurs R/T" : "R/T values"}
-                  value={rtView}
-                  onChange={setRtView}
-                  options={[
-                    { value: "flat", label: lang === "fr" ? "Plan" : "Flat" },
-                    {
-                      value: "profiled",
-                      label: `${lang === "fr" ? "Profilé" : "Profiled"}${
-                        profiled
-                          ? ` · ${profiled.source === "rcwa" ? "RCWA" : profiled.busy ? "EMT…" : "EMT"}${profiled.source === "emt" && profiled.validity === "invalid" ? " ⚠" : ""}`
-                          : ""
-                      }`,
-                    },
-                  ]}
-                />
-              </div>
-            )}
-            <span className="om-hint">{t.clickLayer}</span>
-          </div>
+          <div className="om-hud om-hud-br"><span className="om-hint">{t.clickLayer}</span></div>
           {!playing && <div className="om-paused-badge">{t.pause}</div>}
         </section>
 
