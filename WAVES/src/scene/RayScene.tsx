@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { drawSpatialScene, type SceneOptions } from "../spatialScene";
 import { drawWaveRays } from "../waveRays";
 import { recordFrame } from "../perf";
@@ -72,6 +72,8 @@ export function RayScene(props: {
   onMove: (from: number, to: number) => void;
   /** set the thickness (cm) of layer `index` (same state update as the panel) */
   onResize: (index: number, cm: number) => void;
+  /** extra controls shown in the canvas toolbar in both views (e.g. the Flat / Profiled R/T switch) */
+  tools?: ReactNode;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const size = useCanvasSize(ref);
@@ -298,6 +300,7 @@ export function RayScene(props: {
         <button type="button" aria-pressed={view === "wave"} className={view === "wave" ? "is-on" : ""} onClick={() => setView("wave")}>{french ? "Coupe" : "Section"}</button>
         <button type="button" aria-pressed={view === "spatial"} className={view === "spatial" ? "is-on" : ""} onClick={() => setView("spatial")}>Spatial</button>
       </div>
+      {props.tools}
       {view === "wave" && <>
         <div className="om-view-modes" role="group" aria-label={french ? "Dessin des ondes" : "Wave drawing"}>
           {(["field", "fronts", "both"] as const).map(mode => <button key={mode} type="button" aria-pressed={display === mode} className={display === mode ? "is-on" : ""} onClick={() => setDisplay(mode)}>{mode === "field" ? (french ? "Courbes" : "Curves") : mode === "fronts" ? (french ? "Crêtes" : "Crests") : (french ? "Les deux" : "Both")}</button>)}
