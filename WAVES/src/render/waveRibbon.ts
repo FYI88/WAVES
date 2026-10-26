@@ -133,7 +133,9 @@ export function drawWaveRibbon(
   const particles = Math.max(1, Math.floor(distance / 120));
   for (let p = 0; p < particles; p++) {
     const along = (style.time * 64 / Math.max(1, index) + p * distance / particles) % distance;
-    const strength = alpha(along / distance) * Math.min(1, along / 14, (distance - along) / 14);
+    const f = along / distance;
+    const edge = Math.min(1, along / 14, (distance - along) / 14);
+    const strength = alpha(f) * edge * Math.min(1, envelope(f) * 1.4 + 0.15);
     const x = from.x + dx * along;
     const y = from.y + dy * along;
     const tail = Math.min(along, 30 / Math.max(1, index) + 10);
@@ -144,10 +146,34 @@ export function drawWaveRibbon(
     ctx.strokeStyle = trail;
     ctx.lineWidth = 2.2;
     ctx.stroke();
+    const glowStrength = 0.5 * strength;
+    if (glowStrength > 0.003) {
+      const radius = 11;
+      const halo = ctx.createRadialGradient(x, y, 0, x, y, radius);
+      halo.addColorStop(0, rgba(color, glowStrength));
+      halo.addColorStop(0.35, rgba(color, glowStrength * 0.35));
+      halo.addColorStop(1, rgba(color, 0));
+      ctx.fillStyle = halo;
+      ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    }
     ctx.beginPath();
     ctx.arc(x, y, 1.8, 0, TAU);
     ctx.fillStyle = rgba(style.dark ? "#ffffff" : color, strength);
     ctx.fill();
+  }
+  if (distance > 24) {
+    // direction chevron at 86 % of the length
+    const along = distance * 0.86;
+    const cx = from.x + dx * along;
+    const cy = from.y + dy * along;
+    path([
+      { x: cx - dx * 7 - dy * 4, y: cy - dy * 7 + dx * 4 },
+      { x: cx, y: cy },
+      { x: cx - dx * 7 + dy * 4, y: cy - dy * 7 - dx * 4 },
+    ]);
+    ctx.strokeStyle = rgba(color, alpha(0.86));
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
   }
   ctx.restore();
   return phase + k * distance;
