@@ -446,26 +446,51 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
 
   const detailRef = useRef<HTMLCanvasElement>(null);
   const sweepRef = useRef<HTMLCanvasElement>(null);
+  // own clock: advances only while the detail canvas animates, so pausing freezes the waves
+  // and a change of parameters does not make the phase jump
+  const detailClock = useRef({ t: 0, last: null as number | null });
 
   useEffect(() => {
     const canvas = detailRef.current;
     if (!canvas) return;
+    const clock = detailClock.current;
+    const motion = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
     let raf = 0;
     const draw = () => {
       const { ctx, w, h } = fitCanvas(canvas);
-      if (ctx) drawSurfaceDetail(ctx, w, h, performance.now() / 1000, detail, pal, fmtNum);
+      if (ctx) drawSurfaceDetail(ctx, w, h, clock.t, detail, pal, fmtNum);
     };
+    const running = () => playing && !(motion && motion.matches) && !document.hidden;
     const loop = () => {
+      raf = 0;
+      if (!running()) {
+        clock.last = null;
+        return;
+      }
+      const now = performance.now();
+      if (clock.last !== null) clock.t += Math.min(0.1, (now - clock.last) / 1000);
+      clock.last = now;
       draw();
       raf = requestAnimationFrame(loop);
     };
-    if (playing) loop();
-    else draw();
+    const restart = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      clock.last = null;
+      if (running()) loop();
+      else draw();
+    };
+    restart();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => draw()) : null;
     ro?.observe(canvas);
+    document.addEventListener("visibilitychange", restart);
+    motion?.addEventListener?.("change", restart);
     return () => {
-      cancelAnimationFrame(raf);
+      if (raf) cancelAnimationFrame(raf);
+      clock.last = null;
       ro?.disconnect();
+      document.removeEventListener("visibilitychange", restart);
+      motion?.removeEventListener?.("change", restart);
     };
   }, [detail, pal, playing, fmtNum]);
 
