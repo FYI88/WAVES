@@ -4,6 +4,7 @@ import { MONO, SANS } from "../theme";
 import { profileHeight, type ProfileParams, type ProfileSlice } from "./profiles";
 import type { RcwaSweep } from "./rcwa";
 import type { SweepAxis } from "./labState";
+import type { DetailSegment } from "./detailPaths";
 
 /* Detail cross-section of a profiled wall and its diffraction orders.
    Screen x = depth into the wall (z), screen y = along the period (x).
@@ -46,6 +47,8 @@ export interface DetailParams {
   lang: "fr" | "en";
   /** draw the local surface normals (outward, towards the air) */
   normals: boolean;
+  /** order-0 path inside the wall (profile region, then each flat layer) */
+  paths?: DetailSegment[];
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -394,6 +397,51 @@ export function drawSurfaceDetail(
     ctx.restore();
   }
 
+  /* order 0 inside the wall: refraction per segment and a partial reflection at
+     each interface behind the front face (profile base, layer boundaries, back face) */
+  let exitY = yc;
+  const segs = p.paths ?? [];
+  if (segs.length) {
+    const style = { time, frequency: p.frequency, compact, dark: pal.dark, display: "both" as const, pol: p.pol };
+    let cur = baseX;
+    const spans = segs.map((s) => {
+      if (s.kind === "profile") return [faceX, baseX] as const;
+      const x0 = cur;
+      cur = x0 + (belowPx[s.index] ?? 0);
+      return [x0, cur] as const;
+    });
+    const drops = spans.map(([x0, x1], i) => (x1 - x0) * Math.tan(Math.min(80, segs[i].thetaDeg) * DEG));
+    const total = drops.reduce((s, d) => s + d, 0);
+    const factor = Math.min(1, ((bottom - yc - 24) * 0.45) / Math.max(1, total));
+    const ys = [yc];
+    drops.forEach((d) => ys.push(ys[ys.length - 1] + d * factor));
+    let phase = 0;
+    segs.forEach((s, i) => {
+      const [x0, x1] = spans[i];
+      if (x1 - x0 < 1) return;
+      const start = { x: x0, y: ys[i] };
+      const end = { x: x1, y: ys[i + 1] };
+      ctx.save();
+      phase = drawWaveRibbon(ctx, start, end, pal.inc, s.fluxIn, s.fluxOut, s.n, phase, style);
+      ctx.restore();
+      if (s.back > 1e-5) {
+        const back = { x: x0, y: Math.min(bottom - 6, end.y + Math.max(15, end.y - start.y)) };
+        ctx.save();
+        drawWaveRibbon(ctx, end, back, pal.ref, s.back, s.back, s.n, phase + Math.PI, style, 0.55);
+        ctx.restore();
+        // the reflection from the first interface behind the face comes back out into the air
+        if (i === 0) {
+          const dx = -Math.cos(theta);
+          const dy = Math.sin(theta);
+          const len = Math.min(rayLength(faceX, back.y, dx, dy, w, h, 14), faceX - 14) * 0.8;
+          beam(faceX, back.y, dx, dy, pal.ref, s.back * Math.max(0, segs[0].fluxIn), len,
+            s.kind === "profile" ? (fr ? "↩ base du profil · partiel" : "↩ profile base · partial") : (fr ? "↩ interface 2 · partiel" : "↩ interface 2 · partial"));
+        }
+      }
+    });
+    exitY = ys[ys.length - 1];
+  }
+
   const pct = (e: number) => (Number.isFinite(e) ? ` · ${fmt(e * 100, e < 0.1 ? 1 : 0)}%` : (fr ? " · schém." : " · schematic"));
   for (const o of p.orders) {
     const a = o.angleDeg * DEG;
@@ -407,8 +455,8 @@ export function drawSurfaceDetail(
       if (p.rigorous && !(o.T > 1e-4)) continue;
       const dx = Math.cos(a);
       const dy = Math.sin(a);
-      const len = rayLength(backX, yc, dx, dy, w, h, 14) * 0.9;
-      beam(backX, yc, dx, dy, pal.tra, p.rigorous ? o.T : null, len, `${o.m > 0 ? "+" : ""}${o.m}${pct(p.rigorous ? o.T : NaN)}`);
+      const len = rayLength(backX, exitY, dx, dy, w, h, 14) * 0.9;
+      beam(backX, exitY, dx, dy, pal.tra, p.rigorous ? o.T : null, len, `${o.m > 0 ? "+" : ""}${o.m}${pct(p.rigorous ? o.T : NaN)}`);
     }
   }
 
@@ -429,6 +477,13 @@ export function drawSurfaceDetail(
     14,
     h - 10,
   );
+  if (segs.length && !compact) {
+    ctx.fillText(
+      fr ? "Dans le mur : ordre 0 et réflexions partielles par interface (illustratif) · R/T = somme cohérente" : "Inside the wall: order 0 and partial reflections per interface (illustrative) · R/T = coherent sum",
+      14,
+      30,
+    );
+  }
   if (!p.rigorous) {
     ctx.textAlign = "right";
     ctx.fillText(fr ? "directions seules (mode rapide)" : "directions only (fast mode)", w - 14, h - 10);
