@@ -530,8 +530,9 @@ export function App() {
     etas: res.etas,
     ds: res.ds,
     theta: sim.angle,
-    R: res.R,
-    T: res.T,
+    // beams carry the specular order; diffracted orders are drawn separately
+    R: profiled ? profiled.R0 : res.R,
+    T: profiled ? profiled.T0 : res.T,
     layers: sim.layers.map((l, i) => ({
       mat: l.mat,
       cm: l.thickness,
@@ -539,7 +540,7 @@ export function App() {
       nRe: res.layers[i].nRe,
       absorbed: res.layers[i].absorbed,
       fluxIn: res.layers[i].fluxIn,
-      fluxOut: i + 1 < sim.layers.length ? res.layers[i + 1].fluxIn : res.T,
+      fluxOut: i + 1 < sim.layers.length ? res.layers[i + 1].fluxIn : profiled ? profiled.T0 : res.T,
       name: matName(l.mat),
     })),
     sel: sim.sel,
@@ -686,7 +687,7 @@ export function App() {
       <main className="om-layout" ref={frameHeightRef}>
         {/* ───────── Scene ───────── */}
         <section className="om-card om-scene om-enter" style={{ "--d": "60ms" } as CSSProperties}>
-          <RayScene params={withSurface(sceneParams, sceneSurface)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} onMove={dragMove} onResize={dragResize} />
+          <RayScene params={withSurface(sceneParams, sceneSurfaceShown)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} onMove={dragMove} onResize={dragResize} />
           <div className="om-hud om-hud-tl">
             <span className="om-hud-chip">
               <span className="om-stackdots">
@@ -702,20 +703,54 @@ export function App() {
           <div className="om-hud om-hud-tr">
             <div className="om-hud-big" style={{ "--tone": "var(--om-ref)" } as CSSProperties}>
               <span className="om-hud-k">R</span>
-              <span className="om-hud-v">{fmt.pct(res.R)}<small>%</small></span>
+              <span className="om-hud-v">{fmt.pct(shown.R)}<small>%</small></span>
             </div>
             <div className="om-hud-big" style={{ "--tone": "var(--om-tra)" } as CSSProperties}>
               <span className="om-hud-k">T</span>
-              <span className="om-hud-v">{fmt.pct(res.T)}<small>%</small></span>
+              <span className="om-hud-v">{fmt.pct(shown.T)}<small>%</small></span>
             </div>
           </div>
           <div className="om-hud om-hud-bl">
             <span className="om-leg"><i style={{ background: "var(--om-inc)" }} />{t.incident}</span>
             <span className="om-leg"><i style={{ background: "var(--om-ref)" }} />{t.reflected}</span>
             <span className="om-leg"><i style={{ background: "var(--om-tra)" }} />{t.transmitted}</span>
-            {res.A > 0.005 && <span className="om-leg"><i style={{ background: "var(--om-abs)" }} />{t.absorbed}</span>}
+            {shown.A > 0.005 && <span className="om-leg"><i style={{ background: "var(--om-abs)" }} />{t.absorbed}</span>}
           </div>
-          <div className="om-hud om-hud-br"><span className="om-hint">{t.clickLayer}</span></div>
+          <div className="om-hud om-hud-br">
+            {sceneSurface && (
+              <div
+                className="om-rt-switch"
+                title={
+                  profiled && profiled.source === "emt" && profiled.validity === "invalid"
+                    ? lang === "fr"
+                      ? "EMT hors validité pour cette période : passez le labo en mode rigoureux (RCWA)."
+                      : "EMT is not valid for this period: switch the lab to rigorous mode (RCWA)."
+                    : lang === "fr"
+                      ? "Plan : empilement exact (ITU-R P.2040). Profilé : profil du labo sur la 1re couche, calcul du labo (EMT ou RCWA)."
+                      : "Flat: exact stack (ITU-R P.2040). Profiled: lab profile on the first layer, lab calculation (EMT or RCWA)."
+                }
+              >
+                <Segmented<RtView>
+                  size="sm"
+                  ariaLabel={lang === "fr" ? "Valeurs R/T" : "R/T values"}
+                  value={rtView}
+                  onChange={setRtView}
+                  options={[
+                    { value: "flat", label: lang === "fr" ? "Plan" : "Flat" },
+                    {
+                      value: "profiled",
+                      label: `${lang === "fr" ? "Profilé" : "Profiled"}${
+                        profiled
+                          ? ` · ${profiled.source === "rcwa" ? "RCWA" : profiled.busy ? "EMT…" : "EMT"}${profiled.source === "emt" && profiled.validity === "invalid" ? " ⚠" : ""}`
+                          : ""
+                      }`,
+                    },
+                  ]}
+                />
+              </div>
+            )}
+            <span className="om-hint">{t.clickLayer}</span>
+          </div>
           {!playing && <div className="om-paused-badge">{t.pause}</div>}
         </section>
 

@@ -829,7 +829,9 @@ a:hover {
 .om-canvas.is-grabbing { cursor: grabbing; }
 .om-canvas.is-resize { cursor: ew-resize; }
 .om-scene .om-canvas { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-.om-hud-br { right: 14px; bottom: 12px; }
+.om-hud-br { right: 14px; bottom: 12px; align-items: center; }
+/* the HUD ignores the pointer; the R/T source switch must not */
+.om-rt-switch { pointer-events: auto; }
 .om-hud-br .om-hint { margin: 0; font-size: 10.5px; letter-spacing: .04em; padding: 5px 10px; border-radius: 999px;
   background: color-mix(in srgb, var(--om-bg) 60%, transparent); border: 1px solid var(--om-line); backdrop-filter: blur(10px); }
 .om-stackdots { display: inline-flex; gap: 2px; }
