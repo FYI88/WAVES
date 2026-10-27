@@ -52,12 +52,12 @@ export const PALETTES: Record<Theme, Palette> = {
     ink: "#162939",
     muted: "#40596e",
     faint: "#50687c",
-    // deeper tones: AA contrast on the light stage, same hues as dark
-    inc: "#0b7fa6",
-    ref: "#c8432e",
-    tra: "#0f7a55",
+    // the original soft wave tones, same hues as dark; canvas text darkens them itself
+    inc: "#55dbf5",
+    ref: "#ff9586",
+    tra: "#79e2bc",
     abs: "#8d5b13",
-    acc: "#0b7fa6",
+    acc: "#006b86",
     label: "rgba(255,255,255,0.94)",
     labelBorder: "rgba(22,41,57,0.12)",
   },
