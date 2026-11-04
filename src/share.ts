@@ -1,11 +1,16 @@
 /**
- * Share-link codec (Phase 1) — pure functions, no DOM, no React.
+ * Share-link codec, pure functions, no DOM, no React.
  *
  * A shared setup is the full SimState shape plus lang/theme, JSON-encoded and
  * base64url'd into `#s=…`. Decoding never trusts the payload: it returns the
- * raw object and lets App's sanitizePersisted() clamp/validate everything.
+ * raw object and lets the callers sanitize everything.
+ *
+ * v2 adds an optional `lab` field (Surface lab state, sanitized by
+ * surface/labState.ts). v1 links, which have no `lab`, still decode.
  */
-export const SHARE_VERSION = 1;
+export const SHARE_VERSION = 2;
+/** versions this build can read */
+export const SHARE_VERSIONS: readonly number[] = [1, 2];
 
 export interface ShareLayer {
   id: string;
@@ -14,6 +19,8 @@ export interface ShareLayer {
   eps: number;
   sigma: number;
   customMode: string;
+  matching?: boolean;
+  matchingDesign?: "quarter-wave-live";
 }
 
 export interface ShareState {
@@ -29,6 +36,8 @@ export interface SharePayload {
   sim: ShareState;
   lang: string;
   theme: string;
+  /** Surface lab state (v2), untrusted */
+  lab?: unknown;
 }
 
 const b64urlEncode = (json: string): string => {
@@ -45,7 +54,7 @@ const b64urlDecode = (s: string): string => {
   return new TextDecoder().decode(bytes);
 };
 
-export function encodeShare(sim: ShareState, lang: string, theme: string): string {
+export function encodeShare(sim: ShareState, lang: string, theme: string, lab?: unknown): string {
   const payload: SharePayload = {
     v: SHARE_VERSION,
     sim: {
@@ -56,6 +65,8 @@ export function encodeShare(sim: ShareState, lang: string, theme: string): strin
         eps: l.eps,
         sigma: l.sigma,
         customMode: l.customMode,
+        ...(l.matching === true ? { matching: true } : {}),
+        ...(l.matchingDesign === "quarter-wave-live" ? { matchingDesign: l.matchingDesign } : {}),
       })),
       sel: sim.sel,
       freq: sim.freq,
@@ -64,6 +75,7 @@ export function encodeShare(sim: ShareState, lang: string, theme: string): strin
     },
     lang,
     theme,
+    ...(lab === undefined ? {} : { lab }),
   };
   return b64urlEncode(JSON.stringify(payload));
 }
@@ -72,7 +84,7 @@ export function decodeShare(hash: string): SharePayload | null {
   try {
     if (!hash || /[^A-Za-z0-9\-_]/.test(hash)) return null;
     const p = JSON.parse(b64urlDecode(hash)) as Partial<SharePayload>;
-    if (!p || typeof p !== "object" || p.v !== SHARE_VERSION) return null;
+    if (!p || typeof p !== "object" || typeof p.v !== "number" || !SHARE_VERSIONS.includes(p.v)) return null;
     const s = p.sim;
     if (!s || typeof s !== "object" || !Array.isArray(s.layers)) return null;
     return p as SharePayload;

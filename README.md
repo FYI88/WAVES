@@ -141,3 +141,16 @@ Local physics references (parent folder, outside git): `chapitre-1-.pdf` (Snell,
 ## License
 
 No `LICENSE` file yet — all rights reserved by default.
+# Integrated simulation and Android app
+
+The application remains at the repository root (`src/`, `package.json`, `android/`).
+The updated UI includes Surface Lab, live neighbour-derived impedance adaptation,
+the Simulation / Surface Lab switch on the first canvas, resultant R/T beams,
+optional diffraction-order beams, and the reset fix.
+
+Android native PNG/CSV sharing, hardware Back handling, remembered adaptive
+canvas resolution, launcher resources, build configuration, and the existing
+APK workflow are retained. `APP_HANDOFF.md` records the newer simulation work;
+`HANDOFF.md` retains the Android history. The ideal λ/4 preset is fixed at its
+design frequency; live adaptation uses a normal-incidence reference and does
+not guarantee zero reflection for absorbing multilayer walls.

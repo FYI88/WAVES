@@ -559,3 +559,13 @@ Planned:
 5. Back button: open About → back closes it; open Help → back closes it; enter Present → back leaves Present; on the main screen → back exits the app.
 6. Report any step that fails, with the screen and the action you took.
 7. Then Phase 4: signed release workflow, keystore secrets, `THIRD_PARTY_NOTICES.md`, and the final performance acceptance.
+# 2026-11-04 integration
+
+Ported the newer simulator UI into this repository's existing root layout.
+Preserved the Android project, workflow and plugins; reconnected native PNG/CSV
+sharing and hardware Back handling to the refactored UI, and retained adaptive
+DPR and build-stamp support. Simulation history is in `APP_HANDOFF.md`.
+
+Local verification: 168 tests, TypeScript/production build, and Capacitor Android
+sync pass. Native device gestures and browser visuals are not verified locally;
+the existing GitHub Actions workflow builds and checks the debug APK after push.
