@@ -2,6 +2,9 @@ import { MAX_LAYERS, insertMatchingLayer, layerEpsSigma, nkOf, quarterWaveMatch,
 import type { SimState } from "./results";
 
 export type MatchingReason = "arAdjacent" | "arRange" | "arEqual" | "arFull" | "arReadOnly";
+/** A rejected edit is more informative than the passive capacity reminder. */
+export const matchingFeedback = (reason: MatchingReason | null, full: boolean): MatchingReason | null =>
+  reason ?? (full ? "arFull" : null);
 export const isLiveMatching = (l: Layer | undefined) => l?.matchingDesign === "quarter-wave-live";
 const isCoating = (l: Layer | undefined) => !!l && (!!l.matching || isLiveMatching(l));
 export const referenceIndex = (l: Layer | undefined, freq: number) => {

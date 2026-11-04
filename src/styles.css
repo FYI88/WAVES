@@ -610,7 +610,8 @@ a:hover {
 .om-unit { font: 500 11.5px var(--om-mono); color: var(--om-ink-3); }
 
 .om-range-wrap { position: relative; height: 30px; display: flex; align-items: center; }
-.om-range { -webkit-appearance: none; appearance: none; width: 100%; height: 30px; margin: 0; background: transparent; cursor: pointer; outline: none; }
+.om-range { --acc: var(--om-inc); --pf: 0; -webkit-appearance: none; appearance: none; width: 100%; height: 30px; margin: 0; background: transparent; cursor: pointer; outline: none; }
+.om-slider .om-range { --acc: inherit; --pf: inherit; }
 .om-range::-webkit-slider-runnable-track {
   height: 6px; border-radius: 999px;
   background:
@@ -1744,7 +1745,8 @@ a:hover {
 }
 .om-presentbar-group { flex: 1 1 220px; display: flex; align-items: center; gap: 12px; min-width: 0; }
 .om-presentbar-label { flex: none; min-width: 86px; font-size: 13px; font-weight: 700; }
-.om-presentbar-range { flex: 1; accent-color: var(--om-inc); height: 32px; cursor: pointer; }
+.om-presentbar-range { flex: 1 1 100px; width: 0; min-width: 72px; accent-color: var(--om-inc); height: 44px; cursor: pointer; }
+.om-presentbar-range:focus-visible { outline: 2px solid var(--om-inc); outline-offset: 3px; border-radius: 4px; }
 .om-reset {
   margin-top: 14px; width: 100%; height: 38px; border-radius: 10px; cursor: pointer;
   border: 1px solid var(--om-line-2); background: transparent; color: var(--om-ink-2);

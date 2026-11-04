@@ -46,7 +46,7 @@ import {
 import { applyMove, applyResize, applyStackCommand, stackKeyCommand } from "./scene/dragStack";
 import { computeResults, stackSweepKey, type LayerRes, type Results, type SimState } from "./state/results";
 import { DEFAULT_STATE, presetState } from "./state/presets";
-import { addMatching, isLiveMatching, matchingReference, resolveMatching, transitionMatching, type MatchingReason } from "./state/matching";
+import { addMatching, isLiveMatching, matchingFeedback, matchingReference, resolveMatching, transitionMatching, type MatchingReason } from "./state/matching";
 import { STORAGE_KEY, STORAGE_VERSION, defaultPersisted, loadInitial, sanitizePersisted, type Persisted } from "./state/persistence";
 import { copyText, downloadText } from "./dom";
 import { cssZoom, prepCanvas, useCanvasSize, type CanvasSize } from "./scene/canvas";
@@ -248,7 +248,7 @@ export function App() {
   const [showAbout, setShowAbout] = useState(false);
   const [sceneSurface, setSceneSurface] = useState<SceneSurface | null>(null);
   const [coatingSide, setCoatingSide] = useState("before");
-  const coatingStatus = simulation.reason;
+  const coatingStatus = matchingFeedback(simulation.reason, sim.layers.length >= MAX_LAYERS);
   const [rtView, setRtView] = useState<RtView>(loadRtView);
   useEffect(() => saveRtView(rtView), [rtView]);
   const [perfOn, setPerfOn] = useState(() => {
@@ -817,7 +817,7 @@ export function App() {
             <span className="om-presentbar-label om-mono">{fmt.num(sim.freq, 2)} GHz</span>
             <input
               type="range" className="om-range om-presentbar-range" min={0.5} max={40} step={0.1}
-              value={sim.freq} aria-label={t.frequency}
+              value={sim.freq} aria-label={t.frequency} aria-valuetext={`${fmt.num(sim.freq, 2)} GHz`}
               style={{ "--pf": Math.min(1, Math.max(0, (sim.freq - 0.5) / 39.5)) } as CSSProperties}
               onChange={(e) => update("freq", Number(e.target.value))} />
           </div>
@@ -825,7 +825,7 @@ export function App() {
             <span className="om-presentbar-label om-mono">θ {fmt.num(sim.angle, 1)}°</span>
             <input
               type="range" className="om-range om-presentbar-range" min={0} max={89} step={0.5}
-              value={sim.angle} aria-label={t.angle}
+              value={sim.angle} aria-label={t.angle} aria-valuetext={`${fmt.num(sim.angle, 1)}°`}
               style={{ "--pf": sim.angle / 89 } as CSSProperties}
               onChange={(e) => update("angle", Number(e.target.value))} />
           </div>
@@ -987,7 +987,7 @@ export function App() {
                   </div>
                   <details><summary>{t.arDetails}</summary><p>{t.arInsertHint}</p></details>
                   {sceneSurface?.profile && sceneSurface.profile.id !== "flat" && sim.layers[0].matching && <details><summary>{t.arProfileTitle}</summary><p>{t.arProfile}</p></details>}
-                  <span className="om-coating-status" role="status">{full ? tpl(t.maxLayers, { n: String(MAX_LAYERS) }) : coatingStatus ? t[coatingStatus] : null}</span>
+                  <span className="om-coating-status" role="status">{coatingStatus ? t[coatingStatus] : null}</span>
                 </div>
               </div>
 

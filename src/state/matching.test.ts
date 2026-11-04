@@ -9,7 +9,7 @@ import { DEFAULT_PROFILE } from "../surface/profiles";
 import { wallAt } from "../surface/rcwaJobs";
 import { rcwaInputFor, solveRcwaMode } from "../surface/rcwa";
 import { insertMatchingLayer, layerEpsSigma, mkLayer, quarterWaveMatch } from "./layers";
-import { addMatching, importMatching, matchingReference, referenceIndex, resolveMatching, transitionMatching } from "./matching";
+import { addMatching, importMatching, matchingFeedback, matchingReference, referenceIndex, resolveMatching, transitionMatching } from "./matching";
 import { defaultPersisted, persistedFromHash, sanitizePersisted } from "./persistence";
 import { DEFAULT_STATE, presetState } from "./presets";
 import { computeResults, type SimState } from "./results";
@@ -18,6 +18,14 @@ const base = (): SimState => ({ layers: [mkLayer("custom", 2, 9, 0)], freq: 10, 
 const live = () => addMatching(base(), 0).sim;
 
 describe("neighbour-derived live matching", () => {
+  it("prioritizes rejected-edit feedback over the full-stack reminder", () => {
+    for (const reason of ["arAdjacent", "arRange", "arEqual", "arReadOnly", "arFull"] as const) {
+      expect(matchingFeedback(reason, true)).toBe(reason);
+      expect(matchingFeedback(reason, false)).toBe(reason);
+    }
+    expect(matchingFeedback(null, true)).toBe("arFull");
+    expect(matchingFeedback(null, false)).toBeNull();
+  });
   it("uses the geometric mean of impedance, not its sum, with full precision", () => {
     const sim = live(), coat = sim.layers[0];
     const ref = matchingReference(sim.layers, 0, sim.freq);
