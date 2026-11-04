@@ -1462,7 +1462,7 @@ a:hover {
 /* ── Desktop default 80% ─────────────────────────────────────────────────
    body zoom 0.8 at ≥1040px, plus every desktop breakpoint ×0.8, so the
    layout responds exactly as browser 80% zoom would (3 columns from real
-   1344px up). The stacked phone/tablet layout below 1040px is untouched:
+   1536px up). The stacked phone/tablet layout below 1040px is untouched:
    max-width rules that lived in 1040–1300 now end at 1039px, which changes
    nothing below the gate. */
 @media (min-width: 1040px) {
@@ -1473,7 +1473,7 @@ a:hover {
 @media (min-width: 1040px) and (max-width: 1039px) { .om-charts { grid-template-columns: minmax(0, 1fr); } }
 @media (min-width: 1040px) { .om-hud-br { display: flex; } }
 @media (max-width: 1039px) { .om-hud-br { display: none; } }
-@media (min-width: 1344px) {
+@media (min-width: 1536px) {
   .om-layout { grid-template-columns: 372px minmax(0, 1fr) 340px; grid-template-areas: "controls scene results" "controls charts results"; }
   .om-results { grid-template-columns: minmax(0, 1fr); }
   .om-budget { grid-column: 1 / -1; }
@@ -1536,7 +1536,7 @@ a:hover {
 .om-top { position: static; flex: none; }
 .om-foot { display: none; }
 .om-layout {
-  flex: 1 1 auto; min-height: 0; width: auto;
+  flex: 1 1 auto; min-height: 0; min-width: 0; width: 100%;
   margin: 0; padding: 0; gap: 0; overflow: auto;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
@@ -1565,7 +1565,7 @@ a:hover {
 @media (min-width: 1040px) {
   .om-layout { grid-template-columns: 320px minmax(0, 1fr); }
 }
-@media (min-width: 1344px) {
+@media (min-width: 1536px) {
   .om-layout { grid-template-columns: 320px minmax(0, 1fr) 300px; }
 }
 /* ── grain over the stage ──────────────────────────────────────────────────
@@ -1605,7 +1605,7 @@ a:hover {
 @media (min-width: 1040px) and (max-width: 1039px) {
   .om-chart:first-child { border-right: 0; border-bottom: 1px solid var(--om-line); }
 }
-@media (min-width: 1344px) {
+@media (min-width: 1536px) {
   .om-results { border-bottom: 0; border-left: 1px solid var(--om-line); }
 }
 .om[data-present="true"] .om-scene { border-bottom: 1px solid var(--om-line); }
@@ -1877,9 +1877,9 @@ a:hover {
    content with a void band below it. */
 @media (min-width: 1040px) {
   .om { height: 125vh; height: 125dvh; }
-  .om-scene { height: clamp(644px, 115.5vh, 1148px); }
+  .om-scene { height: clamp(547.4px, 98.175vh, 975.8px); }
   .om-scene:has(.om-scene-toolbar),
-  .om-scene:has(.om-scene-toolbar[data-view="wave"]) { height: clamp(644px, 115.5vh, 1148px); }
+  .om-scene:has(.om-scene-toolbar[data-view="wave"]) { height: clamp(547.4px, 98.175vh, 975.8px); }
   .om-chart-body { height: clamp(240px, 37.5vh, 330px); }
 }
 
@@ -2063,10 +2063,30 @@ a:hover {
 @media (min-width: 1040px) {
   .om-layout { grid-template-areas: "controls scene" "controls results" "controls charts" "controls lab"; }
 }
-@media (min-width: 1344px) {
-  .om-layout { grid-template-columns: 360px minmax(0, 1fr) 345px; grid-template-areas: "controls scene results" "controls charts results" "controls lab lab"; }
+@media (min-width: 1536px) {
+  .om-layout { grid-template-columns: minmax(0, 360px) minmax(0, 1fr) minmax(0, 425px); grid-template-areas: "controls scene results" "controls charts results" "controls lab lab"; }
 }
 .om[data-present="true"] .om-layout > .sl-lab { display: none; }
+
+/* The compact lab is a display-only portal from the bottom lab, not another solver. */
+.om-lab-results-host { grid-column: 1 / -1; min-width: 0; }
+.om-lab-results { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.om-lab-results > *, .om-lab-kv > *, .om-lab-results .om-budget-legend > * { min-width: 0; overflow-wrap: anywhere; }
+.om-lab-summary { padding: 20px; border-bottom: 1px solid var(--om-line); }
+.om-lab-summary h2, .om-lab-summary h3 { margin: 0 0 8px; font-size: var(--om-fs-3); }
+.om-lab-summary p { margin: 6px 0; color: var(--om-ink-2); }
+.om-lab-summary .om-lab-warning { color: var(--om-ref); }
+.om-lab-kv { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 16px; margin: 0; }
+.om-lab-kv dt { color: var(--om-ink-2); }
+.om-lab-kv dd { margin: 0; }
+@media (pointer: coarse) {
+  .om .om-scene-toolbar .om-view-modes button,
+  .om .om-scene-toolbar .om-scene-toggle { min-height: 40px; }
+}
+@media (max-width: 399px) {
+  .om-lab-summary, .om-lab-results .om-budget { padding: 14px; }
+  .om-lab-results .om-budget-legend { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* ═══ Sidebar scroll (desktop) ═══
    The controls area now spans every row down to the lab, so the earlier

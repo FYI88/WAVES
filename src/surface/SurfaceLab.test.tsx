@@ -3,12 +3,19 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { PALETTES } from "../theme";
 import { SurfaceLab } from "./SurfaceLab";
+import { DEFAULT_LAB } from "./labState";
+import { wallAt } from "./rcwaJobs";
+import { emtSolve } from "./emt";
+import { LAB_TEXT } from "./labText";
+import { rcwaPoint, rcwaSweep } from "./rcwaClient";
+import type { RcwaResult } from "./rcwa";
 
 const harness = vi.hoisted(() => ({
   effects: [] as Array<{ effect: () => void | (() => void); deps: unknown[] }>,
   refs: [] as unknown[],
   refIndex: 0,
   portal: vi.fn(), draw: vi.fn(),
+  states: new Map<number, unknown>(), stateIndex: 0,
 }));
 vi.mock("react", async (importOriginal) => {
   const react = await importOriginal<typeof import("react")>();
@@ -16,12 +23,18 @@ vi.mock("react", async (importOriginal) => {
     ...react,
     useEffect: (effect: () => void | (() => void), deps: unknown[]) => { harness.effects.push({ effect, deps }); },
     useRef: (value: unknown) => react.useRef(harness.refs[harness.refIndex++] ?? value),
+    useState: (initial: unknown) => {
+      const index = harness.stateIndex++;
+      const [value] = react.useState(harness.states.has(index) ? harness.states.get(index) : initial);
+      return [value, (next: unknown) => harness.states.set(index, typeof next === "function" ? next(value) : next)];
+    },
   };
 });
 vi.mock("react-dom", () => ({ createPortal: (node: ReactNode, target: HTMLElement) => { harness.portal(node, target); return null; } }));
 vi.mock("./surfaceDetail", async (importOriginal) => ({
   ...await importOriginal<typeof import("./surfaceDetail")>(), drawSurfaceDetail: harness.draw,
 }));
+vi.mock("./rcwaClient", () => ({ rcwaPoint: vi.fn(), rcwaSweep: vi.fn() }));
 
 function canvas(w: number, h: number) {
   const ctx = { setTransform: vi.fn() };
@@ -42,6 +55,8 @@ describe("SurfaceLab shared detail rendering", () => {
   beforeEach(() => {
     harness.effects = [];
     harness.refIndex = 0;
+    harness.stateIndex = 0;
+    harness.states.clear();
     harness.draw.mockClear();
     harness.portal.mockClear();
     bottom = canvas(600, 360);
@@ -137,6 +152,125 @@ describe("SurfaceLab shared detail rendering", () => {
       const progress = Number(range.match(/--pf:([^";]+)/)![1]);
       expect(progress).toBeGreaterThanOrEqual(0);
       expect(progress).toBeLessThanOrEqual(1);
+    }
+  });
+
+  function results(pol: "TE" | "TM" | "AVG" = "TE", freq = 5) {
+    harness.refIndex = 0;
+    harness.stateIndex = 0;
+    harness.effects = [];
+    harness.portal.mockClear();
+    const html = renderToStaticMarkup(<SurfaceLab freq={freq} angle={30} pol={pol} lang="en" pal={PALETTES.dark}
+      playing={false} fmtNum={(v, d) => v.toFixed(d)} onFreq={() => {}} onAngle={() => {}}
+      detailTarget={target} resultsTarget={target} />);
+    const node = harness.portal.mock.calls[0][0];
+    return { html, props: node.props, sidebar: renderToStaticMarkup(node) };
+  }
+
+  it.each(["TE", "TM", "AVG"] as const)("portals authoritative %s lab computations and metadata, not main-wall values", (pol) => {
+    // A deliberately different experiment from the main stack, including a mixed profile and backing.
+    const profile = { ...DEFAULT_LAB.profile, id: "triangle" as const, period: 1.2, depth: 1.7 };
+    const below = [{ material: "glass" as const, cm: 2, customEps: 4, customSigma: 0.05 }];
+    const inclusions = { ...DEFAULT_LAB.inclusions, fraction: 0.12 };
+    harness.states.set(1, profile);
+    harness.states.set(2, "brick");
+    harness.states.set(5, below);
+    harness.states.set(6, inclusions);
+    const wall = wallAt({ profile, material: "brick", customEps: 4, customSigma: 0.05, below, inclusions, inclusionTarget: -1 }, 5);
+    const expected = emtSolve(profile, wall.eta, wall.below, 5, 30, pol, DEFAULT_LAB.slices);
+    const { props, sidebar, html } = results(pol);
+    expect(props).toMatchObject({ R: expected.R, T: expected.T, A: expected.A, pol, material: "brick", profile, below, source: "emt", busy: false, error: null });
+    expect(sidebar).toContain("Fast (EMT)");
+    expect(sidebar).toContain("Brick");
+    expect(sidebar).toContain(pol);
+    expect(sidebar).toContain(`${(expected.R * 100).toFixed(expected.R * 100 < 10 ? 2 : 1)} %`);
+    expect(sidebar).not.toContain("Previous RCWA");
+    // The exact same values feed the detail drawing in both canvases.
+    harness.effects.find(({ deps }) => deps?.length === 5 && deps[4] === target)!.effect();
+    expect(harness.draw.mock.calls[0][4]).toMatchObject({ R: expected.R, T: expected.T, pol });
+    expect(html.match(/class="om-card sl-lab"/g)).toHaveLength(1);
+  });
+
+  it("labels the initial rigorous preview, current solve, stale update and real keyed failure without fake zeros", async () => {
+    vi.useFakeTimers();
+    Object.assign(window, { setTimeout, clearTimeout });
+    try {
+      harness.states.set(9, "rigorous");
+      let rejectPoint: (reason: Error) => void = () => {};
+      const resolved = { R: 0.23, T: 0.61, A: 0.16, orders: [], harmonics: 10 } as unknown as RcwaResult;
+      vi.mocked(rcwaPoint).mockResolvedValueOnce(resolved).mockImplementationOnce(() => new Promise((_, reject) => { rejectPoint = reject; }));
+      let view = results();
+      expect(view.props).toMatchObject({ source: "preview", busy: true, error: null });
+      expect(view.sidebar).toContain(LAB_TEXT.en.emtPreview);
+      // Run the real debounced point effect; no second solver is introduced by the portal.
+      const pointEffect = harness.effects.find(({ deps }) => deps?.length === 2 && deps[0] === "rigorous")!;
+      const cleanup = pointEffect.effect();
+      await vi.advanceTimersByTimeAsync(120);
+      expect(rcwaPoint).toHaveBeenCalledTimes(1);
+      view = results();
+      expect(view.props).toMatchObject({ R: 0.23, T: 0.61, A: 0.16, source: "rcwa", busy: false, error: null });
+      expect(view.sidebar).not.toContain(LAB_TEXT.en.previousResult);
+      cleanup?.();
+      view = results("TM", 7);
+      expect(view.props).toMatchObject({ R: 0.23, source: "previous", busy: true, pol: "TM", freq: 7 });
+      expect(view.sidebar).toContain(LAB_TEXT.en.previousResult);
+      harness.effects.find(({ deps }) => deps?.length === 2 && deps[0] === "rigorous")!.effect();
+      await vi.advanceTimersByTimeAsync(120);
+      rejectPoint(new Error("worker unavailable"));
+      await vi.advanceTimersByTimeAsync(0);
+      view = results("TM", 7);
+      expect(view.props).toMatchObject({ R: 0.23, source: "previous", busy: false, error: "worker unavailable" });
+      expect(view.sidebar).toContain("RCWA error: worker unavailable");
+      view = results("AVG", 8);
+      expect(view.props).toMatchObject({ source: "previous", busy: true, error: null });
+      expect(view.sidebar).not.toContain("worker unavailable");
+      harness.states.set(9, "fast");
+      view = results("AVG", 8);
+      expect(view.props).toMatchObject({ source: "emt", busy: false, error: null });
+      expect(view.props.R).not.toBe(0.23);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps an explicitly labelled EMT preview after a failed first RCWA request", async () => {
+    vi.useFakeTimers();
+    Object.assign(window, { setTimeout, clearTimeout });
+    try {
+      harness.states.set(9, "rigorous");
+      vi.mocked(rcwaPoint).mockRejectedValueOnce(new Error("first point failed"));
+      const initial = results();
+      const emtR = initial.props.R;
+      harness.effects.find(({ deps }) => deps?.length === 2 && deps[0] === "rigorous")!.effect();
+      await vi.advanceTimersByTimeAsync(120);
+      const failed = results();
+      expect(failed.props).toMatchObject({ R: emtR, source: "preview", busy: false, error: "first point failed" });
+      expect(failed.sidebar).toContain(LAB_TEXT.en.emtPreview);
+      expect(failed.sidebar).toContain("first point failed");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports a sweep failure separately without invalidating the current RCWA point", async () => {
+    vi.useFakeTimers();
+    Object.assign(window, { setTimeout, clearTimeout });
+    try {
+      harness.states.set(9, "rigorous");
+      vi.mocked(rcwaPoint).mockResolvedValueOnce({ R: 0.17, T: 0.73, A: 0.1, orders: [] } as unknown as RcwaResult);
+      vi.mocked(rcwaSweep).mockRejectedValueOnce(new Error("sweep failed"));
+      results();
+      const point = harness.effects.find(({ deps }) => deps?.length === 2 && deps[0] === "rigorous")!;
+      const sweep = harness.effects.find(({ deps }) => deps?.length === 3 && deps[0] === "rigorous")!;
+      point.effect();
+      sweep.effect();
+      await vi.advanceTimersByTimeAsync(350);
+      const view = results();
+      expect(view.props).toMatchObject({ source: "rcwa", R: 0.17, busy: false, error: null, sweepError: "sweep failed" });
+      expect(view.sidebar).toContain("sweep failed");
+      expect(view.sidebar).not.toContain(LAB_TEXT.en.previousResult);
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

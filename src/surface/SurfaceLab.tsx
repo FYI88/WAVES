@@ -30,6 +30,7 @@ import { FOG_PRESETS, NO_FOG, fogDbPerKm, withFog, type Fog, type FogPreset } fr
 import { waterPermittivity } from "../media/water";
 import { LAB_TEXT, MATERIAL_NAMES, PROFILE_NAMES, fillTpl } from "./labText";
 import "./surfaceLab.css";
+import { LabResults } from "./LabResults";
 
 /* ════════════════════════════════════════════════════════════════════════
    Surface lab: profiled wall face + flat layers, bubbles, fog.
@@ -44,6 +45,8 @@ type BelowLayer = LabLayer;
 export interface SurfaceLabProps {
   /** Optional second detail view; lab controls and solver stay mounted here. */
   detailTarget?: HTMLElement | null;
+  /** Compact results portal; the bottom lab remains the only solver owner. */
+  resultsTarget?: HTMLElement | null;
   freq: number;
   angle: number;
   pol: PolMode;
@@ -175,7 +178,7 @@ function ProfileThumb({ profile, id }: { profile: ProfileParams; id: ProfileId }
 
 /* ───────── panel ───────── */
 
-export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFreq, onAngle, onSceneSurface, detailTarget }: SurfaceLabProps) {
+export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFreq, onAngle, onSceneSurface, detailTarget, resultsTarget }: SurfaceLabProps) {
   const t = LAB_TEXT[lang];
   const matName = (id: SurfaceMaterialId) => MATERIAL_NAMES[id][lang];
   const pct = (v: number) => fmtNum(v * 100, v * 100 < 10 ? 2 : 1);
@@ -203,7 +206,8 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   const [sweep, setSweep] = useState<{ key: string; axis: SweepAxis; sweep: RcwaSweep } | null>(null);
   const [pointBusy, setPointBusy] = useState(false);
   const [sweepBusy, setSweepBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ key: string; message: string } | null>(null);
+  const [sweepError, setSweepError] = useState<{ key: string; message: string } | null>(null);
 
   const patchProfile = (patch: Partial<ProfileParams>) => {
     setProfile((p) => ({ ...p, ...patch }));
@@ -322,7 +326,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   }, [axis, sweepHeld, spec, profile, pol, slices]);
 
   const pointKey = JSON.stringify([spec, freq, angle, pol, harmonics, slices]);
-  const sweepKey = JSON.stringify([axis, spec, sweepHeld, pol, slices]);
+  const sweepKey = JSON.stringify([axis, spec, sweepHeld, pol, slices, Math.min(harmonics, SWEEP_HARMONICS)]);
 
   useEffect(() => {
     if (mode !== "rigorous") {
@@ -331,6 +335,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
     }
     let alive = true;
     setPointBusy(true);
+    setError(null);
     const timer = window.setTimeout(() => {
       const t0 = performance.now();
       rcwaPoint({ kind: "point", wall: spec, pol, harmonics, slices, fGHz: freq, thetaDeg: angle })
@@ -340,7 +345,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
           setError(null);
         })
         .catch((e: unknown) => {
-          if (alive) setError(e instanceof Error ? e.message : String(e));
+          if (alive) setError({ key: pointKey, message: e instanceof Error ? e.message : String(e) });
         })
         .finally(() => {
           if (alive) setPointBusy(false);
@@ -361,6 +366,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
     }
     let alive = true;
     setSweepBusy(true);
+    setSweepError(null);
     const timer = window.setTimeout(() => {
       const sweepHarmonics = Math.min(harmonics, SWEEP_HARMONICS);
       const request =
@@ -369,10 +375,13 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
           : rcwaSweep({ kind: "freq", wall: spec, pol, harmonics: sweepHarmonics, slices, thetaDeg: sweepHeld, freqs: SWEEP_FREQS });
       request
         .then((result) => {
-          if (alive) setSweep({ key: sweepKey, axis, sweep: result });
+          if (alive) {
+            setSweep({ key: sweepKey, axis, sweep: result });
+            setSweepError(null);
+          }
         })
         .catch((e: unknown) => {
-          if (alive) setError(e instanceof Error ? e.message : String(e));
+          if (alive) setSweepError({ key: sweepKey, message: e instanceof Error ? e.message : String(e) });
         })
         .finally(() => {
           if (alive) setSweepBusy(false);
@@ -387,6 +396,10 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
 
   const rigorous = mode === "rigorous" ? point?.result ?? null : null;
   const stale = mode === "rigorous" && (!point || point.key !== pointKey);
+  const pointFailure = mode === "rigorous" && error?.key === pointKey ? error.message : null;
+  const sweepFailure = mode === "rigorous" && sweepError?.key === sweepKey ? sweepError.message : null;
+  const updating = mode === "rigorous" && !pointFailure && (stale || pointBusy);
+  const resultSource = mode === "fast" ? "emt" : !rigorous ? "preview" : stale ? "previous" : "rcwa";
   const R = rigorous ? rigorous.R : emt.R;
   const T = rigorous ? rigorous.T : emt.T;
   const A = rigorous ? rigorous.A : emt.A;
@@ -817,7 +830,8 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
           {mode === "rigorous" && (pointBusy || sweepBusy) && <span className="sl-badge is-busy">{t.computing}</span>}
           {mode === "rigorous" && point && !pointBusy && <span className="sl-badge sl-mono">{fillTpl(t.elapsed, { ms: fmtNum(point.ms, 0) })}</span>}
         </div>
-        {mode === "rigorous" && error && <p className="sl-note is-error">{t.error} : {error}</p>}
+        {pointFailure && <p className="sl-note is-error">{t.error} : {pointFailure}</p>}
+        {sweepFailure && <p className="sl-note is-error">{t.error} · {t.sweepAxis} : {sweepFailure}</p>}
       </div>
       <div className="sl-group">
         {mode === "rigorous" && (
@@ -906,6 +920,14 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
 
   return (
     <>
+    {resultsTarget && createPortal(
+      <LabResults lang={lang} fmtNum={fmtNum} R={R} T={T} A={A} freq={freq} angle={angle} pol={pol}
+        profile={profile} material={material} below={below} mode={mode} source={resultSource} harmonics={harmonics} slices={slices}
+        validity={validity} mixValidity={hasBubbles ? mixValidity : null} outOfRange={outOfRange}
+        busy={updating} sweepBusy={mode === "rigorous" && sweepBusy} error={pointFailure} sweepError={sweepFailure}
+        fog={fog.lwc > 0 ? link : null} />,
+      resultsTarget,
+    )}
     {detailTarget && createPortal(
       <canvas ref={topDetailRef} className="om-lab-canvas" role="img" aria-label={t.detailTitle} />,
       detailTarget,
@@ -926,7 +948,8 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
           <span className="sl-kpi" style={{ "--tone": "var(--sl-abs)" } as CSSProperties}>
             <i />A <b className="sl-mono">{pct(Math.max(0, A))}</b><small>%</small>
           </span>
-          <span className={`sl-badge ${stale || pointBusy ? "is-busy" : ""}`}>{mode === "fast" ? t.fast : t.rigorous}</span>
+          <span className={`sl-badge ${updating ? "is-busy" : ""}`}>{mode === "fast" ? t.fast : t.rigorous}</span>
+          {mode === "rigorous" && <span className="sl-note" role="status">{resultSource === "previous" ? t.previousResult : resultSource === "preview" ? t.emtPreview : "RCWA"}{updating ? ` · ${t.computing}` : ""}{pointFailure ? ` · ${t.error}: ${pointFailure}` : ""}</span>}
         </div>
       </header>
 

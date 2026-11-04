@@ -259,6 +259,8 @@ export function App() {
     }
   });
   const copyTimer = useRef(0);
+  const [labResultsHost, setLabResultsHost] = useState<HTMLElement | null>(null);
+  const labResultsRef = useCallback((node: HTMLElement | null) => setLabResultsHost(node), []);
   const buildTaps = useRef({ count: 0, at: 0 });
   const presentRef = useRef(present);
   presentRef.current = present;
@@ -1125,7 +1127,8 @@ export function App() {
         </aside>
 
         {/* ───────── Results ───────── */}
-        <section className="om-results" key={`flash-${flash}`}>
+        <section className="om-results" key={`flash-${flash}`} aria-label={sceneView === "lab" ? (fr ? "Résultats du laboratoire de surface" : "Surface lab results") : (fr ? "Résultats de simulation" : "Simulation results")}>
+          {sceneView === "lab" ? <div className="om-lab-results-host" ref={labResultsRef} /> : <>
           <div className="om-card om-hero om-enter" style={{ "--d": "180ms", "--tone": "var(--om-ref)" } as CSSProperties}>
             <Ring value={shown.R} color="var(--om-ref)" />
             <div>
@@ -1211,6 +1214,7 @@ export function App() {
             <Stat delay={530} label={t.index} value={fmt.num(selR.nRe, 3)} tone="var(--om-inc)"
               sub={tpl(t.indexSub, { a: fmt.len(selR.lambda), b: fmt.len(res.lambda0) })} />
           </div>
+          </>}
         </section>
 
         {/* ───────── Charts ───────── */}
@@ -1281,7 +1285,7 @@ export function App() {
             </div>
           </div>
         </section>
-        <SurfaceLab detailTarget={sceneView === "lab" ? detailHost : null} freq={sim.freq} angle={sim.angle} pol={sim.pol} lang={lang} pal={pal} playing={playing} fmtNum={fmt.num} onFreq={(f) => update("freq", f)} onAngle={(a) => update("angle", a)} onSceneSurface={setSceneSurface} />
+        <SurfaceLab detailTarget={sceneView === "lab" ? detailHost : null} resultsTarget={sceneView === "lab" ? labResultsHost : null} freq={sim.freq} angle={sim.angle} pol={sim.pol} lang={lang} pal={pal} playing={playing} fmtNum={fmt.num} onFreq={(f) => update("freq", f)} onAngle={(a) => update("angle", a)} onSceneSurface={setSceneSurface} />
       </main>
 
       <footer className="om-foot">

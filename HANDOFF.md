@@ -617,3 +617,43 @@ debug APK as a production download.
   paused Section/Spatial/Lab, short-landscape scrolling, full/windowed Present,
   projector type and both themes. Automated markup tests do not prove visuals.
   No commit, push, Capacitor sync, settings UI or download button in this batch.
+
+## Selected-view results and stage follow-up (2026-11-04)
+
+- Simulation/Surface Lab is still session-only. The results region now follows
+  that switch; Simulation retains its existing result markup and selected-layer
+  properties. Lab replaces those properties with its own compact R/T/A, TE/TM/AVG,
+  material/profile/backing, method, resolution and validity summary.
+- `SurfaceLab` remains mounted once, with all bottom controls and computations.
+  It portals `LabResults` directly into the sidebar, using the exact R/T/A fed to
+  the detail canvas (not `useProfiledMain`, which models a different wall).
+  No mirrored snapshot, callback synchronization or duplicate solver effects.
+- Rigorous updates retain existing lab behaviour: previous RCWA values remain
+  visible while solving; before the first result, EMT is an explicit preview.
+  Both states are now labelled, including in the bottom header. Point/sweep
+  failures are separate and keyed to their requests; an old failure does not
+  masquerade as a new request's error. Failed requests never fabricate zeros.
+- Normal desktop stage at >=1040px is exactly 15% shorter:
+  `clamp(547.4px, 98.175vh, 975.8px)`. Existing CSS zoom 0.8 and viewport
+  compensation remain; phone/tablet/short-landscape heights and presentation's
+  available-height fill are not scaled. No wall geometry/label sizes changed.
+- Three columns now start at 1536px (was 1344px), with a 360px inspector,
+  `minmax(0, 1fr)` scene and 425px results track. Under desktop zoom this is a
+  340px painted rail, leaving about 908 painted px for the scene at the gate
+  before scrollbar/safe-area deductions. The parent grid explicitly fills its
+  available width rather than shrink-wrapping against automatic side margins.
+  Narrower screens keep two/one-column layouts. Lab labels wrap, including FR;
+  scene touch controls retain 40px minimum targets.
+- Future colour settings remain deferred as documented above. The new compact
+  lab readout reuses `--om-ref/tra/abs` and existing budget components/styles;
+  no settings button, dependencies, Android sync, commit or push added.
+- Verification: 190 tests across 25 files and TypeScript/production build pass.
+  Tests render the selected App results region, preserve one bottom lab, verify
+  authoritative TE/TM/AVG EMT values against the detail canvas, and execute the
+  actual debounced RCWA point effect through preview/current/stale/failure states.
+  These are semantic render/effect tests, not browser-driven click/layout tests.
+- Browser/device visual checks are still pending (no browser-harness executable
+  or active Chrome debugging connection here): especially 320/360px FR labels,
+  1039/1040 and 1535/1536 transitions, both top canvas views, short landscape,
+  and windowed/fullscreen presentation. No claim of every device being validated.
+  Pre-existing dirty generated Android Gradle files were left untouched.

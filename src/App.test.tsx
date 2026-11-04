@@ -3,14 +3,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { DEFAULT_STATE } from "./state/presets";
 import { DICTS, type Lang } from "./i18n";
 import { App } from "./App";
+import type { ReactNode } from "react";
+import { LAB_TEXT } from "./surface/labText";
 
-const harness = vi.hoisted(() => ({ lang: "en" as Lang, index: 0, present: false, copied: false }));
+const harness = vi.hoisted(() => ({ lang: "en" as Lang, index: 0, present: false, copied: false, scene: "main", target: {} }));
+vi.mock("react-dom", () => ({ createPortal: (node: ReactNode) => node }));
 vi.mock("react", async (original) => {
   const react = await original<typeof import("react")>();
   return { ...react, useState: (initial: unknown) => {
     // Drive App's presentation/copied slots without running browser effects.
     const index = harness.index++;
-    return react.useState(index === 8 ? harness.present : index === 9 ? harness.copied : initial);
+    return react.useState(index === 4 ? harness.scene : index === 16 ? harness.target : index === 8 ? harness.present : index === 9 ? harness.copied : initial);
   } };
 });
 vi.mock("./state/persistence", async (original) => ({
@@ -21,9 +24,34 @@ vi.mock("./state/persistence", async (original) => ({
 beforeEach(() => {
   harness.index = 0;
   harness.present = false;
+  harness.scene = "main";
   harness.copied = false;
   vi.stubGlobal("navigator", { userAgent: "Chrome/140", language: "en" });
   vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
+});
+
+it.each(["en", "fr"] as const)("renders results for the selected scene without a second lab in %s", (lang) => {
+  harness.lang = lang;
+  const main = renderToStaticMarkup(<App />);
+  const mainResults = main.match(/<section class="om-results"[\s\S]*?<\/section>/)![0];
+  expect(mainResults).toContain('class="om-stats"');
+  expect(mainResults).toContain(DICTS[lang].reflected);
+  expect(mainResults).not.toContain("om-lab-results-host");
+  harness.index = 0;
+  harness.scene = "lab";
+  const lab = renderToStaticMarkup(<App />);
+  const labResults = lab.match(/<section class="om-results"[\s\S]*?<\/section>/)![0];
+  expect(labResults).toContain('class="om-lab-results-host"');
+  expect(labResults).not.toContain('class="om-stats"');
+  expect(lab).toContain('class="om-lab-results"');
+  expect(lab).toContain(LAB_TEXT[lang].material);
+  expect(lab.match(/class="om-card sl-lab"/g)).toHaveLength(1);
+  expect(lab).toContain('class="sl-detail"');
+  expect(lab).toContain('role="tablist"');
+  harness.index = 0;
+  harness.scene = "main";
+  const restored = renderToStaticMarkup(<App />).match(/<section class="om-results"[\s\S]*?<\/section>/)![0];
+  expect(restored).toBe(mainResults);
 });
 afterEach(() => vi.unstubAllGlobals());
 

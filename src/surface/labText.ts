@@ -81,6 +81,8 @@ const fr = {
   validity: "Validité EMT",
   valid: { ok: "bonne", marginal: "limite", invalid: "hors domaine" },
   computing: "Calcul…",
+  previousResult: "Résultat RCWA précédent — non actualisé",
+  emtPreview: "Aperçu EMT — RCWA indisponible",
   error: "Erreur RCWA",
   elapsed: "{ms} ms",
 
@@ -186,6 +188,8 @@ const en: LabDict = {
   validity: "EMT validity",
   valid: { ok: "good", marginal: "marginal", invalid: "out of range" },
   computing: "Computing…",
+  previousResult: "Previous RCWA result — not current",
+  emtPreview: "EMT preview — RCWA unavailable",
   error: "RCWA error",
   elapsed: "{ms} ms",
 
