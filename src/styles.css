@@ -1877,9 +1877,9 @@ a:hover {
    content with a void band below it. */
 @media (min-width: 1040px) {
   .om { height: 125vh; height: 125dvh; }
-  .om-scene { height: clamp(460px, 82.5vh, 820px); }
+  .om-scene { height: clamp(644px, 115.5vh, 1148px); }
   .om-scene:has(.om-scene-toolbar),
-  .om-scene:has(.om-scene-toolbar[data-view="wave"]) { height: clamp(460px, 82.5vh, 820px); }
+  .om-scene:has(.om-scene-toolbar[data-view="wave"]) { height: clamp(644px, 115.5vh, 1148px); }
   .om-chart-body { height: clamp(240px, 37.5vh, 330px); }
 }
 
@@ -2064,7 +2064,7 @@ a:hover {
   .om-layout { grid-template-areas: "controls scene" "controls results" "controls charts" "controls lab"; }
 }
 @media (min-width: 1344px) {
-  .om-layout { grid-template-columns: 360px minmax(0, 1fr) 300px; grid-template-areas: "controls scene results" "controls charts results" "controls lab lab"; }
+  .om-layout { grid-template-columns: 360px minmax(0, 1fr) 345px; grid-template-areas: "controls scene results" "controls charts results" "controls lab lab"; }
 }
 .om[data-present="true"] .om-layout > .sl-lab { display: none; }
 

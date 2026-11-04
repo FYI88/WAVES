@@ -29,7 +29,7 @@ export function drawWaveRays(
 
   /* ── Geometry ─────────────────────────────────────────────────────── */
   const titleY = compact ? 68 : 82;
-  const tileY = compact ? 80 : 94;
+  const tileY = compact ? 48 : 54;
   const tileH = compact ? 22 : 24;
   const top = compact ? 118 : 140;
   const bottom = height - (compact ? 96 : 86);
