@@ -2061,9 +2061,15 @@ a:hover {
 .om-layout > .sl-lab { grid-area: lab; }
 .om-layout { grid-template-areas: "scene" "controls" "results" "charts" "lab"; }
 @media (min-width: 1040px) {
-  .om-layout { grid-template-areas: "controls scene" "controls results" "controls charts" "controls lab"; }
+  .om-layout {
+    grid-template-columns: minmax(240px, 24%) minmax(0, 1fr) minmax(280px, 28%);
+    grid-template-areas: "controls scene results" "controls charts results" "controls lab lab";
+  }
+  .om-results { grid-template-columns: minmax(0, 1fr); }
+  .om-budget { grid-column: 1 / -1; }
+  .om-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (min-width: 1536px) {
+@media (min-width: 1344px) {
   .om-layout { grid-template-columns: minmax(0, 360px) minmax(0, 1fr) minmax(0, 425px); grid-template-areas: "controls scene results" "controls charts results" "controls lab lab"; }
 }
 .om[data-present="true"] .om-layout > .sl-lab { display: none; }
