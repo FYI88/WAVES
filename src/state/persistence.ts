@@ -20,7 +20,7 @@ export interface Persisted {
 
 export function defaultPersisted(): Persisted {
   const sysTheme: Theme =
-    typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   const sysLang: Lang =
     typeof navigator !== "undefined" && navigator.language?.toLowerCase().startsWith("fr") ? "fr" : "en";
   return { sim: DEFAULT_STATE, lang: sysLang, theme: sysTheme };

@@ -10,7 +10,7 @@
       #splash {
         position: fixed; inset: 0; z-index: 9999;
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 10px; background: #080e17; color: #edf4fc;
+        gap: 10px; background: #f5f8fc; color: #172b42;
         font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
         transition: opacity .35s ease;
       }
@@ -23,6 +23,19 @@
       #splash .sp-bar i { display: block; height: 100%; width: 40%; background: #55dbf5; border-radius: 2px; animation: sp-slide 1.1s ease-in-out infinite; }
       @keyframes sp-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(420%); } }
       #splash .sp-credit { position: absolute; bottom: 22px; font-size: 11px; letter-spacing: .12em; color: #94a6bc; }
+      #splash .sp-kicker, #splash .sp-credit { color: #53677e; }
+      #splash .sp-sub { color: #53677e; }
+      #splash .sp-name span { color: #007c98; }
+      #splash .sp-bar { background: #d9e3ee; }
+      #splash .sp-bar i { background: #007c98; }
+      @media (prefers-color-scheme: dark) {
+        #splash { background: #080e17; color: #edf4fc; }
+        #splash .sp-kicker, #splash .sp-credit { color: #94a6bc; }
+        #splash .sp-sub { color: #b4c3d5; }
+        #splash .sp-name span { color: #55dbf5; }
+        #splash .sp-bar { background: #253447; }
+        #splash .sp-bar i { background: #55dbf5; }
+      }
     </style>
   </head>
   <body>
