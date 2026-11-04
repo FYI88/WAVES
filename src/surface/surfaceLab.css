@@ -203,9 +203,10 @@
 }
 .sl-tabs button {
   flex: 1 0 auto;
+  min-height: 32px;
   padding: 7px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--sl-muted);
   font: inherit;
@@ -287,20 +288,27 @@
   margin: 0;
   accent-color: var(--sl-accent, var(--sl-acc));
 }
+.sl-range input:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--om-input), 0 0 0 6px var(--acc);
+}
+.sl-range input:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px var(--om-input), 0 0 0 6px var(--acc);
+}
 
 /* segmented */
 .sl-seg {
   display: flex;
   gap: 2px;
   padding: 3px;
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--sl-chip);
 }
 .sl-seg button {
   flex: 1;
+  min-height: 32px;
   padding: 6px 8px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: var(--sl-muted);
   font: inherit;
@@ -327,7 +335,7 @@
   gap: 4px;
   padding: 7px 4px 6px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--sl-chip);
   color: var(--sl-muted);
   font: inherit;
@@ -364,11 +372,12 @@
 }
 .sl-btn {
   display: inline-flex;
+  min-height: 32px;
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
   border: 1px solid var(--sl-line);
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--sl-ink);
   font: inherit;
@@ -406,9 +415,10 @@
 /* select */
 .sl-select {
   width: 100%;
+  min-height: 32px;
   padding: 7px 9px;
   border: 1px solid var(--sl-line);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--sl-chip);
   color: var(--sl-ink);
   font: inherit;
@@ -543,6 +553,14 @@
 .sl-btn-sm {
   padding: 3px 9px;
   font-size: 11px;
+}
+@media (pointer: coarse) {
+  .sl-lab :is(.sl-btn, .sl-profile, .sl-tabs button, .sl-seg button, .sl-select, .sl-check) {
+    min-height: 40px;
+  }
+  .sl-lab :is(.sl-btn, .sl-profile, .sl-tabs button, .sl-seg button) {
+    min-width: 40px;
+  }
 }
 
 /* order efficiency bars */

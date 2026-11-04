@@ -569,3 +569,23 @@ DPR and build-stamp support. Simulation history is in `APP_HANDOFF.md`.
 Local verification: 168 tests, TypeScript/production build, and Capacitor Android
 sync pass. Native device gestures and browser visuals are not verified locally;
 the existing GitHub Actions workflow builds and checks the debug APK after push.
+# Visual consistency follow-up (2026-11-04)
+
+Approved A+B only: tighter ordinary sidebar groups, horizontally scrollable About
+equations, aligned/wrapping chart tools, semantic Lab legend colours, matching Lab
+controls/touch targets, and a deliberate Adaptation grid. Physics and Batch C
+layout redesigns are out of scope. UI text uses no emoji; retain physics symbols
+and SVG interface icons.
+
+Future colour settings (no button or settings UI added now): the Lab DOM legend
+uses `--sl-ref`, `--sl-tra`, `--sl-abs`, which inherit the main semantic
+`--om-ref`, `--om-tra`, `--om-abs` tokens. Keep these distinct from the softer
+canvas palette in `src/theme.ts`. A future preference editor should validate and
+persist user colours, apply CSS overrides at the app root, and update canvas
+palettes consistently where requested. Preserve theme-specific accessible
+contrast, defaults/reset and backward-compatible saved/share state. Do not add
+an independent set of hardcoded Lab legend colours.
+
+The Android download button remains deferred until a current permanently signed
+release APK is available. Do not link a private Actions artifact or an obsolete
+debug APK as a production download.

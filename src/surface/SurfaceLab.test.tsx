@@ -122,4 +122,21 @@ describe("SurfaceLab shared detail rendering", () => {
     document.dispatchEvent(new Event("visibilitychange"));
     expect(frames.size).toBe(0);
   });
+
+  it.each(["dark", "light"] as const)("uses semantic legend colours and shared ranges in the %s theme", (theme) => {
+    const html = renderToStaticMarkup(<SurfaceLab freq={5} angle={30} pol="TE" lang="fr" pal={PALETTES[theme]}
+      playing={false} fmtNum={String} onFreq={() => {}} onAngle={() => {}} />);
+    const legend = html.match(/<div class="sl-legend">(.*?)<\/div>/)![1];
+    for (const token of ["ref", "tra", "abs"]) expect(legend).toContain(`--tone:var(--sl-${token})`);
+    expect(legend).toContain('class="is-dash"');
+    const ranges = html.match(/<input type="range"[^>]+>/g)!;
+    expect(ranges.length).toBeGreaterThan(0);
+    for (const range of ranges) {
+      expect(range).toContain('class="om-range"');
+      expect(range).toContain('aria-valuetext="');
+      const progress = Number(range.match(/--pf:([^";]+)/)![1]);
+      expect(progress).toBeGreaterThanOrEqual(0);
+      expect(progress).toBeLessThanOrEqual(1);
+    }
+  });
 });

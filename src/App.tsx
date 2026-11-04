@@ -120,7 +120,7 @@ function Eq({ tex }: { tex: string }) {
   }, [tex]);
 
   if (!html) return <div className="om-eq om-eq-pending" aria-hidden />;
-  return <div className="om-eq" dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div className="om-eq" tabIndex={0} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 function Stat(props: { label: string; value: string; unit?: string; sub?: string; tone?: string; delay: number }) {
@@ -487,7 +487,7 @@ export function App() {
         setSim((s) => applyStackCommand(s, stackCmd));
         return;
       }
-      if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag) || (e.target instanceof Element && e.target.closest(".om-eq")) || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.code === "Space") {
         e.preventDefault();
         setPlaying((p) => !p);
@@ -646,7 +646,7 @@ export function App() {
   );
   const emtWarn = profiled !== null && profiled.source === "emt" && profiled.validity === "invalid";
   const rtChip = profiled
-    ? `R/T · ${fr ? "profilé" : "profiled"} · ${profiled.source === "rcwa" ? "RCWA" : profiled.busy ? "EMT…" : "EMT"}${emtWarn ? " ⚠" : ""}`
+    ? `R/T · ${fr ? "profilé" : "profiled"} · ${profiled.source === "rcwa" ? "RCWA" : profiled.busy ? "EMT…" : "EMT"}${emtWarn ? (fr ? " · hors validité" : " · outside validity") : ""}`
     : `R/T · ${fr ? "mur plan" : "flat wall"}`;
   const rtTitle = emtWarn
     ? fr
@@ -1212,7 +1212,7 @@ export function App() {
                 <h2>{t.chartAngle}</h2>
                 <p>{t.chartAngleHint}{profiled ? (lang === "fr" ? " · mur plan" : " · flat wall") : ""}</p>
               </div>
-              <div className="om-chart-legend">
+              <div className="om-chart-tools">
                 <span className="om-leg"><i style={{ background: "var(--om-ref)" }} />R</span>
                 <span className="om-leg"><i style={{ background: "var(--om-tra)" }} />T</span>
                 <span className="om-leg om-leg-dash"><i />{sim.pol === "AVG" ? "TE / TM" : sim.pol === "TE" ? "TM" : "TE"}</span>
@@ -1240,7 +1240,7 @@ export function App() {
                 <h2>{t.chartField}</h2>
                 <p>{t.chartFieldHint} · {polLabel}{profiled ? (lang === "fr" ? " · mur plan" : " · flat wall") : ""}</p>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div className="om-chart-tools">
                 <Segmented<"lin" | "db">
                   size="sm"
                   ariaLabel="Scale"

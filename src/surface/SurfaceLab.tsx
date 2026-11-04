@@ -120,11 +120,14 @@ function Range({ label, value, min, max, step = 0.01, unit = "", digits = 2, log
       </span>
       <input
         type="range"
+        className="om-range"
+        style={{ "--acc": "var(--sl-accent, var(--sl-acc))", "--pf": log ? pos / 1000 : (v - min) / (max - min) } as CSSProperties}
         min={log ? 0 : min}
         max={log ? 1000 : max}
         step={log ? 1 : step}
         value={pos}
         aria-label={label}
+        aria-valuetext={`${fmtNum(value, digits)}${unit ? ` ${unit}` : ""}`}
         onChange={(e) => {
           const p = Number(e.target.value);
           const raw = log ? min * Math.pow(max / min, p / 1000) : p;
@@ -953,10 +956,9 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
                 </button>
               </div>
               <div className="sl-legend">
-                {/* swatches use the canvas palette so they match the curves */}
-                <span><i style={{ "--tone": pal.ref } as CSSProperties} />R</span>
-                <span><i style={{ "--tone": pal.tra } as CSSProperties} />T</span>
-                <span><i className="is-dash" style={{ "--tone": pal.abs } as CSSProperties} />A</span>
+                <span><i style={{ "--tone": "var(--sl-ref)" } as CSSProperties} />R</span>
+                <span><i style={{ "--tone": "var(--sl-tra)" } as CSSProperties} />T</span>
+                <span><i className="is-dash" style={{ "--tone": "var(--sl-abs)" } as CSSProperties} />A</span>
               </div>
             </div>
             <canvas
