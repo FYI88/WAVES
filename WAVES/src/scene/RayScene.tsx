@@ -25,6 +25,7 @@ export interface SceneLayer {
   fluxIn: number;
   fluxOut: number;
   name: string;
+  readOnlyThickness?: boolean;
 }
 
 export interface SceneParams {
@@ -62,6 +63,9 @@ interface Gesture {
 }
 
 export function RayScene(props: {
+  active?: boolean;
+  /** Leading scene switch, always available even while the simulation is inactive. */
+  viewTools?: ReactNode;
   params: SceneParams;
   pal: Palette;
   playing: boolean;
@@ -72,9 +76,10 @@ export function RayScene(props: {
   onMove: (from: number, to: number) => void;
   /** set the thickness (cm) of layer `index` (same state update as the panel) */
   onResize: (index: number, cm: number) => void;
-  /** extra controls shown in the canvas toolbar in both views (e.g. the Flat / Profiled R/T switch) */
+  /** Extra simulation controls (e.g. the Flat / Profiled R/T switch). */
   tools?: ReactNode;
 }) {
+  const active = props.active ?? true;
   const ref = useRef<HTMLCanvasElement>(null);
   const size = useCanvasSize(ref);
   const [hover, setHover] = useState(-1);
@@ -100,11 +105,13 @@ export function RayScene(props: {
   // state — "waves:set-view"/"waves:set-display" events connect the two
   useEffect(() => {
     const onView = (e: Event) => {
+      if (!active) return;
       const v = (e as CustomEvent).detail;
       if (v === "wave" || v === "spatial") setView(v);
       else setView((cur) => (cur === "wave" ? "spatial" : "wave"));
     };
     const onDisplay = (e: Event) => {
+      if (!active) return;
       const d = (e as CustomEvent).detail;
       if (d === "field" || d === "fronts" || d === "both") setDisplay(d);
     };
@@ -114,11 +121,11 @@ export function RayScene(props: {
       window.removeEventListener("waves:set-view", onView);
       window.removeEventListener("waves:set-display", onDisplay);
     };
-  }, []);
+  }, [active]);
 
   useEffect(() => {
     const canvas = ref.current;
-    if (!canvas || size.w === 0) return;
+    if (!active || !canvas || size.w === 0) return;
     const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
     let raf = 0;
     let last = performance.now();
@@ -152,7 +159,7 @@ export function RayScene(props: {
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [size]);
+  }, [size, active]);
 
   // wider grab band for touch / pen and on coarse-pointer devices
   const coarse = useRef<MediaQueryList | null>(null);
@@ -169,6 +176,15 @@ export function RayScene(props: {
     setDragUi(null);
     setCursor("");
   }, []);
+
+  useEffect(() => {
+    if (active) return;
+    const pointerId = drag.current?.id;
+    cancelDrag(true);
+    if (pointerId !== undefined && ref.current?.hasPointerCapture(pointerId)) ref.current.releasePointerCapture(pointerId);
+    setHover(-1);
+    setEdge(0);
+  }, [active, cancelDrag]);
 
   // Escape cancels an active drag (capture phase, so App's own Escape handling,
   // e.g. leaving present mode, does not also fire)
@@ -189,6 +205,7 @@ export function RayScene(props: {
     const lay = layout.current;
     let nextEdge = 0;
     if (view === "wave" && lay.boundaries && inWallBand(lay, point)) nextEdge = Math.max(0, hitBoundary(point.x, lay.boundaries, bandOf(event)));
+    if (live.current.params.layers[nextEdge - 1]?.readOnlyThickness) nextEdge = 0;
     const h = hitLayer(lay, point);
     setHover(h.index);
     setEdge(nextEdge);
@@ -199,6 +216,7 @@ export function RayScene(props: {
     <canvas
       ref={ref}
       className={`om-canvas ${cursor}`}
+      style={{ display: active ? "block" : "none" }}
       aria-label={DICTS[props.lang].canvasAria}
       role="img"
       onPointerMove={event => {
@@ -265,7 +283,7 @@ export function RayScene(props: {
         if (event.button === 0 || event.pointerType !== "mouse") {
           if (view === "wave" && lay.boundaries && inWallBand(lay, point)) {
             const j = hitBoundary(point.x, lay.boundaries, bandOf(event));
-            if (j > 0) {
+            if (j > 0 && !live.current.params.layers[j - 1]?.readOnlyThickness) {
               const cms = live.current.params.layers.map(l => l.cm);
               Object.assign(g, { mode: "resize", index: j - 1, cms, boundaries: lay.boundaries.slice(), minWidth: lay.minWidth ?? 0, startCm: cms[j - 1], lastCm: cms[j - 1] });
             }
@@ -295,7 +313,9 @@ export function RayScene(props: {
       }}
       onPointerCancel={() => cancelDrag(true)}
     />
-    <div className="om-scene-toolbar" data-view={view} aria-label={french ? "Affichage de la simulation" : "Simulation display"}>
+    <div className="om-scene-toolbar" data-view={active ? view : "lab"} aria-label={french ? "Affichage de la simulation" : "Simulation display"}>
+      {props.viewTools}
+      {active && <>
       <div className="om-view-modes" role="group" aria-label={french ? "Vue" : "View"}>
         <button type="button" aria-pressed={view === "wave"} className={view === "wave" ? "is-on" : ""} onClick={() => setView("wave")}>{french ? "Coupe" : "Section"}</button>
         <button type="button" aria-pressed={view === "spatial"} className={view === "spatial" ? "is-on" : ""} onClick={() => setView("spatial")}>Spatial</button>
@@ -341,6 +361,7 @@ export function RayScene(props: {
       >
         PNG
       </button>
+      </>}
     </div>
   </>;
 }

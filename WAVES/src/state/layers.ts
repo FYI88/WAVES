@@ -1,4 +1,4 @@
-import { CUSTOM_SWATCH, MATERIALS, MATERIAL_IDS, materialProps, type MaterialId } from "../physics";
+import { C0, CUSTOM_SWATCH, MATERIALS, MATERIAL_IDS, materialProps, type MaterialId } from "../physics";
 import { tintOf } from "../render/util";
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -17,12 +17,43 @@ export interface Layer {
   eps: number; // custom ε′
   sigma: number; // custom σ
   customMode: CustomMode; // how the custom medium is edited
+  matching?: boolean; // ideal matching coating, electrically a custom medium
+  matchingDesign?: "quarter-wave-live"; // absent: fixed numerical snapshot
 }
 
 export type CustomMode = "eps" | "nk";
 
 export const newId = () => Math.random().toString(36).slice(2, 10);
 export const mkLayer = (mat: LayerMat, thickness: number, eps = 4, sigma = 0.05): Layer => ({ id: newId(), mat, thickness, eps, sigma, customMode: "eps" });
+
+/** Normal-incidence, lossless matching estimate; not an optimizer for a lossy stack.
+ * Keep the thickness within the editor range using an odd quarter-wave multiple. */
+export function quarterWaveMatch(n1: number, n2: number, fGHz: number): { eps: number; cm: number; order: number } | null {
+  if (![n1, n2, fGHz].every((v) => Number.isFinite(v) && v > 0)) return null;
+  const eps = n1 * n2;
+  const quarter = (100 * C0) / (fGHz * 1e9 * 4 * Math.sqrt(eps));
+  if (eps < 1 || eps > 30 || !Number.isFinite(quarter) || quarter <= 0) return null;
+  const multiple = Math.max(1, 2 * Math.ceil((0.1 / quarter - 1) / 2) + 1);
+  const cm = quarter * multiple;
+  return cm <= 100 ? { eps, cm, order: multiple } : null;
+}
+
+/** Insert a coating at a boundary without replacing either neighbouring material. */
+export function insertMatchingLayer(layers: Layer[], slot: number, fGHz: number): Layer[] | null {
+  if (layers.length >= MAX_LAYERS || !Number.isInteger(slot) || slot < 0 || slot > layers.length) return null;
+  if ([layers[slot - 1], layers[slot]].some((l) => l && (l.matching || l.matchingDesign))) return null;
+  const index = (l: Layer | undefined) => {
+    if (!l) return 1;
+    const { epsR, sigma } = layerEpsSigma(l, fGHz);
+    return nkOf(epsR, sigma, fGHz).n;
+  };
+  const n1 = index(layers[slot - 1]), n2 = index(layers[slot]);
+  if (Math.abs(n1 - n2) < 1e-6) return null;
+  const match = quarterWaveMatch(n1, n2, fGHz);
+  if (!match) return null;
+  const coating: Layer = { ...mkLayer("custom", match.cm, match.eps, 0), matching: true, matchingDesign: "quarter-wave-live" };
+  return [...layers.slice(0, slot), coating, ...layers.slice(slot)];
+}
 
 /** refractive index n − jκ from custom ε′, σ at f */
 export function nkOf(eps: number, sigma: number, f: number): { n: number; k: number } {

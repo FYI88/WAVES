@@ -78,6 +78,13 @@ cd android && ./gradlew assembleDebug
 
 ## Physics Engine
 
+### Adaptation layers and lab view
+
+- **Adaptation → Before/After → Add** inserts a live matching layer based on its immediate neighbours. It follows their properties and frequency, using the normal-incidence geometric-mean impedance reference. Real-material losses remain; zero reflection is not guaranteed for arbitrary stacks.
+- Live adaptation properties are read-only and persist through saved settings and share links. Existing fixed coatings remain fixed. The ideal **Anti-reflection λ/4** scenario demonstrates approximately 100% transmission at its design frequency.
+- Use **Simulation / Surface Lab** on the first canvas to display either scene. The full Surface Lab remains at the bottom; both lab canvases share its settings and animation.
+- Reset clears saved simulation/lab settings and the share hash before reloading.
+
 `src/physics.ts` — pure, DOM-free, reusable as-is (PWA, Tauri, Capacitor):
 
 - Complex arithmetic in `exp(jωt)` convention; η = ε′ − j·17.98·σ/f (ITU-R P.2040 eq. 9b); Table 3 materials as ε′ = a·fᵇ, σ = c·fᵈ.

@@ -502,7 +502,9 @@ export function drawWaveRays(
   meter(receiver.x + 18 * scale, receiver.y - 14 * scale, params.T, palette.tra);
   meter(refEnd.x - 48 * scale, refEnd.y - 14 * scale, params.R, palette.ref);
 
-  /* ── Surface lab overlay: profile on the front face, diffracted orders ── */
+  /* ── Surface lab overlay: profile on the front face ──────────────────
+     No extra beams: the single R and T beams above carry the resultant
+     R and T, summed over all diffraction orders. */
   const surface = params.surface;
   if (surface && surface.profile.id !== "flat") {
     const prof = surface.profile;
@@ -533,6 +535,7 @@ export function drawWaveRays(
     ctx.stroke();
     ctx.restore();
 
+    // optional: the diffracted orders as separate beams (m = 0 is the specular beam already drawn)
     const reach = (from: Point, dx: number, dy: number) => {
       let t = Infinity;
       if (dx > 1e-9) t = Math.min(t, (width - 14 - from.x) / dx);
@@ -542,22 +545,21 @@ export function drawWaveRays(
       return Math.max(0, t);
     };
     const face = { x: left - depthPx / 2, y: middle };
-    for (const o of surface.orders) {
-      if (o.m === 0) continue; // the specular beams are already drawn
+    for (const o of surface.orders ?? []) {
+      if (o.m === 0) continue;
       const a = o.angleDeg * DEG;
       for (const side of ["R", "T"] as const) {
-        const e = surface.efficiencies ? (side === "R" ? o.R : o.T) : NaN;
-        if (surface.efficiencies && !(e > 1e-4)) continue;
+        const e = side === "R" ? o.R : o.T;
+        const known = Number.isFinite(e);
+        if (known && !(e > 1e-4)) continue;
         const from = side === "R" ? face : exit;
         const dx = side === "R" ? -Math.cos(a) : Math.cos(a);
         const dy = Math.sin(a);
         const len = reach(from, dx, dy) * 0.88;
         if (len < 12) continue;
         const color = side === "R" ? palette.ref : palette.tra;
-        const known = Number.isFinite(e);
         const to = { x: from.x + dx * len, y: from.y + dy * len };
         ctx.save();
-        // Shared wave language; unknown power uses a schematic envelope.
         wave(from, to, color, known ? e : null, known ? e : null, 1,
           side === "R" ? reflectionPhase + Math.PI : phase, 0.7);
         if (options.annotations) {
@@ -576,6 +578,7 @@ export function drawWaveRays(
         ctx.restore();
       }
     }
+
     if (options.annotations && !compact) {
       ctx.save();
       ctx.font = `500 9.5px ${SANS}`;
@@ -583,18 +586,14 @@ export function drawWaveRays(
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
       const rt = surface.rt;
-      const mainEff = rt?.source === "rcwa";
-      const effText = french
-        ? mainEff ? "efficacités du mur principal" : surface.efficiencies ? "efficacités du mur du labo" : "directions des ordres"
-        : mainEff ? "main wall efficiencies" : surface.efficiencies ? "lab wall efficiencies" : "order directions";
       const rtText = !rt || rt.source === "flat"
         ? (french ? "R/T : mur plan" : "R/T: flat wall")
         : rt.source === "rcwa"
-          ? (french ? "R/T : mur profilé · RCWA · faisceaux : ordre 0" : "R/T: profiled wall · RCWA · beams: order 0")
+          ? (french ? "R/T : mur profilé · RCWA · somme des ordres" : "R/T: profiled wall · RCWA · sum of all orders")
           : (french ? `R/T : mur profilé · EMT${rt.busy ? " · RCWA en cours…" : ""}` : `R/T: profiled wall · EMT${rt.busy ? " · RCWA running…" : ""}`);
       const caption = french
-        ? `Profil du labo · Λ ${format(prof.period, 2)} cm · h ${format(prof.depth, 2)} cm · ${effText} · ${rtText}`
-        : `Lab profile · Λ ${format(prof.period, 2)} cm · h ${format(prof.depth, 2)} cm · ${effText} · ${rtText}`;
+        ? `Profil du labo · Λ ${format(prof.period, 2)} cm · h ${format(prof.depth, 2)} cm · ${rtText}`
+        : `Lab profile · Λ ${format(prof.period, 2)} cm · h ${format(prof.depth, 2)} cm · ${rtText}`;
       ctx.fillText(caption, 18, bottom + 52);
       ctx.restore();
     }

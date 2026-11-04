@@ -39,8 +39,11 @@ export interface DetailParams {
   thetaDeg: number;
   frequency: number;
   pol: PolMode;
-  orders: DetailOrder[];
-  rigorous: boolean;
+  /** resultant reflectance / transmittance (sum of all orders), drawn as the single R and T beams */
+  R: number;
+  T: number;
+  /** diffracted orders drawn as extra beams; null (default): only the summed R and T */
+  orders: DetailOrder[] | null;
   slices: ProfileSlice[] | null;
   bubbles: { fraction: number; water: boolean; diameterMm: number; target: number } | null;
   fog: number;
@@ -398,7 +401,9 @@ export function drawSurfaceDetail(
   }
 
   /* order 0 inside the wall: refraction per segment and a partial reflection at
-     each interface behind the front face (profile base, layer boundaries, back face) */
+     each interface behind the front face (profile base, layer boundaries, back face).
+     These stay inside the wall: their share of the power is already in the
+     resultant R and T beams drawn below. */
   let exitY = yc;
   const segs = p.paths ?? [];
   if (segs.length) {
@@ -429,34 +434,37 @@ export function drawSurfaceDetail(
         ctx.save();
         drawWaveRibbon(ctx, end, back, pal.ref, s.back, s.back, s.n, phase + Math.PI, style, 0.55);
         ctx.restore();
-        // the reflection from the first interface behind the face comes back out into the air
-        if (i === 0) {
-          const dx = -Math.cos(theta);
-          const dy = Math.sin(theta);
-          const len = Math.min(rayLength(faceX, back.y, dx, dy, w, h, 14), faceX - 14) * 0.8;
-          beam(faceX, back.y, dx, dy, pal.ref, s.back * Math.max(0, segs[0].fluxIn), len,
-            s.kind === "profile" ? (fr ? "↩ base du profil · partiel" : "↩ profile base · partial") : (fr ? "↩ interface 2 · partiel" : "↩ interface 2 · partial"));
-        }
       }
     });
     exitY = ys[ys.length - 1];
   }
 
-  const pct = (e: number) => (Number.isFinite(e) ? ` · ${fmt(e * 100, e < 0.1 ? 1 : 0)}%` : (fr ? " · schém." : " · schematic"));
-  for (const o of p.orders) {
+  // one reflected and one transmitted beam: the resultant R and T
+  // (sum of all orders, every internal reflection and absorption included)
+  const pct = (e: number) => `${fmt(e * 100, e < 0.1 ? 2 : 1)} %`;
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  const rLen = Math.min(rayLength(hit.x, hit.y, -cos, sin, w, h, 14), faceX - 14) * 0.92;
+  beam(hit.x, hit.y, -cos, sin, pal.ref, p.R, rLen, `R · ${pct(p.R)}`);
+  beam(backX, exitY, cos, sin, pal.tra, p.T, rayLength(backX, exitY, cos, sin, w, h, 14) * 0.9, `T · ${pct(p.T)}`);
+
+  // optional: the diffracted orders as extra beams (m = 0 is the specular direction of R and T)
+  const orderPct = (e: number) => (Number.isFinite(e) ? ` · ${fmt(e * 100, e < 0.1 ? 1 : 0)}%` : fr ? " · schém." : " · schematic");
+  for (const o of p.orders ?? []) {
+    if (o.m === 0) continue;
     const a = o.angleDeg * DEG;
-    if (!p.rigorous || o.R > 1e-4) {
+    const tag = `${o.m > 0 ? "+" : ""}${o.m}`;
+    if (!(o.R <= 1e-4)) {
       const dx = -Math.cos(a);
       const dy = Math.sin(a);
       const len = Math.min(rayLength(hit.x, hit.y, dx, dy, w, h, 14), faceX - 14) * 0.92;
-      beam(hit.x, hit.y, dx, dy, pal.ref, p.rigorous ? o.R : null, len, `${o.m > 0 ? "+" : ""}${o.m}${pct(p.rigorous ? o.R : NaN)}`);
+      beam(hit.x, hit.y, dx, dy, pal.ref, Number.isFinite(o.R) ? o.R : null, len, `${tag}${orderPct(o.R)}`);
     }
-    if (!p.rigorous || o.T > 1e-4) {
-      if (p.rigorous && !(o.T > 1e-4)) continue;
+    if (!(o.T <= 1e-4)) {
       const dx = Math.cos(a);
       const dy = Math.sin(a);
       const len = rayLength(backX, exitY, dx, dy, w, h, 14) * 0.9;
-      beam(backX, exitY, dx, dy, pal.tra, p.rigorous ? o.T : null, len, `${o.m > 0 ? "+" : ""}${o.m}${pct(p.rigorous ? o.T : NaN)}`);
+      beam(backX, exitY, dx, dy, pal.tra, Number.isFinite(o.T) ? o.T : null, len, `${tag}${orderPct(o.T)}`);
     }
   }
 
@@ -483,10 +491,6 @@ export function drawSurfaceDetail(
       14,
       29,
     );
-  }
-  if (!p.rigorous) {
-    ctx.textAlign = "right";
-    ctx.fillText(fr ? "directions seules (mode rapide)" : "directions only (fast mode)", w - 14, h - 10);
   }
   ctx.restore();
 }
@@ -561,12 +565,10 @@ export function drawOrderSweep(
     ctx.stroke();
     ctx.restore();
   };
-  Object.entries(sweep.orderR).forEach(([m, ys]) => {
-    if (Number(m) !== 0 && ys.some((v) => v > 0.005)) line(ys, hexA(pal.inc, 0.85), 1.2, true);
-  });
+  // resultant R and T (sum of all orders), so R + T + A = 1 at every point
   line(sweep.A, hexA(pal.abs, 0.9), 1.2, true);
-  line(sweep.R0, pal.ref, 2);
-  line(sweep.T0, pal.tra, 2);
+  line(sweep.R, pal.ref, 2);
+  line(sweep.T, pal.tra, 2);
   ctx.save();
   ctx.strokeStyle = hexA(pal.ink, 0.5);
   ctx.setLineDash([2, 3]);

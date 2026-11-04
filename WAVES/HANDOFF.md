@@ -351,6 +351,28 @@ Planned:
 
 ## 13. Journal
 
+### 2026-11-04: reviewed neighbour-derived live adaptation (supersedes optimizer)
+
+- Removed the superseded numerical optimizer. New `matchingDesign: "quarter-wave-live"` coatings use immediate ordinary neighbours, exterior air, nᵢ = Re √εᵣ,ᵢ and εᵣ,ₘ = n₁n₂. Thus ηₘ,ref = √(Z₁,ref Z₂,ref), with Zref = 376.730313668/n Ω. Lossy neighbours are explicitly an approximation, not exact complex-impedance matching or a T-improvement promise. `physics.ts` untouched.
+- `state/matching.ts` resolves every interactive simulation transition synchronously in App. Frequency/material/topology changes rebind coats; angle/pol do not redesign. Invalid interactive edits preserve the entire previous state. No adjacent-coating dependencies; separated live coats supported. Derived material/thickness read-only, no duplication; deletion is off, valid movement allowed. Smallest supported odd quarter-wave multiple, full precision, existing ranges.
+- Compact Adaptation / position / Ajouter row and read-only numerical editor; formula, neighbours, reference impedances and limitations behind disclosures. Profile still uses the first physical layer (including a coating); insertion selects Flat R/T. Original picker styles retained.
+- Share/persistence whitelist the optional discriminator, keeping resolved snapshots, keys and versions. Legacy fixed coats and the ideal preset remain fixed and detunable. Invalid imported live metadata becomes a deterministic fixed snapshot; no import notice is currently surfaced. Browser layout/gestures still need visual verification.
+- Verification: focused suite 148 passing, then final full `npm test` **434/434 passing across 46 files**; `npm run build` passes (TypeScript + Vite). Coverage includes frequency/material updates, angle/pol invariance, real-loss preservation, a finite-stack counterexample to guaranteed T improvement, topology rejection/rebinding/removal, editor/resize guards, odd orders/full precision, metadata fallback/roundtrip, fixed ideal demo/detuning, and leading-coating EMT/RCWA depth-zero agreement. No browser validation claimed. No commit or push.
+
+### 2026-11-03: reset, separate coatings, material samples
+
+- Reset previously removed storage but reloaded the live share hash, restoring the same settings. Both reset paths now clear the hash and saved lab/R-T mode before reloading. A regression test exercises the button handler with a share hash present.
+- Added dedicated matching-layer insertion controls before/after the selected layer. Neighbour materials are preserved; the coating is a custom medium electrically, but labelled as an anti-reflection layer in the list/scene. Its optional marker survives storage/share links. Existing six-layer and normal-incidence limits remain.
+- Main material picker now uses offline canvas texture thumbnails shared with the scene, with glass/air/custom glyphs. Layer-stack presets show miniature material stacks. No external image requests or dependencies.
+
+### 2026-11-03: quarter-wave matching and one ideal demo
+
+- Added `quarterWaveMatch` in `state/layers.ts`: normal-incidence estimate from adjacent real indices, odd quarter-wave thickness within existing editor limits, invalid/out-of-range inputs rejected. No physics solver changes.
+- Custom-layer editor can apply this estimate to the selected layer at θ = 0°. It sets σ = 0 and selects Flat R/T; it is explicitly not a guaranteed optimizer for lossy multilayer walls.
+- Added one `antireflection` scenario: ideal ε′ = 9 slab, 0.75 cm, between ε′ = 3 matching coatings at 10 GHz. Full-precision coating thickness gives T ≈ 1. Existing real materials are unchanged.
+- Main persistence now permits σ = 0 (also fixes κ = 0 reload/share behavior). No schema change. Existing logarithmic conductivity control retains its positive range and displays a lossless explanation at zero.
+- Verification: 421 tests pass; production typecheck/build passes; browser verification not performed. New tests cover design limits, TE/TM/AVG full transmission, detuning, bare-slab comparison, zero-loss persistence/share and retained real-wall absorption.
+
 ### 2026-10-25 (GitLab / Surface lab track): canvas drag (#1, !5)
 
 - Branch `feature/canvas-drag` from `fix/sidebar-scroll` (!3); Draft MR !5 to `main`, depends on !3. `App.tsx` changes are small (3 callbacks, 1 import, keyboard branch, 2 help rows) so the merge with !4 (#7) stays easy; the logic is in `src/scene/`.
@@ -458,7 +480,7 @@ Targets phones, laptops and teaching boards. Simple, minimal, premium; UI only (
 ### Decisions
 
 - Surface lab is a separate model (own profile, materials, layers); it shares only f, θ and polarization with the main simulator.
-- Main-view overlay (#3): default draws the lab profile and the order **directions** only (grating equation, valid for any wall); lab-wall **efficiencies** are an opt-in checkbox and labelled as such. Main R/T always stay the flat-stack result.
+- One resultant R and one resultant T (2026-11-03, supersedes the #3 order-direction beams): every view (Section, Spatial, lab detail) draws a single reflected and a single transmitted beam carrying the resultant R and T, i.e. the sum over all diffraction orders, with every internal reflection and absorption already in the math. Nothing else leaves the wall: no diffracted-order beams, no partial-reflection exits. The internal reflections inside the wall stay. Diffracted orders are an opt-in: Surface lab > Surface > "Also show the diffracted orders" (`showOrders`, off by default, saved and shared) adds m ≠ 0 beams to the main Section view and the lab detail, on top of the summed R and T (efficiencies from the main wall's RCWA result or the lab's rigorous result, directions only otherwise). The old "beam widths: lab efficiencies" option is gone (old links and saved states drop it). The lab sweep chart plots the resultant R, T and A; the order table and bars keep the per-order breakdown.
 - Lab state persists in `localStorage` (`waves:lab:v1`) and travels in share links (codec v2, optional `lab`, omitted while the lab is untouched); v1 links must keep decoding.
 - Lab UI colours use the app theme tokens `--om-*` only; never the base `--fg-*` / `--surface-*` tokens (those follow the OS scheme, not the app toggle).
 - About: compact sheet, 440px card on laptops (500px on boards), bottom sheet on phones, model assumptions behind a disclosure, email addresses only in link tooltips.
@@ -489,3 +511,9 @@ Targets phones, laptops and teaching boards. Simple, minimal, premium; UI only (
 - DOM accents (`--om-*`) and canvas palettes (`theme.ts`) use different wave colours; unify in #7.
 - Rayleigh roughness estimate (#6) not implemented.
 - A few imports in `App.tsx` on `main` are unused (left to keep !2 mergeable).
+
+### Local top-canvas switch (2026-11-04, uncommitted)
+
+- Added session-only Simulation / Surface Lab selector (FR/EN). One bottom lab stays mounted; only its extra detail canvas is portalled into the stage, using the same parameters and animation clock. Main preferences survive; inactive simulation RAF/shortcuts stop and its HUD/controls hide. Solver/persistence dependencies unchanged.
+- Validation: `npm test` 440/440; `npm run build` passes. Six new component-render/effect tests cover toolbar visibility, inactive shortcuts/RAF, paused redraw, shared detail phase, resize, hidden bottom canvas, reduced motion/visibility and cleanup. These use SSR plus explicit effect/host mocks, not browser integration.
+- Browser/mobile/presentation visual checks and live repeated-switch solver/storage counts remain unverified: no browser-harness executable or exposed Chrome debugging connection here. Existing Android/user changes preserved; no commit/push.

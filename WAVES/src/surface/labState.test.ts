@@ -43,7 +43,11 @@ describe("lab state", () => {
       mainEfficiencies: 1,
     });
     expect(s?.showInMain).toBe(true);
-    expect(s?.mainEfficiencies).toBe(false);
+    // retired option (older links and saved states): dropped, not carried
+    expect(s && "mainEfficiencies" in s).toBe(false);
+    // orders are opt-in: off unless explicitly true
+    expect(s?.showOrders).toBe(false);
+    expect(sanitizeLab({ showOrders: true })?.showOrders).toBe(true);
     expect(s?.profile.id).toBe(DEFAULT_LAB.profile.id);
     expect(s?.profile.period).toBe(30);
     expect(s?.profile.depth).toBe(0.05);

@@ -33,10 +33,10 @@ export interface LabState {
   harmonics: number;
   slices: number;
   axis: SweepAxis;
-  /** draw the lab profile and its order directions in the main cross-section */
+  /** draw the lab profile on the wall face of the main cross-section */
   showInMain: boolean;
-  /** use the lab wall's rigorous efficiencies for those beams (off by default) */
-  mainEfficiencies: boolean;
+  /** also draw the diffracted orders as separate beams (off: one summed R and one summed T) */
+  showOrders: boolean;
 }
 
 export const LAB_MAX_BELOW = 4;
@@ -56,7 +56,7 @@ export const DEFAULT_LAB: LabState = {
   slices: 16,
   axis: "angle",
   showInMain: true,
-  mainEfficiencies: false,
+  showOrders: false,
 };
 
 type Obj = Record<string, unknown>;
@@ -123,7 +123,7 @@ export function sanitizeLab(raw: unknown): LabState | null {
     slices: int(raw.slices, 4, 40, d.slices),
     axis: pick<SweepAxis>(raw.axis, AXES, d.axis),
     showInMain: bool(raw.showInMain, d.showInMain),
-    mainEfficiencies: bool(raw.mainEfficiencies, d.mainEfficiencies),
+    showOrders: bool(raw.showOrders, d.showOrders),
   };
 }
 

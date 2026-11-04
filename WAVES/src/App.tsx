@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
+  type SetStateAction,
 } from "react";
 import { drawSpatialScene, type SceneOptions } from "./spatialScene";
 import { drawWaveRays } from "./waveRays";
@@ -43,6 +44,7 @@ import {
 import { applyMove, applyResize, applyStackCommand, stackKeyCommand } from "./scene/dragStack";
 import { computeResults, stackSweepKey, type LayerRes, type Results, type SimState } from "./state/results";
 import { DEFAULT_STATE, presetState } from "./state/presets";
+import { addMatching, isLiveMatching, matchingReference, resolveMatching, transitionMatching, type MatchingReason } from "./state/matching";
 import { STORAGE_KEY, STORAGE_VERSION, defaultPersisted, loadInitial, sanitizePersisted, type Persisted } from "./state/persistence";
 import { copyText, downloadFile } from "./dom";
 import { cssZoom, prepCanvas, useCanvasSize, type CanvasSize } from "./scene/canvas";
@@ -162,6 +164,9 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, Boundar
     const reset = () => {
       try {
         window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem("waves:lab:v1");
+        window.localStorage.removeItem("waves:rt-view");
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
       } catch {
         /* ignore */
       }
@@ -218,10 +223,21 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, Boundar
 
 export function App() {
   const initial = useMemo(loadInitial, []);
-  const [sim, setSim] = useState<SimState>(initial.sim);
+  const [simulation, setSimulation] = useState<{ sim: SimState; reason: MatchingReason | null }>({ sim: initial.sim, reason: null });
+  const sim = simulation.sim;
+  // All interactive paths commit a fully resolved stack, never an effect-delayed coating.
+  const setSim = useCallback((action: SetStateAction<SimState>, imported = false) => {
+    setSimulation((previous) => {
+      const candidate = typeof action === "function" ? action(previous.sim) : action;
+      return imported ? resolveMatching(candidate) : transitionMatching(previous.sim, candidate);
+    });
+  }, []);
   const [lang, setLang] = useState<Lang>(initial.lang);
   const [theme, setTheme] = useState<Theme>(initial.theme);
   const [playing, setPlaying] = useState(true);
+  const [sceneView, setSceneView] = useState<"main" | "lab">("main");
+  const [detailHost, setDetailHost] = useState<HTMLDivElement | null>(null);
+  const detailHostRef = useCallback((node: HTMLDivElement | null) => setDetailHost(node), []);
   const [fieldScale, setFieldScale] = useState<"lin" | "db">("lin");
   const [flash, setFlash] = useState(0);
   const [present, setPresent] = useState(false);
@@ -229,6 +245,8 @@ export function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [sceneSurface, setSceneSurface] = useState<SceneSurface | null>(null);
+  const [coatingSide, setCoatingSide] = useState("before");
+  const coatingStatus = simulation.reason;
   const [rtView, setRtView] = useState<RtView>(loadRtView);
   useEffect(() => saveRtView(rtView), [rtView]);
   const [perfOn, setPerfOn] = useState(() => {
@@ -323,7 +341,7 @@ export function App() {
     });
   const dupLayer = (i: number) =>
     setSim((s) => {
-      if (s.layers.length >= MAX_LAYERS) return s;
+      if (s.layers.length >= MAX_LAYERS || isLiveMatching(s.layers[i])) return s;
       const layers = [...s.layers];
       layers.splice(i + 1, 0, { ...s.layers[i], id: newId() });
       return { ...s, layers, sel: i + 1 };
@@ -385,7 +403,7 @@ export function App() {
         },
         defaultPersisted(),
       );
-      setSim(next.sim);
+      setSim(next.sim, true);
       setLang(next.lang);
       setTheme(next.theme);
     };
@@ -511,9 +529,12 @@ export function App() {
   const shownRdB = 10 * Math.log10(Math.max(shown.R, 1e-30));
   const shownTdB = 10 * Math.log10(Math.max(shown.T, 1e-30));
   const sceneSurfaceShown: SceneSurface | null = sceneSurface
-    ? profiled?.orders
-      ? { ...sceneSurface, orders: profiled.orders, efficiencies: true, rt: { source: "rcwa", busy: false } }
-      : { ...sceneSurface, rt: { source: profiled ? profiled.source : "flat", busy: profiled?.busy ?? false } }
+    ? {
+        ...sceneSurface,
+        // orders are opt-in; with an RCWA result they carry the main wall's efficiencies
+        orders: sceneSurface.orders && (profiled?.orders ?? sceneSurface.orders),
+        rt: { source: profiled ? profiled.source : "flat", busy: profiled?.busy ?? false },
+      }
     : null;
   // keyed on values: res arrays are rebuilt on every state change, so angle,
   // polarization and selection changes reuse the previous 181-point sweep
@@ -530,18 +551,20 @@ export function App() {
     etas: res.etas,
     ds: res.ds,
     theta: sim.angle,
-    // beams carry the specular order; diffracted orders are drawn separately
-    R: profiled ? profiled.R0 : res.R,
-    T: profiled ? profiled.T0 : res.T,
+    // one reflected and one transmitted beam, carrying the resultant R and T
+    // (all orders, every internal reflection and absorption already in the math)
+    R: shown.R,
+    T: shown.T,
     layers: sim.layers.map((l, i) => ({
       mat: l.mat,
+      readOnlyThickness: isLiveMatching(l),
       cm: l.thickness,
       thetaT: res.layers[i].thetaT,
       nRe: res.layers[i].nRe,
       absorbed: res.layers[i].absorbed,
       fluxIn: res.layers[i].fluxIn,
-      fluxOut: i + 1 < sim.layers.length ? res.layers[i + 1].fluxIn : profiled ? profiled.T0 : res.T,
-      name: matName(l.mat),
+      fluxOut: i + 1 < sim.layers.length ? res.layers[i + 1].fluxIn : shown.T,
+      name: l.matching ? t.arMaterial : matName(l.mat),
     })),
     sel: sim.sel,
     hover: -1,
@@ -557,6 +580,7 @@ export function App() {
   );
 
   const applyPreset = (key: string) => {
+    if (key === "antireflection") setRtView("flat");
     setSim(presetState(key, sim));
     setFlash((f) => f + 1);
   };
@@ -587,6 +611,16 @@ export function App() {
 
   // which model gives the R / T on screen, and the switch between flat and profiled
   const fr = lang === "fr";
+  const viewTools = (
+    <div className="om-view-modes" role="group" aria-label={fr ? "Scène affichée" : "Displayed scene"}>
+      <button type="button" aria-pressed={sceneView === "main"} className={sceneView === "main" ? "is-on" : ""} onClick={() => setSceneView("main")}>
+        Simulation
+      </button>
+      <button type="button" aria-pressed={sceneView === "lab"} className={sceneView === "lab" ? "is-on" : ""} onClick={() => setSceneView("lab")}>
+        {fr ? "Labo de surface" : "Surface Lab"}
+      </button>
+    </div>
+  );
   const emtWarn = profiled !== null && profiled.source === "emt" && profiled.validity === "invalid";
   const rtChip = profiled
     ? `R/T · ${fr ? "profilé" : "profiled"} · ${profiled.source === "rcwa" ? "RCWA" : profiled.busy ? "EMT…" : "EMT"}${emtWarn ? " ⚠" : ""}`
@@ -609,13 +643,20 @@ export function App() {
     </div>
   ) : null;
   const full = sim.layers.length >= MAX_LAYERS;
+  const insertCoating = (slot: number) => {
+    const next = addMatching(sim, slot);
+    setSimulation((previous) => next.reason ? { ...previous, reason: next.reason } : transitionMatching(previous.sim, next.sim));
+    if (!next.reason) setRtView("flat");
+  };
+  const liveCoating = isLiveMatching(selL);
+  const matchRef = liveCoating ? matchingReference(sim.layers, sim.sel, sim.freq) : null;
 
   const setMaterial = (m: LayerMat) => {
     if (m === selL.mat) return;
     if (m === "custom") {
       const cur = layerEpsSigma(selL, sim.freq);
-      patchLayer({ mat: m, eps: clamp(Number(cur.epsR.toFixed(2)), 1, 30), sigma: clamp(Number(cur.sigma.toPrecision(3)), 0.0001, 10) });
-    } else patchLayer({ mat: m });
+      patchLayer({ mat: m, matching: undefined, eps: clamp(Number(cur.epsR.toFixed(2)), 1, 30), sigma: clamp(Number(cur.sigma.toPrecision(3)), 0.0001, 10) });
+    } else patchLayer({ mat: m, matching: undefined });
   };
 
   return (
@@ -711,7 +752,9 @@ export function App() {
       <main className="om-layout" ref={frameHeightRef}>
         {/* ───────── Scene ───────── */}
         <section className="om-card om-scene om-enter" style={{ "--d": "60ms" } as CSSProperties}>
-          <RayScene params={withSurface(sceneParams, sceneSurfaceShown)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} onMove={dragMove} onResize={dragResize} tools={rtTools} />
+          <RayScene active={sceneView === "main"} viewTools={viewTools} params={withSurface(sceneParams, sceneSurfaceShown)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} onMove={dragMove} onResize={dragResize} tools={rtTools} />
+          <div ref={detailHostRef} className="om-lab-host" hidden={sceneView !== "lab"} />
+          {sceneView === "main" && <>
           <div className="om-hud om-hud-tl">
             <span className="om-hud-chip">
               <span className="om-stackdots">
@@ -742,6 +785,7 @@ export function App() {
             {shown.A > 0.005 && <span className="om-leg"><i style={{ background: "var(--om-abs)" }} />{t.absorbed}</span>}
           </div>
           <div className="om-hud om-hud-br"><span className="om-hint">{t.clickLayer}</span></div>
+          </>}
           {!playing && <div className="om-paused-badge">{t.pause}</div>}
         </section>
 
@@ -883,7 +927,7 @@ export function App() {
                           <span className="om-layer-idx">{i + 1}</span>
                           <span className="om-layer-sw" style={{ background: matSwatch(l.mat) }} />
                           <span className="om-layer-txt">
-                            <b>{matName(l.mat)}</b>
+                            <b>{l.matching ? t.arMaterial : matName(l.mat)}</b>
                             <small className="om-mono">
                               {fmt.num(l.thickness, l.thickness < 1 ? 2 : 1)} cm · ε′ {fmt.num(r.epsR, 2)} · A {fmt.pct(r.absorbed)}%
                             </small>
@@ -892,7 +936,7 @@ export function App() {
                         <span className="om-layer-actions">
                           <button type="button" aria-label={t.moveUp} title={t.moveUp} disabled={i === 0} onClick={() => moveLayer(i, -1)}>{Icon.up}</button>
                           <button type="button" aria-label={t.moveDown} title={t.moveDown} disabled={i === sim.layers.length - 1} onClick={() => moveLayer(i, 1)}>{Icon.down}</button>
-                          <button type="button" aria-label={t.duplicate} title={t.duplicate} disabled={full} onClick={() => dupLayer(i)}>{Icon.copy}</button>
+                          <button type="button" aria-label={t.duplicate} title={t.duplicate} disabled={full || isLiveMatching(l)} onClick={() => dupLayer(i)}>{Icon.copy}</button>
                           <button type="button" aria-label={t.remove} title={t.remove} disabled={sim.layers.length <= 1} onClick={() => removeLayer(i)} className="is-danger">{Icon.trash}</button>
                         </span>
                       </li>
@@ -910,6 +954,18 @@ export function App() {
                     </button>
                   ))}
                 </div>
+                <div className="om-coating-tools">
+                  <div className="om-coating-row">
+                    <span className="om-label">{t.arAdaptation}</span>
+                    <select aria-label={t.arPosition} value={coatingSide} onChange={(e) => setCoatingSide(e.target.value)}>
+                      <option value="before">{t.arBefore}</option><option value="after">{t.arAfter}</option>
+                    </select>
+                    <button type="button" className="om-preset" disabled={full} onClick={() => insertCoating(sim.sel + (coatingSide === "after" ? 1 : 0))}>{t.arAdd}</button>
+                  </div>
+                  <details><summary>{t.arDetails}</summary><p>{t.arInsertHint}</p></details>
+                  {sceneSurface?.profile && sceneSurface.profile.id !== "flat" && sim.layers[0].matching && <details><summary>{t.arProfileTitle}</summary><p>{t.arProfile}</p></details>}
+                  <span className="om-coating-status" role="status">{full ? tpl(t.maxLayers, { n: String(MAX_LAYERS) }) : coatingStatus ? t[coatingStatus] : null}</span>
+                </div>
               </div>
 
               <div className="om-group om-editor" key={selL.id} style={{ "--tint": matTint(selL.mat) } as CSSProperties}>
@@ -918,8 +974,18 @@ export function App() {
                     <span className="om-layer-idx is-sm">{sim.sel + 1}</span>
                     {t.editing}
                   </span>
-                  <span className="om-mono om-faint">{matName(selL.mat)}</span>
+                  <span className="om-mono om-faint">{selL.matching ? t.arMaterial : matName(selL.mat)}</span>
                 </div>
+                {liveCoating && matchRef ? <div className="om-coating-tools">
+                  <div className="om-hint">{t.arAuto}</div>
+                  <div className="om-mono">εᵣ = {fmt.sig(selL.eps, 6)} · σ = 0 S/m</div>
+                  <div className="om-mono">d = {fmt.sig(selL.thickness, 6)} cm</div>
+                  <details><summary>{t.arDetails}</summary>
+                    <p>{(sim.layers[sim.sel - 1] ? matName(sim.layers[sim.sel - 1].mat) : t.air)} → {(sim.layers[sim.sel + 1] ? matName(sim.layers[sim.sel + 1].mat) : t.air)}</p>
+                    <p className="om-mono">n₁ = {fmt.sig(matchRef.n1, 6)} · n₂ = {fmt.sig(matchRef.n2, 6)}<br />Z₁,ref = {fmt.sig(matchRef.z1, 6)} Ω · Z₂,ref = {fmt.sig(matchRef.z2, 6)} Ω<br />nₘ = √(n₁n₂) · εᵣ,ₘ = n₁n₂<br />ηₘ,ref = √(Z₁,ref Z₂,ref)<br />d = {matchRef.design?.order}λ₀/(4nₘ)</p>
+                    <p>{t.arInsertHint}</p>
+                  </details>
+                </div> : <>
                 <div className="om-materials" role="radiogroup" aria-label={t.material}>
                   {LAYER_MATS.map((id) => {
                     const eps = id === "air" ? 1 : materialProps(id, sim.freq, selL.eps, selL.sigma).epsR;
@@ -933,7 +999,7 @@ export function App() {
                         className={`om-mat ${on ? "is-on" : ""} ${id === "custom" ? "is-wide" : ""}`}
                         onClick={() => setMaterial(id)}
                       >
-                        <span className="om-mat-swatch" style={{ background: matSwatch(id) }} />
+                          <span className="om-mat-swatch" style={{ background: matSwatch(id) }} />
                         <span className="om-mat-name">{matName(id)}</span>
                         <span className="om-mat-eps">ε′ {fmt.num(eps, 2)}</span>
                       </button>
@@ -979,7 +1045,8 @@ export function App() {
                         <>
                           <Slider label={t.epsCustom} value={selL.eps} min={1} max={30} step={0.01} unit="" digits={2}
                             accent="var(--om-acc)" onChange={(v) => patchLayer({ eps: v })} fmtNum={fmt.num} />
-                          <Slider label={t.sigmaCustom} value={selL.sigma} min={0.0001} max={10} step={0.0001} log unit="S/m" digits={4}
+                           {selL.sigma === 0 && <div className="om-hint">{t.arLossless}</div>}
+                           <Slider label={t.sigmaCustom} value={selL.sigma} min={0.0001} max={10} step={0.0001} log unit="S/m" digits={4}
                             accent="var(--om-acc)" onChange={(v) => patchLayer({ sigma: v })} fmtNum={fmt.num}
                             ticks={[
                               { v: 0.001, label: "10⁻³" },
@@ -1003,6 +1070,7 @@ export function App() {
                     <span className="om-note-text">{rangeNote}</span>
                   </span>
                 </div>
+                </>}
                 </div>
               </div>
           <button
@@ -1011,6 +1079,9 @@ export function App() {
             onClick={() => {
               try {
                 window.localStorage.removeItem(STORAGE_KEY);
+                window.localStorage.removeItem("waves:lab:v1");
+                window.localStorage.removeItem("waves:rt-view");
+                window.history.replaceState(null, "", window.location.pathname + window.location.search);
               } catch {
                 /* ignore */
               }
@@ -1178,7 +1249,7 @@ export function App() {
             </div>
           </div>
         </section>
-        <SurfaceLab freq={sim.freq} angle={sim.angle} pol={sim.pol} lang={lang} pal={pal} playing={playing} fmtNum={fmt.num} onFreq={(f) => update("freq", f)} onAngle={(a) => update("angle", a)} onSceneSurface={setSceneSurface} />
+        <SurfaceLab detailTarget={sceneView === "lab" ? detailHost : null} freq={sim.freq} angle={sim.angle} pol={sim.pol} lang={lang} pal={pal} playing={playing} fmtNum={fmt.num} onFreq={(f) => update("freq", f)} onAngle={(a) => update("angle", a)} onSceneSurface={setSceneSurface} />
       </main>
 
       <footer className="om-foot">
@@ -1263,7 +1334,7 @@ export function App() {
                 <span className="om-model-ref">ITU-R P.2040 § 3</span>
               </div>
               <div className="om-eqs">
-                  <Eq tex={String.raw`\eta = \varepsilon' - j\,\frac{17.98\,\sigma}{f}`} />
+                  <Eq tex={String.raw`\varepsilon_r = \varepsilon' - j\,\frac{17.98\,\sigma}{f},\qquad \eta = \frac{\eta_0}{\sqrt{\varepsilon_r}}`} />
                   <Eq tex={String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`} />
                   <Eq tex={String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`} />
               </div>

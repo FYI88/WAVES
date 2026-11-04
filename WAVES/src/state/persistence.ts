@@ -5,6 +5,7 @@ import type { Theme } from "../theme";
 import { LAYER_MATS, MAX_LAYERS, newId, type CustomMode } from "./layers";
 import { DEFAULT_STATE } from "./presets";
 import type { SimState } from "./results";
+import { importMatching } from "./matching";
 
 export const STORAGE_KEY = "onde-mur:v2";
 export const STORAGE_VERSION = 1;
@@ -39,19 +40,21 @@ export function sanitizePersisted(p: Partial<Persisted>, fallback: Persisted): P
           mat: l.mat,
           thickness: num(l.thickness, 0.1, 100, 10),
           eps: num(l.eps, 1, 30, 4),
-          sigma: num(l.sigma, 0.0001, 10, 0.05),
+          sigma: num(l.sigma, 0, 10, 0.05),
           customMode: (l.customMode === "nk" ? "nk" : "eps") as CustomMode,
+          ...(l.mat === "custom" && l.matching === true ? { matching: true } : {}),
+          ...(l.mat === "custom" && l.matching === true && l.matchingDesign === "quarter-wave-live" ? { matchingDesign: "quarter-wave-live" as const } : {}),
         }))
     : [];
   const ls = layers.length ? layers : fallback.sim.layers;
   return {
-    sim: {
+    sim: importMatching({
       layers: ls,
       sel: Math.round(num(s.sel, 0, ls.length - 1, 0)),
       freq: num(s.freq, 0.5, 40, fallback.sim.freq),
       angle: num(s.angle, 0, 89, fallback.sim.angle),
       pol: s.pol === "TE" || s.pol === "TM" || s.pol === "AVG" ? s.pol : fallback.sim.pol,
-    },
+    }),
     lang: p.lang === "fr" || p.lang === "en" ? p.lang : fallback.lang,
     theme: p.theme === "dark" || p.theme === "light" ? p.theme : fallback.theme,
   };

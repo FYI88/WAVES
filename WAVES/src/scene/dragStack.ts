@@ -220,9 +220,9 @@ export function applyMove<L extends HasId, S extends StackState<L>>(s: S, from: 
 }
 
 /** Set the thickness of layer `index` (clamped/snapped); same object when unchanged. */
-export function applyResize<L extends HasId & { thickness: number }, S extends StackState<L>>(s: S, index: number, cm: number): S {
+export function applyResize<L extends HasId & { thickness: number; matchingDesign?: string }, S extends StackState<L>>(s: S, index: number, cm: number): S {
   const layer = s.layers[index];
-  if (!layer) return s;
+  if (!layer || layer.matchingDesign === "quarter-wave-live") return s;
   const thickness = clampThickness(cm);
   if (thickness === layer.thickness) return s;
   return { ...s, layers: s.layers.map((l, i) => (i === index ? { ...l, thickness } : l)) };
