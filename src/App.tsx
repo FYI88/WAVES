@@ -710,7 +710,7 @@ export function App() {
             ]}
           />
           <a
-            className="om-icon-btn om-icon-link"
+            className="om-icon-btn om-icon-link om-header-repo"
             href={REPO_URL}
             target="_blank"
             rel="noopener noreferrer"
@@ -719,6 +719,15 @@ export function App() {
           >
             {Icon.github}
           </a>
+          <button
+            type="button"
+            className="om-icon-btn om-header-help"
+            aria-label={t.helpTitle}
+            title={t.helpTitle}
+            onClick={() => setShowHelp(true)}
+          >
+            ?
+          </button>
           <button
             type="button"
             className="om-icon-btn"
@@ -746,11 +755,11 @@ export function App() {
             onClick={share}
             title={t.shareTitle}
           >
-            {copied ? t.copied : t.share}
+            {copied && Icon.check}{copied ? t.copied : t.share}
           </button>
           <button
             type="button"
-            className={`om-presentbtn ${present ? "is-on" : ""}`}
+            className={`om-presentbtn om-present-action ${present ? "is-on" : ""}`}
             onClick={() => setPresentFull(!presentRef.current)}
             aria-pressed={present}
             title={present ? t.exitPresent : t.present}
@@ -787,7 +796,7 @@ export function App() {
               </span>
               {tpl(sim.layers.length > 1 ? t.layersN : t.layer1, { n: String(sim.layers.length) })}
             </span>
-            {sceneSurface && <span className="om-hud-chip om-mono" title={rtTitle}>{rtChip}</span>}
+            {sceneSurface && <span className="om-hud-chip om-mono" title={rtTitle}>{emtWarn && Icon.warn}{rtChip}</span>}
             <span className="om-hud-chip om-mono">{fmt.num(sim.freq, sim.freq < 10 ? 2 : 1)} GHz</span>
             <span className="om-hud-chip om-mono">{polLabel}</span>
           </div>

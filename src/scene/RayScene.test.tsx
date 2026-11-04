@@ -66,6 +66,22 @@ describe("top scene simulation lifecycle", () => {
     expect(render(true, "fr")).toContain(">Coupe<");
   });
 
+  it.each(["en", "fr"] as const)("renders named scene/view controls before separate display utilities in %s", (lang) => {
+    const html = render(true, lang);
+    const split = html.indexOf('class="om-scene-tool-group om-scene-display-tools"');
+    expect(split).toBeGreaterThan(0);
+    const scene = html.slice(0, split);
+    const display = html.slice(split);
+    expect(scene).toContain(`role="group" aria-label="${lang === "fr" ? "Scène et vue" : "Scene and view"}"`);
+    for (const label of ["Surface Lab", "Flat R/T", "Spatial"]) expect(scene).toContain(`>${label}<`);
+    expect(display).toContain(`role="group" aria-label="${lang === "fr" ? "Options d’affichage" : "Display utilities"}"`);
+    expect(display).toContain('type="checkbox" checked=""');
+    expect(display).toContain(`aria-pressed="true">${lang === "fr" ? "Repères" : "Labels"}`);
+    expect(display).toContain('class="om-scene-toggle om-scene-speed"');
+    expect(display).toContain(">PNG<");
+    expect(render(false, lang)).not.toContain('class="om-scene-tool-group om-scene-display-tools"');
+  });
+
   it("does not schedule simulation frames or read shortcut payloads while inactive", () => {
     render(false);
     const cleanups = harness.effects.map((effect) => effect());

@@ -441,6 +441,7 @@ a:hover {
 .om-brand-tag { color: var(--om-ink-3); overflow: hidden; text-overflow: ellipsis; }
 .om-dot-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--om-ink-3); flex: none; }
 .om-top-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+.om-header-help { font-weight: 700; }
 
 .om-icon-btn {
   width: 38px; height: 38px; border-radius: 999px; border: 1px solid var(--om-line-2);
@@ -1097,24 +1098,6 @@ a:hover {
 .om-hud-v small { font-size: 11px; }
 .om-hud-k { font-size: 11px; }
 .om-paused-badge { right: 18px; bottom: 18px; background: var(--om-card); border-radius: 7px; }
-.om-scene:has(.om-scene-toolbar) .om-paused-badge { bottom: 78px; }
-.om-scene:has(.om-scene-toolbar) .om-hud-bl,
-.om-scene:has(.om-scene-toolbar) .om-hud-br { display: none; }
-.om-scene-toolbar {
-  position: absolute;
-  z-index: 4;
-  inset: auto 18px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  padding: 8px;
-  border: 1px solid var(--om-line-2);
-  border-radius: 12px;
-  background: var(--om-card);
-  box-shadow: var(--om-shadow);
-}
 .om-view-modes { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
 .om .om-view-modes button, .om .om-scene-toggle {
   display: inline-flex;
@@ -1157,12 +1140,12 @@ a:hover {
 .om-scene-caption strong { display: block; color: var(--om-ink); font-weight: 600; }
 .om-count { background: var(--om-chip-hover); color: var(--om-ink-2); }
 .om-group:not(.om-editor) { padding: 12px 0; }
-.om-section-title, .om-stats-head { font-size: 11px; letter-spacing: 0.11em; color: var(--om-ink-2); }
-.om-label { font-size: 14px; font-weight: 600; }
+.om-section-title, .om-stats-head { font-size: var(--om-fs-1); letter-spacing: 0.11em; color: var(--om-ink-2); }
+.om-label { font-size: var(--om-fs-2); font-weight: 600; }
 .om-label-row { margin-bottom: 14px; }
 .om-controls .om-group:not(.om-editor) > .om-label-row { margin-bottom: 8px; }
 .om-label-split { display: flex; flex-wrap: wrap; gap: 6px; }
-.om-faint { font-size: 12px; }
+.om-faint { font-size: var(--om-fs-1); }
 .om-strip { height: 48px; padding: 7px; border-radius: 9px; background: var(--om-input); margin-bottom: 12px; }
 .om-strip-seg { box-shadow: inset 0 0 0 1px var(--om-line-2); min-width: 12px; }
 .om-strip-seg.is-on { transform: none; box-shadow: 0 0 0 2px var(--om-inc); }
@@ -1211,7 +1194,7 @@ a:hover {
 .om-slider-head { gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
 .om-value { min-height: 34px; padding: 5px 8px; background: var(--om-input); border-color: var(--om-line-2); border-radius: 7px; }
 .om-value-input { font-size: 13px; font-weight: 600; max-width: 12ch; }
-.om-unit { font-size: 11px; }
+.om-unit { font-size: var(--om-fs-1); }
 .om-range-wrap, .om-range { height: 38px; }
 .om-range::-webkit-slider-runnable-track {
   height: 4px;
@@ -1265,14 +1248,14 @@ a:hover {
 .om-stat { padding: 16px; border-radius: 11px; box-shadow: none; }
 .om-stat::before { width: 2px; box-shadow: none; top: 18px; bottom: 18px; }
 .om-stat:hover { transform: none; border-color: var(--om-line-2); }
-.om-stat-label { font-size: 12px; white-space: normal; }
+.om-stat-label { font-size: var(--om-fs-1); white-space: normal; }
 .om-stat-value { margin-top: 9px; font-size: 20px; font-weight: 600; flex-wrap: wrap; gap: 4px 6px; }
-.om-stat-sub { font-size: 11.5px; line-height: 1.6; overflow-wrap: anywhere; }
+.om-stat-sub { font-size: var(--om-fs-1); line-height: 1.6; overflow-wrap: anywhere; }
 .om-charts { gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .om-chart { padding: 0; overflow: hidden; }
 .om-chart-head { padding: 18px 18px 14px; gap: 10px 16px; flex-wrap: wrap; border-bottom: 1px solid var(--om-line); min-height: 84px; }
-.om-chart-head h2 { font-size: 14px; line-height: 1.5; font-weight: 650; }
-.om-chart-head p { font-size: 11px; line-height: 1.65; margin-top: 4px; }
+.om-chart-head h2 { font-size: var(--om-fs-3); line-height: 1.5; font-weight: 650; }
+.om-chart-head p { font-size: var(--om-fs-1); line-height: 1.65; margin-top: 4px; }
 .om-chart-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
 .om-chart-legend { gap: 8px 12px; }
 .om-leg { font-size: 11px; gap: 5px; }
@@ -1317,9 +1300,7 @@ a:hover {
   .om-controls .om-tabpanel > .om-editor { margin-top: 4px; }
   .om-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .om-chart-head { min-height: 0; }
-  .om-scene-toolbar { gap: 6px; }
   .om-scene-caption { bottom: 116px; }
-  .om-scene:has(.om-scene-toolbar) .om-paused-badge { bottom: 110px; }
 }
 @media (max-width: 900px) {
   .om-top { min-height: 116px; flex-wrap: wrap; padding: 14px 16px; gap: 12px; }
@@ -1345,12 +1326,10 @@ a:hover {
   .om-hud-tr { top: 12px; right: 12px; gap: 5px; flex-direction: column; }
   .om-hud-big { min-width: 72px; padding: 7px 8px; border-radius: 8px; }
   .om-hud-v { font-size: 18px; }
-  .om-scene-toolbar { inset: auto 10px 10px; padding: 6px; border-radius: 10px; }
   .om-view-modes { flex: 1 1 100%; gap: 3px; }
   .om .om-view-modes button { flex: 1; padding: 7px 6px; font-size: 10px; min-height: 36px; }
   .om .om-scene-toggle { min-height: 32px; padding: 5px 8px; font-size: 10px; }
   .om-scene-caption { left: 14px; bottom: 112px; max-width: calc(100% - 112px); font-size: 10px; line-height: 1.5; }
-  .om-scene:has(.om-scene-toolbar) .om-paused-badge { right: 12px; bottom: 112px; font-size: 9px; }
   .om-results { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .om-hero { padding: 16px 12px; gap: 10px; flex-wrap: wrap; align-content: flex-start; min-height: 140px; }
   .om-ring { width: 36px; height: 36px; }
@@ -1374,7 +1353,6 @@ a:hover {
   .om .om-view-modes button, .om .om-scene-toggle { min-height: 40px; }
   .om-range-wrap, .om-range { height: 44px; }
   .om-scene-caption { bottom: 130px; }
-  .om-scene:has(.om-scene-toolbar) .om-paused-badge { bottom: 130px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .om, .om *, .om *::before, .om *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
@@ -1385,67 +1363,6 @@ a:hover {
   .om-range { appearance: auto; }
 }
 
-.om-scene:has(.om-scene-toolbar) {
-  container-type: inline-size;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: minmax(0, 1fr) auto auto;
-}
-.om-scene:has(.om-scene-toolbar) > .om-canvas {
-  position: absolute;
-  inset: 0;
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
-}
-.om-scene-toolbar {
-  position: relative;
-  inset: auto;
-  grid-area: 2 / 1 / 3 / -1;
-  display: grid;
-  grid-template-columns: auto auto minmax(94px, 1fr) auto auto;
-  align-items: center;
-  justify-content: normal;
-  gap: 6px;
-  min-width: 0;
-  margin: 0 10px;
-  padding: 4px;
-  border-radius: 10px;
-  box-shadow: var(--om-control-shadow);
-}
-.om-scene-toolbar .om-view-modes {
-  display: flex;
-  flex: initial;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 2px;
-  min-width: 0;
-  padding: 0;
-  border-radius: 7px;
-  background: var(--om-input);
-}
-.om .om-scene-toolbar .om-view-modes button,
-.om .om-scene-toolbar .om-scene-toggle {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 32px;
-  padding: 5px 9px;
-  font-size: 11.5px;
-  line-height: 1.35;
-  white-space: nowrap;
-  border-radius: 5px;
-}
-.om-scene-toolbar .om-view-modes button > span { line-height: 1; }
-.om .om-scene-toolbar .om-scene-speed {
-  min-width: 34px;
-  font-family: var(--om-mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--om-ink);
-  background: var(--om-chip);
-}
-.om-scene-toolbar:not(:has(.om-scene-camera)) { grid-template-columns: auto 1fr auto; }
-.om-scene-toolbar:not(:has(.om-scene-camera)) .om-scene-speed { grid-column: -2; justify-self: end; }
 .om-scene-camera {
   display: flex;
   align-items: center;
@@ -1459,45 +1376,6 @@ a:hover {
   cursor: pointer;
 }
 .om-scene-camera > span { flex: none; }
-.om-scene-camera input[type="range"] {
-  appearance: none;
-  -webkit-appearance: none;
-  display: block;
-  flex: 1 1 64px;
-  width: 64px;
-  min-width: 32px;
-  height: 34px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  accent-color: var(--om-inc);
-  cursor: ew-resize;
-}
-.om-scene-camera input::-webkit-slider-runnable-track { height: 3px; border-radius: 3px; background: var(--om-track); }
-.om-scene-camera input::-moz-range-track { height: 3px; border-radius: 3px; background: var(--om-track); }
-.om-scene-camera input::-moz-range-progress { height: 3px; border-radius: 3px; background: var(--om-inc); }
-.om-scene-camera input::-webkit-slider-thumb {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  margin-top: -5.5px;
-  border: 2px solid var(--om-inc);
-  border-radius: 50%;
-  background: var(--om-thumb);
-  box-shadow: 0 0 0 2px var(--om-card);
-}
-.om-scene-camera input::-moz-range-thumb {
-  box-sizing: border-box;
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--om-inc);
-  border-radius: 50%;
-  background: var(--om-thumb);
-  box-shadow: 0 0 0 2px var(--om-card);
-}
 .om-scene-camera:focus-within > span { color: var(--om-inc); }
 .om .om-scene-toolbar button:is(:disabled, [aria-disabled="true"], .is-disabled),
 .om-scene-camera:has(input:disabled) {
@@ -1512,32 +1390,6 @@ a:hover {
   border-color: var(--om-line);
 }
 .om-scene-camera input:disabled { cursor: not-allowed; }
-.om-scene:has(.om-scene-toolbar) .om-hud-bl {
-  position: relative;
-  inset: auto;
-  transform: none;
-  grid-area: 3 / 1 / 4 / 2;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  min-width: 0;
-  min-height: 18px;
-  margin: 0;
-  padding: 2px 14px;
-  background: var(--om-stage);
-}
-.om-scene:has(.om-scene-toolbar) .om-hud-bl .om-leg { font-size: 10px; line-height: 1.4; white-space: nowrap; }
-.om-scene:has(.om-scene-toolbar) .om-hud-br {
-  position: relative;
-  inset: auto;
-  grid-area: 3 / 2 / 4 / 3;
-  align-self: center;
-  display: flex;
-  padding: 0 14px 0 0;
-  background: var(--om-stage);
-}
 .om-scene:has(.om-scene-toolbar) .om-hud-br .om-hint {
   max-width: 210px;
   padding: 0;
@@ -1548,20 +1400,7 @@ a:hover {
   font-size: 9px;
   line-height: 1.4;
 }
-.om-scene:has(.om-scene-toolbar) .om-paused-badge {
-  position: relative;
-  inset: auto;
-  grid-area: 3 / 2 / 4 / 3;
-  align-self: center;
-  justify-self: end;
-  margin: 0 12px 0 0;
-  padding: 1px 6px;
-  font-size: 9px;
-  line-height: 1.4;
-  letter-spacing: 0.04em;
-}
 .om-scene:has(.om-paused-badge) .om-hud-br { display: none; }
-.om-scene:has(.om-scene-toolbar) .om-hud-tr { top: 12px; right: 12px; flex-direction: row; gap: 5px; }
 .om-scene:has(.om-scene-toolbar) .om-hud-big {
   min-width: 82px;
   min-height: 36px;
@@ -1572,89 +1411,13 @@ a:hover {
   gap: 7px;
   border-radius: 7px;
 }
-.om-scene:has(.om-scene-toolbar) .om-hud-v { margin-top: 0; font-size: 18px; }
-.om-scene:has(.om-scene-toolbar) .om-hud-tl { top: 12px; left: 12px; bottom: auto; max-width: calc(100% - 202px); gap: 5px; }
-
-@container (max-width: 740px) {
-  .om-scene-toolbar {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: 4px 6px;
-  }
-  .om-scene-toolbar > .om-view-modes:first-child { grid-area: 1 / 1 / 2 / 2; }
-  .om-scene-toolbar > .om-view-modes:nth-child(2) { grid-area: 1 / 2 / 2 / 4; }
-  .om-scene-camera { grid-area: 2 / 1 / 3 / 2; padding: 0 4px; }
-  .om-scene-toolbar > .om-scene-toggle:not(.om-scene-speed) { grid-area: 2 / 2 / 3 / 3; }
-  .om-scene-toolbar > .om-scene-speed { grid-area: 2 / 3 / 3 / 4; }
-  .om-scene-toolbar:not(:has(.om-scene-camera)) .om-scene-speed { grid-row: 1; }
-  .om-scene:has(.om-scene-toolbar) .om-hud-br { display: none; }
-  .om-scene:has(.om-scene-toolbar) .om-hud-bl { gap: 4px 10px; padding-inline: 12px; }
-}
-@container (max-width: 560px) {
-  .om-scene-toolbar { margin-bottom: 8px; }
-  .om-scene:has(.om-scene-toolbar) .om-hud-bl {
-    position: absolute;
-    grid-area: auto;
-    inset: 54px 12px auto auto;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 160px;
-    min-height: 0;
-    padding: 4px 6px;
-    gap: 4px 6px;
-    border: 1px solid var(--om-line);
-    border-radius: 6px;
-  }
-  .om-scene:has(.om-scene-toolbar) .om-hud-bl .om-leg { font-size: 9px; gap: 4px; }
-  .om-scene:has(.om-scene-toolbar) .om-hud-bl .om-leg i { width: 9px; }
-  .om-scene:has(.om-scene-toolbar) .om-paused-badge {
-    position: absolute;
-    grid-area: auto;
-    inset: 94px 12px auto auto;
-    margin: 0;
-  }
-}
-@container (max-width: 420px) {
-  .om-scene-toolbar { grid-template-columns: minmax(0, 1fr) 120px 36px; margin-inline: 8px; padding: 4px; gap: 4px; }
-  .om-scene-toolbar > .om-view-modes:first-child { width: 100%; max-width: 132px; justify-self: start; }
-  .om .om-scene-toolbar .om-view-modes button,
-  .om .om-scene-toolbar .om-scene-toggle { min-height: 32px; font-size: 10px; padding: 5px; gap: 4px; }
-  .om-scene-toolbar .om-view-modes { gap: 1px; padding: 0; }
-  .om-scene-camera { gap: 5px; min-height: 32px; max-width: 132px; font-size: 9px; }
-  .om-scene-camera input[type="range"] { height: 32px; min-height: 32px; }
-  .om-scene:has(.om-scene-toolbar) .om-hud-big { min-width: 65px; padding: 6px; gap: 4px; }
-  .om-scene:has(.om-scene-toolbar) .om-hud-v { font-size: 15px; }
-  .om-scene:has(.om-scene-toolbar) .om-hud-tl { max-width: calc(100% - 158px); }
-  .om-scene:has(.om-scene-toolbar) .om-hud-bl { gap: 3px 7px; padding: 2px 10px; }
-  .om-scene:has(.om-scene-toolbar) .om-hud-bl .om-leg { font-size: 9px; gap: 4px; }
-  .om-scene:has(.om-scene-toolbar) .om-hud-bl .om-leg i { width: 9px; }
-}
-@container (max-width: 350px) {
-  .om-scene-toolbar { grid-template-columns: minmax(0, 1fr) 102px 30px; }
-  .om .om-scene-toolbar .om-view-modes button { padding-inline: 4px; font-size: 9px; gap: 3px; }
-  .om .om-scene-toolbar .om-scene-speed { min-width: 30px; }
-  .om-scene:has(.om-scene-toolbar) .om-hud-bl { gap: 3px 5px; padding-inline: 8px; }
-  .om-scene:has(.om-scene-toolbar) .om-hud-bl .om-leg { font-size: 8px; gap: 3px; }
-}
-@media (pointer: coarse) and (min-width: 761px) {
-  .om .om-scene-toolbar .om-view-modes button,
-  .om .om-scene-toolbar .om-scene-toggle,
-  .om-scene-camera,
-  .om-scene-camera input[type="range"] { min-height: 36px; }
-}
-@media (forced-colors: active) {
-  .om-scene-camera input[type="range"] { appearance: auto; }
-  .om-scene-camera input::-webkit-slider-thumb,
-  .om-scene-camera input::-moz-range-thumb { background: ButtonText; border-color: Highlight; }
-}
 
 .om-scene:has(.om-scene-toolbar[data-view="wave"]) { height: clamp(540px, 70vh, 680px); }
 .om-scene:has(.om-scene-toolbar[data-view="wave"]) .om-hud-bl,
 .om-scene:has(.om-scene-toolbar[data-view="wave"]) .om-hud-br { display: none; }
-.om-scene-toolbar[data-view="wave"] { margin-bottom: 10px; }
 .om-scene:has(.om-scene-toolbar[data-view="wave"]) .om-hud-tl > .om-hud-chip:first-child { display: none; }
 .om-field-envelope input[type="checkbox"] { width: 15px; height: 15px; margin: 0; accent-color: var(--om-inc); cursor: pointer; }
 .om-field-envelope:has(input:checked) { color: var(--om-inc); }
-.om-scene:has(.om-scene-toolbar[data-view="wave"]) .om-paused-badge { position: absolute; inset: 52px auto auto 50%; transform: translateX(-50%); }
 @media (max-width: 560px) {
   .om-scene:has(.om-scene-toolbar[data-view="wave"]) { height: 470px; }
 }
@@ -1669,9 +1432,6 @@ a:hover {
 .om-card { position: relative; border-radius: 20px; }
 .om-scene { height: clamp(580px, 66vh, 780px); overflow: hidden; padding: 0; box-shadow: 0 40px 90px -50px rgba(0,0,0,.9), 0 0 0 1px var(--om-line); }
 .om-scene .om-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.om-scene-toolbar { position: absolute; z-index: 5; top: 12px; left: 12px; right: 210px; display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: none; }
-.om-scene-toolbar::-webkit-scrollbar { display: none; }
-.om-scene-toolbar > * { flex: none; }
 .om-view-modes { display: inline-flex; gap: 2px; padding: 3px; border-radius: 11px; background: color-mix(in srgb, var(--om-bg) 70%, transparent); border: 1px solid var(--om-line-2); backdrop-filter: blur(12px); }
 .om-view-modes button { border: 0; background: transparent; color: var(--om-ink-2); font: 600 11.5px var(--om-font); padding: 6px 11px; border-radius: 8px; cursor: pointer; transition: background .25s, color .25s, box-shadow .25s; }
 .om-view-modes button:hover { color: var(--om-ink); }
@@ -1723,7 +1483,6 @@ a:hover {
 @media (max-width: 639px) {
   .om-layout { gap: 12px; padding: 12px 10px 24px; }
   .om-scene { height: 600px; border-radius: 16px; }
-  .om-scene-toolbar { right: 12px; }
   .om-hud-tl { display: none; }
   .om-hud-tr { top: auto; bottom: 12px; right: 12px; }
   .om-results { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1733,22 +1492,26 @@ a:hover {
 
 /* ═══ V2 teaching theme: stacked inspector, present mode ═══ */
 .om-presentbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   height: 42px; padding: 0 16px; border-radius: 12px; cursor: pointer;
   border: 1px solid var(--om-line-2); background: var(--om-card); color: var(--om-ink);
   font-size: 13px; font-weight: 700; box-shadow: var(--om-control-shadow);
 }
 .om-presentbtn:hover { border-color: var(--om-inc); color: var(--om-inc); }
+.om-presentbtn svg, .om-hud-chip svg { width: 16px; height: 16px; flex: none; }
 .om-presentbtn.is-on { color: var(--om-inc); border-color: var(--om-inc); }
 .om-presentbar { display: none; }
 .om[data-present="true"] .om-layout {
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas: "scene" "presentbar";
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: stretch;
+  align-content: stretch;
 }
 .om[data-present="true"] .om-controls,
 .om[data-present="true"] .om-results,
 .om[data-present="true"] .om-charts,
 .om[data-present="true"] .om-foot { display: none; }
-.om[data-present="true"] .om-scene { height: calc(100vh - 250px); height: calc(100dvh - 250px); min-height: 480px; }
 .om[data-present="true"] .om-presentbar {
   display: flex; grid-area: presentbar; align-items: center; gap: 18px; flex-wrap: wrap;
   background: var(--om-card); border: 1px solid var(--om-line); border-radius: 16px;
@@ -1764,10 +1527,8 @@ a:hover {
   font-size: 12.5px; font-weight: 650;
 }
 .om-reset:hover { color: var(--om-ref); border-color: var(--om-ref); }
-.om .om-scene-toolbar > .om-scene-toggle { flex: none; white-space: nowrap; }
 @media (max-width: 639px) {
   .om-presentbtn { height: 40px; padding: 0 12px; }
-  .om[data-present="true"] .om-scene { height: calc(100vh - 300px); height: calc(100dvh - 300px); min-height: 420px; }
 }
 
 /* ═══ V2 app-frame: one box that fits the screen, no islands ═══ */
@@ -1871,7 +1632,7 @@ a:hover {
 
 /* ── stage: canvas row + deck row ───────────────────────────────────── */
 .om-scene:has(.om-scene-toolbar) {
-  container-type: normal; /* retire the old @container deck rules */
+  container: scene / inline-size;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
@@ -1914,30 +1675,41 @@ a:hover {
   inset: auto;
   grid-area: 2 / 1 / 3 / 2;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  z-index: 5;
   width: auto;
   min-width: 0;
   margin: 0;
-  /* a slim deck hands ~10px of height to the canvas */
+  /* Both named groups remain in flow when controls wrap. */
   padding: 6px 12px;
   border-radius: 0;
   overflow: visible;
   background: color-mix(in srgb, var(--om-bg) 86%, transparent);
+  border: 0;
   border-top: 1px solid var(--om-line);
   box-shadow: none;
   backdrop-filter: blur(14px) saturate(1.3);
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
 }
-.om .om-scene-toolbar > * { flex: 0 1 auto; min-width: 0; }
-.om .om-scene-toolbar .om-view-modes { flex: 0 0 auto; }
+.om-scene-tool-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.om-scene-display-tools { border-top: 1px solid var(--om-line); padding-top: 6px; }
+.om-scene-tool-label { color: var(--om-ink-2); font-size: var(--om-fs-1); font-weight: 600; min-width: 78px; }
+.om .om-scene-toolbar .om-view-modes { display: flex; flex: 0 1 auto; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; padding: 2px; border-radius: 7px; background: var(--om-input); }
+.om .om-scene-toolbar .om-view-modes button,
+.om .om-scene-toolbar .om-scene-toggle { min-width: 0; min-height: 32px; border-radius: 5px; font-size: var(--om-fs-1); line-height: 1.35; }
 .om .om-scene-toolbar .om-view-modes button {
-  flex: 0 0 auto;
-  font-size: 11.5px;
+  flex: 0 1 auto;
   padding: 5px 10px;
 }
-.om .om-scene-toolbar .om-scene-speed { margin-left: auto; }
+.om .om-scene-toolbar .om-scene-speed { margin-left: auto; min-width: 36px; font-family: var(--om-mono); font-variant-numeric: tabular-nums; color: var(--om-ink); background: var(--om-chip); }
+.om-scene-camera { font-size: var(--om-fs-1); }
+@container scene (max-width: 560px) {
+  .om .om-scene-toolbar { padding: 6px 8px; }
+  .om-scene-tool-label { flex-basis: 100%; }
+  .om .om-scene-toolbar .om-view-modes button { padding-inline: 7px; }
+}
 
 /* ── stage chrome: one corner each ──────────────────────────────────── */
 .om-scene:has(.om-scene-toolbar) .om-hud-tl {
@@ -1968,32 +1740,34 @@ a:hover {
   padding: 6px 8px;
   border-radius: 8px;
 }
-.om .om-scene .om-hud-v { font-size: 17px; }
-.om .om-scene .om-hud-v small { font-size: 10px; }
+.om .om-scene .om-hud-v { margin-top: 0; font-size: var(--om-fs-4); }
+.om .om-scene .om-hud-v small { font-size: var(--om-fs-1); }
+.om .om-scene .om-hud-k, .om .om-scene .om-hud-chip { font-size: var(--om-fs-1); }
 
 /* legend + hint sit on the free band just above the deck (wide screens) */
 .om-scene:has(.om-scene-toolbar) .om-hud-bl,
 .om-scene:has(.om-scene-toolbar) .om-hud-br { display: none; }
-@media (min-width: 701px) {
+@container scene (min-width: 701px) {
   .om-scene:has(.om-scene-toolbar[data-view="spatial"]) .om-hud-bl {
     position: absolute;
-    inset: auto auto 70px 12px;
-    grid-area: auto;
+    inset: auto auto 12px 12px;
+    grid-area: 1 / 1 / 2 / 2;
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 4px 12px;
     min-height: 0;
     margin: 0;
+    transform: none;
     padding: 2px 0;
     background: none;
   }
 }
-@media (min-width: 1040px) {
+@container scene (min-width: 1040px) {
   .om-scene:has(.om-scene-toolbar) .om-hud-br {
     position: absolute;
-    inset: auto 14px 70px auto;
-    grid-area: auto;
+    inset: auto 14px 12px auto;
+    grid-area: 1 / 1 / 2 / 2;
     align-self: auto;
     display: flex;
     padding: 0;
@@ -2004,11 +1778,14 @@ a:hover {
 /* paused badge: clear of the deck, never over the drawing's centre */
 .om-scene:has(.om-scene-toolbar) .om-paused-badge {
   position: absolute;
-  inset: auto auto 70px 50%;
-  grid-area: auto;
+  inset: auto auto 12px 50%;
+  grid-area: 1 / 1 / 2 / 2;
   z-index: 5;
   margin: 0;
   transform: translateX(-50%);
+  padding: 2px 7px;
+  font-size: var(--om-fs-1);
+  line-height: 1.4;
 }
 
 /* ── phones: the switch moves to its own row, the deck compact ──────── */
@@ -2016,16 +1793,9 @@ a:hover {
   /* row 1 belongs to the read-outs, the switch takes row 2 */
   .om-geomswitch { top: 60px; }
   .om-cylmode { top: 102px; }
-  .om-scene:has(.om-scene-toolbar) .om-paused-badge { bottom: 116px; }
 }
 
 @media (max-width: 560px) {
-  .om .om-scene-toolbar button,
-  .om .om-scene-toolbar .om-view-modes button,
-  .om-scene-camera { font-size: 10px; }
-  .om .om-scene-toolbar .om-view-modes button { padding: 5px 7px; }
-  .om .om-scene-toolbar { gap: 6px 8px; padding-inline: 8px; }
-  .om-scene-camera { gap: 6px; padding-inline: 4px; }
   .om-geomswitch button { padding: 6px 9px; font-size: 11px; }
 }
 
@@ -2084,37 +1854,19 @@ a:hover {
   }
 }
 
-/* ── present mode ─────────────────────────────────────────────────────────
-   The deck-only frame hides the inspector, the results and the charts, so the
-   stage may take the whole screen: it was previously caught by the generic
-   clamp() rule above, which capped a projector at 66vh. */
+/* Presentation fills the frame after the wrapping header. The toolbar and
+   presentbar own auto rows; no guessed header-height subtraction. */
 .om[data-present="true"] .om-scene,
 .om[data-present="true"] .om-scene:has(.om-scene-toolbar) {
-  height: calc(100vh - 236px);
-  height: calc(100dvh - 236px);
-  min-height: 420px;
+  height: 100%;
+  min-height: 0;
 }
-@media (max-width: 639px) {
-  .om[data-present="true"] .om-scene,
-  .om[data-present="true"] .om-scene:has(.om-scene-toolbar) {
-    height: calc(100vh - 300px);
-    height: calc(100dvh - 300px);
-    min-height: 380px;
-  }
-}
-
-/* short landscape: the deck must not push the stage out of the viewport */
-@media (max-height: 560px) and (max-width: 900px) {
-  .om[data-present="true"] .om-presentbar {
-    flex-wrap: nowrap; overflow-x: auto; padding-block: 8px; gap: 10px;
-  }
-  .om-presentbar-group { flex: 1 0 170px; }
-  .om[data-present="true"] .om-scene,
-  .om[data-present="true"] .om-scene:has(.om-scene-toolbar) {
-    height: calc(100vh - 210px);
-    height: calc(100dvh - 210px);
-    min-height: 120px;
-  }
+.om[data-present="true"] .om-layout { padding-bottom: env(safe-area-inset-bottom); }
+.om[data-present="true"] .om-top, .om[data-present="true"] .om-top-actions { flex-wrap: wrap; }
+/* On short screens scroll the presentation, never clip wrapped controls. */
+@media (max-height: 600px), (max-width: 639px) {
+  .om[data-present="true"] { overflow-y: auto; }
+  .om[data-present="true"] .om-layout { flex: 1 0 auto; overflow: visible; grid-template-rows: minmax(360px, 1fr) auto; }
 }
 
 /* ── Desktop 80%: viewport-unit compensation ─────────────────────────────
@@ -2129,8 +1881,6 @@ a:hover {
   .om-scene:has(.om-scene-toolbar),
   .om-scene:has(.om-scene-toolbar[data-view="wave"]) { height: clamp(460px, 82.5vh, 820px); }
   .om-chart-body { height: clamp(240px, 37.5vh, 330px); }
-  .om[data-present="true"] .om-scene,
-  .om[data-present="true"] .om-scene:has(.om-scene-toolbar) { height: calc(125vh - 236px); height: calc(125dvh - 236px); }
 }
 
 /* ── Shortcuts overlay (? key) ─────────────────────────────────────────
@@ -2179,13 +1929,25 @@ a:hover {
 @media (max-width: 560px) {
   .om-top-actions { flex: 0 1 auto; flex-wrap: wrap; row-gap: 6px; }
 }
+/* Narrow phones: compact identity, then reachable utilities and primary actions.
+   Only the duplicate repository link is hidden; About retains it. */
+@media (max-width: 480px) {
+  .om-top { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; gap: 8px; }
+  .om-brand { gap: 8px; }
+  .om-brand p, .om-top-actions > .om-header-repo { display: none; }
+  .om-school { font-size: 9px; letter-spacing: 0.08em; }
+  .om-logo { width: 34px; height: 34px; }
+  .om-top-actions { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); width: 100%; gap: 6px; }
+  .om-top-actions > .om-seg { grid-column: span 3; margin: 0; }
+  .om-top-actions > .om-presentbtn, .om-top-actions > .om-play { grid-column: span 2; min-width: 0; padding-inline: 6px; justify-content: center; }
+  .om-top-actions > .om-icon-btn { width: 100%; height: 36px; }
+}
 @media (pointer: coarse) {
   .om-about-close { top: 8px; right: 8px; width: 40px; height: 40px; }
   .om-about-id { padding-right: 46px; }
   .om .om-scene-toolbar .om-view-modes button,
   .om .om-scene-toolbar .om-scene-toggle,
-  .om-scene-camera,
-  .om-scene-camera input[type="range"] { min-height: 40px; }
+  .om-scene-camera { min-height: 40px; }
 }
 
 /* ═══ About sheet ═══
@@ -2302,7 +2064,7 @@ a:hover {
   .om-layout { grid-template-areas: "controls scene" "controls results" "controls charts" "controls lab"; }
 }
 @media (min-width: 1344px) {
-  .om-layout { grid-template-areas: "controls scene results" "controls charts results" "controls lab lab"; }
+  .om-layout { grid-template-columns: 360px minmax(0, 1fr) 300px; grid-template-areas: "controls scene results" "controls charts results" "controls lab lab"; }
 }
 .om[data-present="true"] .om-layout > .sl-lab { display: none; }
 
@@ -2338,6 +2100,7 @@ a:hover {
   --om-fs-4: 22px;   /* main readouts */
   --om-lh: 1.45;
 }
+.om[data-present="true"] { --om-fs-1: 13px; --om-fs-2: 15px; --om-fs-3: 18px; --om-fs-4: 25px; }
 /* teaching boards / projectors: larger type */
 @media (min-width: 1600px) and (min-height: 900px) {
   .om { --om-fs-1: 13px; --om-fs-2: 15px; --om-fs-3: 18px; --om-fs-4: 26px; }

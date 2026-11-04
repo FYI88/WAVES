@@ -571,10 +571,10 @@ sync pass. Native device gestures and browser visuals are not verified locally;
 the existing GitHub Actions workflow builds and checks the debug APK after push.
 # Visual consistency follow-up (2026-11-04)
 
-Approved A+B only: tighter ordinary sidebar groups, horizontally scrollable About
+Completed A+B: tighter ordinary sidebar groups, horizontally scrollable About
 equations, aligned/wrapping chart tools, semantic Lab legend colours, matching Lab
-controls/touch targets, and a deliberate Adaptation grid. Physics and Batch C
-layout redesigns are out of scope. UI text uses no emoji; retain physics symbols
+controls/touch targets, and a deliberate Adaptation grid. Batch C was subsequently
+approved and implemented below. UI text uses no emoji; retain physics symbols
 and SVG interface icons.
 
 Future colour settings (no button or settings UI added now): the Lab DOM legend
@@ -589,3 +589,31 @@ an independent set of hardcoded Lab legend colours.
 The Android download button remains deferred until a current permanently signed
 release APK is available. Do not link a private Actions artifact or an obsolete
 debug APK as a production download.
+
+## Batch C (2026-11-04, uncommitted)
+
+- Wide layout at 1344px and above explicitly uses `360px minmax(0, 1fr) 300px`
+  alongside its three-column areas; narrower two/one-column layouts are retained.
+- Present mode uses the existing flex app frame and grid rows
+  `minmax(0, 1fr) auto`, with an in-flow wrapping toolbar and presentbar. Removed
+  guessed header-height subtraction. Short screens (600px height or less) and
+  narrow phones use a scrolling fallback with a 360px scene track, not clipped
+  controls. Normal sidebar measurement and desktop body zoom stay unchanged.
+- Toolbar has named Scene/view and Display groups; main-only utilities disappear
+  in Lab mode. Container queries use actual scene width. Pause/legend/hint anchor
+  to canvas grid row 1, independently of toolbar wrapping. Removed superseded
+  toolbar grids, impossible old container queries and unused camera-range styles.
+- At 480px and below, the compact header keeps language/help/About/theme and a
+  second row of Share/Present/Play; hides only author text and duplicate repo link.
+  About retains the repository. Added a visible Help button for touch access.
+- Existing font tokens now size headings, captions and HUD values; present mode
+  uses a moderate token increase. Warning and copied success use decorative SVGs
+  beside meaningful translated text, never emoji strings.
+- Verification: 182 tests across 25 files, TypeScript and production build pass;
+  tests exercise rendered FR/EN toolbar/header states, SVGs, and zoom-correct
+  frame measurement. Physics/native bridge and generated Android edits untouched.
+- Browser/screenshot and device checks remain pending: 320/360px FR/EN headers,
+  1040/1344px transitions, wrapped toolbar with profiled R/T and EMT warning,
+  paused Section/Spatial/Lab, short-landscape scrolling, full/windowed Present,
+  projector type and both themes. Automated markup tests do not prove visuals.
+  No commit, push, Capacitor sync, settings UI or download button in this batch.

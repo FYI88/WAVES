@@ -316,6 +316,8 @@ export function RayScene(props: {
       onPointerCancel={() => cancelDrag(true)}
     />
     <div className="om-scene-toolbar" data-view={active ? view : "lab"} aria-label={french ? "Affichage de la simulation" : "Simulation display"}>
+      <div className="om-scene-tool-group om-scene-view-tools" role="group" aria-label={french ? "Scène et vue" : "Scene and view"}>
+      <span className="om-scene-tool-label">{french ? "Scène / vue" : "Scene / view"}</span>
       {props.viewTools}
       {active && <>
       <div className="om-view-modes" role="group" aria-label={french ? "Vue" : "View"}>
@@ -323,6 +325,10 @@ export function RayScene(props: {
         <button type="button" aria-pressed={view === "spatial"} className={view === "spatial" ? "is-on" : ""} onClick={() => setView("spatial")}>Spatial</button>
       </div>
       {props.tools}
+      </>}
+      </div>
+      {active && <div className="om-scene-tool-group om-scene-display-tools" role="group" aria-label={french ? "Options d’affichage" : "Display utilities"}>
+      <span className="om-scene-tool-label">{french ? "Affichage" : "Display"}</span>
       {view === "wave" && <>
         <div className="om-view-modes" role="group" aria-label={french ? "Dessin des ondes" : "Wave drawing"}>
           {(["field", "fronts", "both"] as const).map(mode => <button key={mode} type="button" aria-pressed={display === mode} className={display === mode ? "is-on" : ""} onClick={() => setDisplay(mode)}>{mode === "field" ? (french ? "Courbes" : "Curves") : mode === "fronts" ? (french ? "Crêtes" : "Crests") : (french ? "Les deux" : "Both")}</button>)}
@@ -360,7 +366,7 @@ export function RayScene(props: {
       >
         PNG
       </button>
-      </>}
+      </div>}
     </div>
   </>;
 }
