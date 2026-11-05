@@ -1,5 +1,13 @@
 # WaveS - Android packaging handoff
 
+## About sheet refinement — 2026-11-05 (uncommitted, both app copies)
+
+- Academic info sheet in the simulation sans/token system: fixed translated heading/tagline + 44px close, credits/contact first, complete existing model note + ITU reference visible, one collapsed Physics equations disclosure (all math retained, joined permittivity/impedance split and labelled), build diagnostics inside scroll body. Five-tap perf toggle retained. Desktop 560px/760px bounded flex shell; safe-area phone bottom sheet, 18/24px spacing, 44px wrapping links, credits stack below 420px; fake drag handle and competing old About/coarse/large-screen rules removed. Equations remain 15px, start-aligned and locally keyboard-scrollable.
+- `src/ui/modalFocus.ts` contains focus for About + Help, restores opener, makes surrounding branches inert and locks body/root scrolling with reversible cleanup. Existing div dialogs retain fullscreen/Android Back compatibility. Global keyboard handler returns after Escape while either modal is open, before stack commands, so links/disclosure/arrows/Space retain native behavior. No new state slots/dependencies/physics changes; native/web App differences and all prior Android edits preserved.
+- Files per copy: `src/App.tsx`, `src/styles.css`, `src/i18n/index.ts`, `src/App.test.tsx`, `src/embeddedEditor.test.tsx`, `src/ui/modalFocus{,.test}.ts`, `HANDOFF.md`. Added 8 tests/copy: FR/EN content/disclosure, actual equation and five-tap callbacks, modal shortcut guard/Escape, deterministic focus/inert/scroll cleanup and dynamic Tab boundaries.
+- Verification: primary `npm test -- --maxWorkers=1` **286 / 32 files**, build pass (**116 modules**); secondary app-only `npm test -- --exclude "waves-gitlab/**" --maxWorkers=1` **282 / 31**, full including untouched nested repo **558 / 59**, build pass (**104 modules**). Both diff checks pass (line-ending warnings only). Initial concurrent default-worker runs hit Windows VirtualAlloc/OOM; sequential single-worker suites passed without code/config workarounds.
+- No commit/push, subagents, browser or Android build. Rendered/hook/fake-DOM checks are not real-browser proof: mobile visual reflow, zoom/contrast, touch scrolling, fullscreen and native Back still need device/browser smoke testing.
+
 ## Surface Lab Phase 3 + Brewster tick — 2026-11-05 (uncommitted, both app copies)
 
 - Lab-only layout: equal-width compact tabs, real section headings, consistent 12/16px grouping, width-aware two-column control grids (one column below 460px of controls width), aligned labels/units and host/content pickers. Profile cards and long FR labels wrap; Lab controls/actions have 40px minimum targets. Canvas sizes, body proportions and sidebar width unchanged.

@@ -1913,9 +1913,7 @@ a:hover {
   font-family: var(--om-mono); font-size: 11.5px; font-weight: 600;
 }
 
-/* ── About overlay (header info button) ────────────────────────────────
-   Business-card treatment: monochrome, hairline rules, one restrained
-   accent. Reuses .om-help-backdrop, so no existing layout rule moves. */
+/* Shared header links and performance indicator. */
 .om-icon-link { text-decoration: none; color: var(--om-ink-2); }
 .om-icon-link:hover { color: var(--om-ink); }
 .om-eq-pending { min-height: 28px; border-radius: 6px; background: color-mix(in srgb, var(--om-ink-3) 8%, transparent); animation: om-pulse 1.1s ease-in-out infinite; }
@@ -1947,89 +1945,76 @@ a:hover {
   .om-top-actions > .om-icon-btn { width: 100%; height: 36px; }
 }
 @media (pointer: coarse) {
-  .om-about-close { top: 8px; right: 8px; width: 40px; height: 40px; }
-  .om-about-id { padding-right: 46px; }
   .om .om-scene-toolbar .om-view-modes button,
   .om .om-scene-toolbar .om-scene-toggle,
   .om-scene-camera { min-height: 40px; }
 }
 
-/* ═══ About sheet ═══
-   Short info sheet: a 440px card centred on laptops and boards, a bottom
-   sheet on phones. Content stays short (model, credits, links; the model
-   assumptions sit behind a disclosure) so it never needs to scroll. */
+/* About: fixed heading, independently scrollable academic info sheet. */
 .om-about {
-  position: relative; display: flex; flex-direction: column;
-  width: min(440px, 100%); max-height: 100%; overflow: hidden auto;
-  background: var(--om-card-hi); border: 1px solid var(--om-line-2);
-  border-radius: 18px; box-shadow: var(--om-shadow);
-  backdrop-filter: blur(24px) saturate(1.2); -webkit-backdrop-filter: blur(24px) saturate(1.2);
+  display: flex; flex-direction: column; min-height: 0;
+  width: min(560px, 100%);
+  max-height: min(760px, calc(100dvh - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom))));
+  overflow: hidden; background: var(--om-card); border: 1px solid var(--om-line-2);
+  border-radius: 16px; box-shadow: var(--om-shadow);
 }
-.om-about-head { position: relative; display: flex; align-items: center; gap: 12px; padding: 18px 18px 14px; }
-.om-about-mark {
-  flex: none; display: grid; place-items: center;
-  width: 36px; height: 36px; border-radius: 50%;
-  background: #fff; border: 1px solid var(--om-line-2);
-}
-.om-about-mark .om-logo { width: 30px; height: 30px; }
-.om-about-id { flex: 1 1 auto; min-width: 0; padding-right: 40px; }
-.om-about-id h2 { margin: 0; font-size: 17px; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; color: var(--om-ink); }
-.om-about-id p { margin: 2px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--om-ink-2); }
+.om-about-head { flex: none; display: flex; align-items: flex-start; gap: 18px; padding: 18px 24px; border-bottom: 1px solid var(--om-line); }
+.om-about-id { flex: 1 1 auto; min-width: 0; }
+.om-about-id h2 { margin: 0; font-size: 20px; line-height: 1.3; font-weight: 650; letter-spacing: -0.02em; color: var(--om-ink); }
+.om-about-id p { margin: 6px 0 0; font-size: 14px; line-height: 1.5; color: var(--om-ink-2); }
+.om-about-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .om-about-close {
-  position: absolute; top: 14px; right: 12px;
-  width: 36px; height: 36px; border-radius: 10px; cursor: pointer;
-  border: 1px solid transparent; background: transparent;
-  color: var(--om-ink-3); font-size: 18px; line-height: 1;
-  display: grid; place-items: center;
-  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  flex: none; width: 44px; height: 44px; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent; background: transparent; color: var(--om-ink-2);
+  font-size: 24px; line-height: 1; display: grid; place-items: center;
 }
 .om-about-close:hover { background: var(--om-chip); color: var(--om-ink); border-color: var(--om-line); }
-.om-about-close:focus-visible { outline: 2px solid var(--om-acc); outline-offset: 2px; }
-.om-about-sec { padding: 14px 18px; border-top: 1px solid var(--om-line); }
-.om-about-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.om-about :is(button, a, summary, .om-eq):focus-visible,
+.om-help button:focus-visible { outline: 2px solid var(--om-acc); outline-offset: 2px; }
+.om-about-sec { padding: 18px 24px; }
+.om-about-sec + .om-about-sec { border-top: 1px solid var(--om-line); }
+.om-about-sec-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 18px; margin-bottom: 12px; }
 .om-about-label {
-  display: block; color: var(--om-ink-3);
-  font: 600 10px var(--om-mono); letter-spacing: 0.12em; text-transform: uppercase;
+  display: block; margin: 0; color: var(--om-ink-2);
+  font-size: 12px; line-height: 1.5; font-weight: 600;
 }
-.om-model-ref { color: var(--om-ink-3); font: 500 10.5px var(--om-mono); white-space: nowrap; }
+.om-model-ref { color: var(--om-ink-2); font: 500 12px/1.5 var(--om-mono); }
+.om-about-note { margin: 0; font-size: 14px; line-height: 1.65; color: var(--om-ink-2); }
 .om-eqs { display: flex; flex-direction: column; }
-.om-eq { min-width: 0; padding: 7px 0; overflow-x: auto; overflow-y: hidden; color: var(--om-ink); text-align: center; }
-.om-eq .katex { font-size: 15px; }
-.om-eq .katex-display { width: max-content; min-width: 100%; margin: 0; }
-.om-eq-pending { min-height: 30px; }
-.om-model-more { margin-top: 4px; }
+.om-about-equation { min-width: 0; margin: 0; padding: 12px 0; border-top: 1px solid var(--om-line); }
+.om-about-equation figcaption { color: var(--om-ink-2); font-size: 12px; line-height: 1.5; margin-bottom: 6px; }
+.om-about .om-eq { min-width: 0; padding: 6px 2px; overflow-x: auto; overflow-y: hidden; color: var(--om-ink); text-align: left; }
+.om-about .om-eq .katex { font-size: 15px; }
+.om-about .om-eq .katex-display { width: max-content; min-width: 100%; margin: 0; text-align: left; }
+.om-model-more { margin-top: 12px; }
 .om-model-more summary {
-  display: inline-flex; align-items: center; gap: 8px; padding: 6px 0;
+  display: flex; align-items: center; gap: 10px; min-height: 44px;
   list-style: none; cursor: pointer;
-  font-size: 12.5px; font-weight: 600; color: var(--om-ink-2);
+  font-size: 14px; font-weight: 600; color: var(--om-ink);
 }
 .om-model-more summary::-webkit-details-marker { display: none; }
 .om-model-more summary::before {
-  content: ""; width: 6px; height: 6px; margin-top: -3px;
+  content: ""; flex: none; width: 6px; height: 6px;
   border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
-  transform: rotate(45deg); transition: transform 0.2s;
+  transform: rotate(-45deg);
 }
-.om-model-more[open] summary::before { margin-top: 2px; transform: rotate(-135deg); }
+.om-model-more[open] summary::before { transform: rotate(45deg); }
 .om-model-more summary:hover { color: var(--om-ink); }
-.om-model-more summary:focus-visible { outline: 2px solid var(--om-acc); outline-offset: 2px; border-radius: 4px; }
-.om-model-more p { margin: 2px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--om-ink-2); }
-.om-about-credit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
-.om-about-credit strong { display: block; margin-top: 3px; font-size: 13.5px; font-weight: 600; color: var(--om-ink); overflow-wrap: anywhere; }
-.om-about-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.om-about-credit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
+.om-about-credit strong { display: block; margin-top: 6px; font-size: 14px; line-height: 1.5; font-weight: 600; color: var(--om-ink); overflow-wrap: anywhere; }
+.om-about-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .om-about-link {
   display: inline-flex; align-items: center; gap: 7px;
-  height: 34px; padding: 0 12px; border-radius: 999px; text-decoration: none;
+  min-height: 44px; padding: 8px 12px; border-radius: 8px; text-decoration: none;
   border: 1px solid var(--om-line-2); background: transparent;
-  color: var(--om-ink); font-size: 12.5px; font-weight: 600;
-  transition: background 0.2s, border-color 0.2s;
+  color: var(--om-ink); font-size: 13px; line-height: 1.5; font-weight: 600;
 }
 .om-about-link:hover { background: var(--om-chip-hover); color: var(--om-ink); border-color: color-mix(in srgb, var(--om-acc) 40%, var(--om-line-2)); }
-.om-about-link:focus-visible { outline: 2px solid var(--om-acc); outline-offset: 2px; }
 .om-about-link svg { width: 15px; height: 15px; flex: none; color: var(--om-ink-2); }
 .om-about-build {
-  appearance: none; display: block; width: 100%; margin: 0; padding: 10px 18px 14px;
-  border: 0; border-top: 1px solid var(--om-line); background: transparent; color: var(--om-ink-3);
-  font: 500 10.5px/1.4 var(--om-mono); letter-spacing: 0.04em;
+  appearance: none; display: block; width: 100%; min-height: 44px; margin: 0; padding: 18px 24px;
+  border: 0; border-top: 1px solid var(--om-line); background: transparent; color: var(--om-ink-2);
+  font: 500 12px/1.5 var(--om-mono);
   text-align: left; overflow-wrap: anywhere; touch-action: manipulation; cursor: default;
 }
 .om-about-build:hover { color: var(--om-ink-2); }
@@ -2037,26 +2022,17 @@ a:hover {
 @media (max-width: 640px) {
   .om-about-backdrop { align-items: flex-end; padding: 0; }
   .om-about {
-    width: 100%; max-height: calc(100% - max(24px, env(safe-area-inset-top)));
-    border-radius: 18px 18px 0 0; border-bottom: 0;
-    padding-bottom: env(safe-area-inset-bottom);
+    width: 100%; max-height: calc(100dvh - max(18px, env(safe-area-inset-top)));
+    border-radius: 16px 16px 0 0; border-bottom: 0;
     animation: om-sheet-up 0.28s var(--om-ease) both;
   }
-  .om-about::before {
-    content: ""; display: block; flex: none; width: 36px; height: 4px; margin: 8px auto 0;
-    border-radius: 2px; background: var(--om-line-2);
-  }
-  .om-about-head { padding-top: 10px; }
-  .om-about-close { top: 14px; }
-  .om-about-link { flex: 1 1 auto; justify-content: center; height: 40px; }
+  .om-about-head, .om-about-sec, .om-about-build { padding-inline: max(18px, env(safe-area-inset-left)) max(18px, env(safe-area-inset-right)); }
+  .om-about-body { padding-bottom: env(safe-area-inset-bottom); }
+  .om-about-link { flex: 1 1 auto; justify-content: center; }
 }
+@media (max-width: 420px) { .om-about-credit { grid-template-columns: minmax(0, 1fr); } }
 @keyframes om-sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .om-about { animation: none; } }
-/* teaching boards / large screens */
-@media (min-width: 1280px) and (min-height: 900px) {
-  .om-about { width: min(500px, 100%); }
-  .om-eq .katex { font-size: 16px; }
-}
 
 /* ═══ Surface lab placement ═══
    The lab card has its own grid area. Without one it was auto-placed in an

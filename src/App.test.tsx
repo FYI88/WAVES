@@ -7,14 +7,14 @@ import type { ReactNode } from "react";
 import { LAB_TEXT } from "./surface/labText";
 import { NO_INCLUSIONS } from "./media/mixing";
 
-const harness = vi.hoisted(() => ({ lang: "en" as Lang, index: 0, present: false, copied: false, scene: "main", target: {}, inclusions: null as null | typeof NO_INCLUSIONS }));
+const harness = vi.hoisted(() => ({ lang: "en" as Lang, index: 0, present: false, copied: false, help: false, about: false, scene: "main", target: {}, inclusions: null as null | typeof NO_INCLUSIONS }));
 vi.mock("react-dom", () => ({ createPortal: (node: ReactNode) => node }));
 vi.mock("react", async (original) => {
   const react = await original<typeof import("react")>();
   return { ...react, useState: (initial: unknown) => {
     // Drive App's presentation/copied slots without running browser effects.
     const index = harness.index++;
-    return react.useState(index === 4 ? harness.scene : index === 16 ? harness.target : index === 17 ? harness.inclusions : index === 8 ? harness.present : index === 9 ? harness.copied : initial);
+    return react.useState(index === 4 ? harness.scene : index === 16 ? harness.target : index === 17 ? harness.inclusions : index === 8 ? harness.present : index === 9 ? harness.copied : index === 10 ? harness.help : index === 11 ? harness.about : initial);
   } };
 });
 vi.mock("./state/persistence", async (original) => ({
@@ -27,6 +27,8 @@ beforeEach(() => {
   harness.present = false;
   harness.scene = "main";
   harness.copied = false;
+  harness.help = false;
+  harness.about = false;
   harness.inclusions = null;
   vi.stubGlobal("navigator", { userAgent: "Chrome/140", language: "en" });
   vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
@@ -56,6 +58,30 @@ it.each(["en", "fr"] as const)("renders results for the selected scene without a
   expect(restored).toBe(mainResults);
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it.each(["en", "fr"] as const)("renders an academic About sheet with visible model text and one equations disclosure (%s)", (lang) => {
+  harness.lang = lang;
+  harness.about = true;
+  const html = renderToStaticMarkup(<App />);
+  const sheet = html.slice(html.indexOf('<div class="om-about"'));
+  const t = DICTS[lang];
+  expect(sheet).toContain('aria-labelledby="om-about-title"');
+  expect(sheet).toContain(`<h2 id="om-about-title">${t.aboutTitle}</h2>`);
+  expect(sheet).toContain('class="om-about-body"');
+  expect(sheet).toContain(t.author);
+  expect(sheet).toContain(t.school);
+  expect(sheet).toContain('href="mailto:chetaine.younes@etu.uae.ac.ma"');
+  expect(sheet).toContain('href="mailto:youneschetaine@gmail.com"');
+  expect(sheet).toContain('href="https://github.com/FYI88/WAVES"');
+  expect(sheet).toContain(`<p class="om-about-note">${t.modelNote}</p>`);
+  expect(sheet).toContain('ITU-R P.2040 § 3');
+  expect(sheet.match(/<details/g)).toHaveLength(1);
+  expect(sheet).toContain(`<details class="om-model-more"><summary>${t.physicsEquations}</summary>`);
+  expect(sheet).not.toContain('<details class="om-model-more" open');
+  for (const label of [t.eqPermittivity, t.eqImpedance, t.eqSnell, t.eqFresnel]) expect(sheet).toContain(`<figcaption>${label}</figcaption>`);
+  expect(sheet).toContain('class="om-about-build"');
+  expect(sheet).not.toContain('om-about-mark');
+});
 
 it.each(["en", "fr"] as const)("keeps language, help, About, theme, share and primary actions in the rendered %s header", (lang) => {
   harness.lang = lang;

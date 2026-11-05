@@ -18,7 +18,7 @@ import { DEFAULT_PROFILE } from "./surface/profiles";
 import { mainEmt, mainWallSpec } from "./surface/profiledMain";
 
 const harness = vi.hoisted(() => ({ states: [] as unknown[], index: 0, sim: {} as SimState, lang: "en" as Lang,
-  csv: [] as Array<{ text?: string; filename: string }>, blob: null as Blob | null }));
+  csv: [] as Array<{ text?: string; filename: string }>, blob: null as Blob | null, effects: [] as Array<() => unknown> }));
 // Invoke the real App and its actual callbacks without a DOM dependency. Only
 // lifecycle hooks are replaced; no editor/solver/scene-mapping logic is mocked.
 vi.mock("react", async (original) => ({
@@ -26,7 +26,7 @@ vi.mock("react", async (original) => ({
   useMemo: (fn: () => unknown) => fn(),
   useCallback: (fn: unknown) => fn,
   useRef: (current: unknown) => ({ current }),
-  useEffect: () => {},
+  useEffect: (effect: () => unknown) => { harness.effects.push(effect); },
   useState: (initial: unknown) => {
     const index = harness.index++;
     if (!(index in harness.states)) harness.states[index] = typeof initial === "function" ? initial() : initial;
@@ -65,12 +65,55 @@ beforeEach(() => {
   harness.index = 0;
   harness.csv = [];
   harness.blob = null;
+  harness.effects = [];
   harness.sim = { layers: [{ ...mkLayer("custom", 2, 9, 0.03), id: "host" }], sel: 0, freq: 10, angle: 30, pol: "TE" };
   vi.stubGlobal("navigator", { userAgent: "Chrome/140", language: "en" });
   vi.stubGlobal("window", { matchMedia: () => ({ matches: false }), setTimeout: vi.fn() });
   vi.stubGlobal("URL", { createObjectURL: (blob: Blob) => { harness.blob = blob; return "blob:waves-test"; }, revokeObjectURL: vi.fn() });
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it.each([10, 11])("blocks simulation shortcuts while overlay state slot %s is open, but keeps Escape", (slot) => {
+  render();
+  harness.states[slot] = true;
+  harness.effects = [];
+  render();
+  let onKey: (event: any) => void = () => {};
+  vi.stubGlobal("window", { addEventListener: (_type: string, fn: typeof onKey) => { onKey = fn; }, removeEventListener: vi.fn() });
+  const effect = harness.effects.find((fn) => fn.toString().includes('"keydown"'))!;
+  expect(effect).toBeDefined();
+  effect();
+  const original = [...harness.states];
+  for (const key of [" ", "ArrowLeft", "ArrowUp", "l", "t", "p", "v", "1", "?"]) {
+    const event = { key, code: key === " " ? "Space" : key, target: { tagName: "SUMMARY" }, preventDefault: vi.fn() };
+    onKey(event);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(harness.states).toEqual(original);
+  }
+  onKey({ key: "ArrowRight", altKey: true, target: { tagName: "A" }, preventDefault: vi.fn() });
+  expect(harness.states).toEqual(original);
+  onKey({ key: "Escape" });
+  expect(harness.states[slot]).toBe(false);
+});
+
+it("retains all equations and the five-tap build diagnostic toggle inside About", () => {
+  render(); harness.states[11] = true;
+  const tree = render();
+  const equations = tree.filter((node) => typeof node.props.tex === "string");
+  expect(equations.map((node) => node.props.tex)).toEqual([
+    String.raw`\varepsilon_r = \varepsilon' - j\,\frac{17.98\,\sigma}{f}`,
+    String.raw`\eta = \frac{\eta_0}{\sqrt{\varepsilon_r}}`,
+    String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`,
+    String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`,
+  ]);
+  const build = tree.find((node) => node.props.className === "om-about-build")!;
+  for (let i = 0; i < 4; i++) build.props.onClick();
+  expect(harness.states[15]).toBe(false);
+  build.props.onClick();
+  expect(harness.states[15]).toBe(true);
+  tree.find((node) => node.props.className === "om-about-close")!.props.onClick();
+  expect(harness.states[11]).toBe(false);
+});
 
 it("requests the second row only for the incidence Brewster tick", () => {
   const tree = render();

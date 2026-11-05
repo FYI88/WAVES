@@ -63,6 +63,7 @@ import { AngleChart } from "./charts/AngleChart";
 import { FieldChart } from "./charts/FieldChart";
 import { Icon, Logo } from "./ui/icons";
 import { Check, Segmented, Slider } from "./ui/controls";
+import { containModal } from "./ui/modalFocus";
 import {
   C0,
   CUSTOM_SWATCH,
@@ -95,7 +96,7 @@ const CONTACT_EMAILS = [
 import { Ring } from "./ui/Ring";
 
 
-function Eq({ tex }: { tex: string }) {
+function Eq({ tex, label }: { tex: string; label: string }) {
   const [html, setHtml] = useState<string | null>(null);
 
   useEffect(() => {
@@ -110,8 +111,12 @@ function Eq({ tex }: { tex: string }) {
     };
   }, [tex]);
 
-  if (!html) return <div className="om-eq om-eq-pending" aria-hidden />;
-  return <div className="om-eq" tabIndex={0} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <figure className="om-about-equation">
+    <figcaption>{label}</figcaption>
+    {html
+      ? <div className="om-eq" role="group" aria-label={label} tabIndex={0} dangerouslySetInnerHTML={{ __html: html }} />
+      : <div className="om-eq om-eq-pending" aria-hidden />}
+  </figure>;
 }
 
 function Stat(props: { label: string; value: string; unit?: string; sub?: string; tone?: string; delay: number }) {
@@ -475,6 +480,7 @@ export function App() {
         else setPresentFull(false);
         return;
       }
+      if (showHelp || showAbout) return;
       const tag = (e.target as HTMLElement | null)?.tagName ?? "";
       const stackCmd = stackKeyCommand(e, tag, (e.target as HTMLInputElement | null)?.type);
       if (stackCmd) {
@@ -512,6 +518,13 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [showHelp, showAbout, setPresentFull]);
+
+  const helpDialog = useRef<HTMLDivElement>(null);
+  const aboutDialog = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const dialog = showAbout ? aboutDialog.current : showHelp ? helpDialog.current : null;
+    if (dialog) return containModal(dialog);
+  }, [showAbout, showHelp]);
 
   const aboutOpen = useRef(showAbout);
   aboutOpen.current = showAbout;
@@ -1315,6 +1328,8 @@ export function App() {
         <div className="om-help-backdrop" onClick={() => setShowHelp(false)}>
           <div
             className="om-help"
+            ref={helpDialog}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-label={t.helpTitle}
@@ -1322,7 +1337,7 @@ export function App() {
           >
             <div className="om-help-head">
               <h2>{t.helpTitle}</h2>
-              <button type="button" className="om-scene-toggle" onClick={() => setShowHelp(false)} autoFocus>
+              <button type="button" className="om-scene-toggle" onClick={() => setShowHelp(false)} data-modal-close>
                 {t.helpClose}
               </button>
             </div>
@@ -1357,17 +1372,16 @@ export function App() {
         <div className="om-help-backdrop om-about-backdrop" onClick={() => setShowAbout(false)}>
           <div
             className="om-about"
+            ref={aboutDialog}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
-            aria-label={t.aboutTitle}
+            aria-labelledby="om-about-title"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="om-about-head">
-              <span className="om-about-mark">
-                <Logo />
-              </span>
               <div className="om-about-id">
-                <h2>WaveS</h2>
+                <h2 id="om-about-title">{t.aboutTitle}</h2>
                 <p>{t.tagline}</p>
               </div>
               <button
@@ -1376,28 +1390,13 @@ export function App() {
                 aria-label={t.helpClose}
                 title={t.helpClose}
                 onClick={() => setShowAbout(false)}
-                autoFocus
+                data-modal-close
               >
                 ×
               </button>
             </div>
 
-            <section className="om-about-sec" aria-label={t.modelLabel}>
-              <div className="om-about-sec-head">
-                <span className="om-about-label">{t.modelLabel}</span>
-                <span className="om-model-ref">ITU-R P.2040 § 3</span>
-              </div>
-              <div className="om-eqs">
-                  <Eq tex={String.raw`\varepsilon_r = \varepsilon' - j\,\frac{17.98\,\sigma}{f},\qquad \eta = \frac{\eta_0}{\sqrt{\varepsilon_r}}`} />
-                  <Eq tex={String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`} />
-                  <Eq tex={String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`} />
-              </div>
-              <details className="om-model-more">
-                <summary>{lang === "fr" ? "Hypothèses du modèle" : "Model assumptions"}</summary>
-                <p>{t.modelNote}</p>
-              </details>
-            </section>
-
+            <div className="om-about-body">
             <section className="om-about-sec" aria-label={t.authorLabel}>
               <div className="om-about-credit">
                 <div>
@@ -1423,9 +1422,27 @@ export function App() {
               </div>
             </section>
 
+            <section className="om-about-sec" aria-labelledby="om-about-model">
+              <div className="om-about-sec-head">
+                <h3 className="om-about-label" id="om-about-model">{t.modelLimitations}</h3>
+                <span className="om-model-ref">ITU-R P.2040 § 3</span>
+              </div>
+              <p className="om-about-note">{t.modelNote}</p>
+              <details className="om-model-more">
+                <summary>{t.physicsEquations}</summary>
+                <div className="om-eqs">
+                  <Eq label={t.eqPermittivity} tex={String.raw`\varepsilon_r = \varepsilon' - j\,\frac{17.98\,\sigma}{f}`} />
+                  <Eq label={t.eqImpedance} tex={String.raw`\eta = \frac{\eta_0}{\sqrt{\varepsilon_r}}`} />
+                  <Eq label={t.eqSnell} tex={String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`} />
+                  <Eq label={t.eqFresnel} tex={String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`} />
+                </div>
+              </details>
+            </section>
+
             <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
               {buildInfo}
             </button>
+            </div>
           </div>
         </div>
       )}
