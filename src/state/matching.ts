@@ -1,7 +1,7 @@
-import { MAX_LAYERS, insertMatchingLayer, layerEpsSigma, nkOf, quarterWaveMatch, type Layer } from "./layers";
+import { MAX_LAYERS, insertMatchingLayer, insertReason, physicalLayerCount, layerEpsSigma, nkOf, quarterWaveMatch, type Layer, type InsertReason } from "./layers";
 import type { SimState } from "./results";
 
-export type MatchingReason = "arAdjacent" | "arRange" | "arEqual" | "arFull" | "arReadOnly";
+export type MatchingReason = "arAdjacent" | "arRange" | "arEqual" | "arFull" | "arReadOnly" | "arFrontSkipped" | "arBackSkipped" | "arCoated" | InsertReason;
 /** A rejected edit is more informative than the passive capacity reminder. */
 export const matchingFeedback = (reason: MatchingReason | null, full: boolean): MatchingReason | null =>
   reason ?? (full ? "arFull" : null);
@@ -35,6 +35,8 @@ export function resolveMatching(sim: SimState): { sim: SimState; reason: Matchin
 
 /** One atomic interactive transition. Invalid edits preserve the entire previous state. */
 export function transitionMatching(previous: SimState, candidate: SimState) {
+  const invalidInsert = insertReason(candidate.layers);
+  if (invalidInsert) return { sim: previous, reason: invalidInsert };
   for (const l of candidate.layers) {
     const old = previous.layers.find((p) => p.id === l.id);
     if (old && isLiveMatching(old) && ["mat", "eps", "sigma", "thickness", "customMode", "matching", "matchingDesign"].some((k) => old[k as keyof Layer] !== l[k as keyof Layer])) {
@@ -47,13 +49,41 @@ export function transitionMatching(previous: SimState, candidate: SimState) {
 
 export function addMatching(sim: SimState, slot: number) {
   let reason: MatchingReason | null = null;
-  if (sim.layers.length >= MAX_LAYERS) reason = "arFull";
+  if (physicalLayerCount(sim.layers) >= MAX_LAYERS) reason = "arFull";
   else if (!Number.isInteger(slot) || slot < 0 || slot > sim.layers.length) reason = "arRange";
   else if (isCoating(sim.layers[slot - 1]) || isCoating(sim.layers[slot])) reason = "arAdjacent";
   else if (Math.abs(referenceIndex(sim.layers[slot - 1], sim.freq) - referenceIndex(sim.layers[slot], sim.freq)) < 1e-6) reason = "arEqual";
   if (reason) return { sim, reason };
   const layers = insertMatchingLayer(sim.layers, slot, sim.freq);
-  return layers ? { sim: { ...sim, layers, sel: slot }, reason: null } : { sim, reason: "arRange" as MatchingReason };
+  return layers ? transitionMatching(sim, { ...sim, layers, sel: slot }) : { sim, reason: "arRange" as MatchingReason };
+}
+
+/** Fill only missing outer faces. Capacity/design failures roll back both insertions. */
+export function matchWall(sim: SimState) {
+  if (!sim.layers.length) return { sim, reason: "arRange" as MatchingReason };
+  const front = isCoating(sim.layers[0]), back = isCoating(sim.layers.at(-1));
+  if (front && back) return { sim, reason: "arCoated" as MatchingReason };
+  if (physicalLayerCount(sim.layers) + Number(!front) + Number(!back) > MAX_LAYERS) return { sim, reason: "arFull" as MatchingReason };
+  let next = sim;
+  for (const slot of [...(!front ? [0] : []), ...(!back ? [sim.layers.length + Number(!front)] : [])]) {
+    const added = addMatching(next, slot);
+    if (added.reason) return { sim, reason: added.reason };
+    next = added.sim;
+  }
+  const result = transitionMatching(sim, { ...next, sel: 0 });
+  return result.reason ? result : { sim: result.sim, reason: front ? "arFrontSkipped" as const : back ? "arBackSkipped" as const : null };
+}
+
+/** Fixed coatings change only on this explicit request; imported live coatings stay read-only. */
+export function recalculateMatching(sim: SimState, index: number) {
+  if (!Number.isInteger(index) || !isCoating(sim.layers[index])) return { sim, reason: "arRange" as MatchingReason };
+  if (isLiveMatching(sim.layers[index])) return { sim, reason: "arReadOnly" as MatchingReason };
+  if (isCoating(sim.layers[index - 1]) || isCoating(sim.layers[index + 1])) return { sim, reason: "arAdjacent" as MatchingReason };
+  const { n1, n2, design } = matchingReference(sim.layers, index, sim.freq);
+  if (Math.abs(n1 - n2) < 1e-6) return { sim, reason: "arEqual" as MatchingReason };
+  if (!design) return { sim, reason: "arRange" as MatchingReason };
+  const layers = sim.layers.map((l, i) => i === index ? { ...l, mat: "custom" as const, eps: design.eps, sigma: 0, thickness: design.cm } : l);
+  return transitionMatching(sim, { ...sim, layers });
 }
 
 /** Trust-boundary fallback: invalid live metadata becomes a fixed snapshot, not a rejected import.

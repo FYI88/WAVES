@@ -45,7 +45,7 @@ export interface DetailParams {
   /** diffracted orders drawn as extra beams; null (default): only the summed R and T */
   orders: DetailOrder[] | null;
   slices: ProfileSlice[] | null;
-  bubbles: { fraction: number; water: boolean; diameterMm: number; target: number } | null;
+  bubbles: { fraction: number; water: boolean; diameterMm: number; target: number | "all" } | null;
   fog: number;
   lang: "fr" | "en";
   /** draw the local surface normals (outward, towards the air) */
@@ -274,25 +274,28 @@ export function drawSurfaceDetail(
   /* bubbles */
   if (p.bubbles && p.bubbles.fraction > 0) {
     const b = p.bubbles;
-    const rand = seeded(17 + b.target * 31);
     const r = clamp(((b.diameterMm / 10) * scale) / 2, 1.2, 14);
-    const regionX0 = b.target < 0 ? faceX : baseX + belowPx.slice(0, b.target).reduce((s, v) => s + v, 0);
-    const regionX1 = b.target < 0 ? baseX : regionX0 + (belowPx[b.target] ?? 0);
-    const area = Math.max(0, regionX1 - regionX0) * span;
-    const count = Math.min(500, Math.round((b.fraction * area) / (Math.PI * r * r)));
+    const targets = b.target === "all" ? [-1, ...p.below.map((_, i) => i)] : [b.target];
     ctx.save();
-    for (let k = 0, tries = 0; k < count && tries < count * 4; tries++) {
-      const bx = regionX0 + r + rand() * Math.max(0, regionX1 - regionX0 - 2 * r);
-      const by = top + r + rand() * (span - 2 * r);
-      if (b.target < 0 && bx - r < surfaceX(by)) continue;
-      k++;
-      ctx.beginPath();
-      ctx.arc(bx, by, r, 0, Math.PI * 2);
-      ctx.fillStyle = b.water ? "rgba(70,160,255,.55)" : pal.dark ? "rgba(10,20,32,.55)" : "rgba(255,255,255,.7)";
-      ctx.fill();
-      ctx.strokeStyle = b.water ? "rgba(170,215,255,.7)" : "rgba(255,255,255,.45)";
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
+    for (const target of targets) {
+      const rand = seeded(17 + target * 31);
+      const regionX0 = target < 0 ? faceX : baseX + belowPx.slice(0, target).reduce((s, v) => s + v, 0);
+      const regionX1 = target < 0 ? baseX : regionX0 + (belowPx[target] ?? 0);
+      const area = Math.max(0, regionX1 - regionX0) * span;
+      const count = Math.min(500, Math.round((b.fraction * area) / (Math.PI * r * r)));
+      for (let k = 0, tries = 0; k < count && tries < count * 4; tries++) {
+        const bx = regionX0 + r + rand() * Math.max(0, regionX1 - regionX0 - 2 * r);
+        const by = top + r + rand() * (span - 2 * r);
+        if (target < 0 && bx - r < surfaceX(by)) continue;
+        k++;
+        ctx.beginPath();
+        ctx.arc(bx, by, r, 0, Math.PI * 2);
+        ctx.fillStyle = b.water ? "rgba(70,160,255,.55)" : pal.dark ? "rgba(10,20,32,.55)" : "rgba(255,255,255,.7)";
+        ctx.fill();
+        ctx.strokeStyle = b.water ? "rgba(170,215,255,.7)" : "rgba(255,255,255,.45)";
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }

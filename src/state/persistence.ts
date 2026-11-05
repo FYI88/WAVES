@@ -2,7 +2,7 @@ import { decodeShare, shareHashOf } from "../share";
 import { clamp } from "../render/util";
 import type { Lang } from "../i18n";
 import type { Theme } from "../theme";
-import { LAYER_MATS, MAX_LAYERS, newId, type CustomMode } from "./layers";
+import { LAYER_MATS, MAX_LAYERS, canEmbed, validInsert, newId, type CustomMode, type Layer } from "./layers";
 import { DEFAULT_STATE } from "./presets";
 import type { SimState } from "./results";
 import { importMatching } from "./matching";
@@ -31,7 +31,7 @@ export function sanitizePersisted(p: Partial<Persisted>, fallback: Persisted): P
   const s = (p.sim ?? {}) as Partial<SimState>;
   const num = (v: unknown, lo: number, hi: number, d: number) =>
     typeof v === "number" && Number.isFinite(v) ? clamp(v, lo, hi) : d;
-  const layers = Array.isArray(s.layers)
+  const layers: Layer[] = Array.isArray(s.layers)
     ? s.layers
         .slice(0, MAX_LAYERS)
         .filter((l) => l && LAYER_MATS.includes(l.mat))
@@ -44,8 +44,18 @@ export function sanitizePersisted(p: Partial<Persisted>, fallback: Persisted): P
           customMode: (l.customMode === "nk" ? "nk" : "eps") as CustomMode,
           ...(l.mat === "custom" && l.matching === true ? { matching: true } : {}),
           ...(l.mat === "custom" && l.matching === true && l.matchingDesign === "quarter-wave-live" ? { matchingDesign: "quarter-wave-live" as const } : {}),
+          ...(l.embeddedInsert && validInsert(l.embeddedInsert) ? { embeddedInsert: { enabled: l.embeddedInsert.enabled, eps: l.embeddedInsert.eps, thickness: l.embeddedInsert.thickness } } : {}),
         }))
     : [];
+  // Keep valid disabled designs for retoggling. Invalid fit/eligibility/capacity
+  // disables the insert without changing the host or losing its design values.
+  let slots = MAX_LAYERS - layers.length;
+  for (const l of layers) {
+    const v = l.embeddedInsert;
+    if (!v?.enabled) continue;
+    if (!canEmbed(l) || v.thickness >= l.thickness || slots < 2) l.embeddedInsert = { ...v, enabled: false };
+    else slots -= 2;
+  }
   const ls = layers.length ? layers : fallback.sim.layers;
   return {
     sim: importMatching({

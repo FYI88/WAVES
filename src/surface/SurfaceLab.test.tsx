@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ReactNode } from "react";
+import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { PALETTES } from "../theme";
 import { SurfaceLab } from "./SurfaceLab";
 import { DEFAULT_LAB } from "./labState";
@@ -9,6 +9,10 @@ import { emtSolve } from "./emt";
 import { LAB_TEXT } from "./labText";
 import { rcwaPoint, rcwaSweep } from "./rcwaClient";
 import type { RcwaResult } from "./rcwa";
+import { encodeShare } from "../share";
+import { DEFAULT_STATE } from "../state/presets";
+import { LAB_MAX_BELOW } from "./labState";
+import { LAB_SCENARIOS } from "./scenarios";
 
 const harness = vi.hoisted(() => ({
   effects: [] as Array<{ effect: () => void | (() => void); deps: unknown[] }>,
@@ -167,6 +171,116 @@ describe("SurfaceLab shared detail rendering", () => {
     return { html, props: node.props, sidebar: renderToStaticMarkup(node) };
   }
 
+  type Node = ReactElement<Record<string, any>>;
+  function nodes(value: unknown): Node[] {
+    if (Array.isArray(value)) return value.flatMap(nodes);
+    if (!isValidElement(value)) return [];
+    const node = value as Node;
+    return [node, ...nodes(node.props.children)];
+  }
+  function controls(lang: "en" | "fr" = "en") {
+    harness.stateIndex = 0;
+    harness.refIndex = 0;
+    const onFreq = vi.fn(), onAngle = vi.fn();
+    let tree: Node[] = [];
+    function Capture() {
+      const result = SurfaceLab({ freq: 5, angle: 30, pol: "TE", lang, pal: PALETTES.dark,
+        playing: false, fmtNum: String, onFreq, onAngle });
+      tree = nodes(result);
+      return result;
+    }
+    const html = renderToStaticMarkup(<Capture />);
+    return { html, tree, onFreq, onAngle };
+  }
+
+  it.each(["en", "fr"] as const)("connects all five compact tabs and preserves click/keyboard navigation (%s)", (lang) => {
+    const t = LAB_TEXT[lang];
+    let view = controls(lang);
+    const tabs = view.tree.filter((n) => n.props.role === "tab");
+    expect(tabs).toHaveLength(5);
+    const panel = view.tree.find((n) => n.props.role === "tabpanel")!;
+    expect(panel.props["aria-labelledby"]).toBe(tabs[0].props.id);
+    expect(tabs[0].props["aria-controls"]).toBe(panel.props.id);
+    expect(tabs.map((n) => n.props.tabIndex)).toEqual([0, -1, -1, -1, -1]);
+    const focus = vi.fn(), preventDefault = vi.fn();
+    tabs[0].props.onKeyDown({ key: "End", preventDefault, currentTarget: { parentElement: { querySelectorAll: () => tabs.map(() => ({ focus })) } } });
+    expect(harness.states.get(0)).toBe("calc");
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(focus).toHaveBeenCalledOnce();
+    view = controls(lang);
+    expect(view.html).toContain(`<h3 class="sl-label">${t.numericalDetails}</h3>`);
+    expect(view.html).toContain(`<summary>${t.methodNotes}</summary>`);
+    expect(view.html).toContain('class="sl-control-grid"');
+    view.tree.find((n) => n.props.role === "tab" && n.props.children === t.tabs.medium)!.props.onClick();
+    view = controls(lang);
+    expect(view.html).toContain(`<h3 class="sl-label">${t.fog}</h3>`);
+    expect(view.html).toContain(t.targetWholeWall);
+  });
+
+  it("keeps profile, scenario and main-view controls wired through the grouped surface panel", () => {
+    let view = controls();
+    expect(view.html).toContain('<h3 class="sl-label">Geometry</h3>');
+    expect(view.html).toContain('<details class="sl-help"><summary>View notes</summary>');
+    view.tree.find((n) => n.type === "button" && String(n.props.className).includes("sl-scenario"))!.props.onClick();
+    expect(view.onFreq).toHaveBeenCalledWith(LAB_SCENARIOS[0].fGHz);
+    expect(view.onAngle).toHaveBeenCalledWith(Math.round(LAB_SCENARIOS[0].thetaDeg * 10) / 10);
+    view = controls();
+    view.tree.find((n) => n.props.role === "radio" && String(n.props.className).includes("sl-profile") && n.key === "rough")!.props.onClick();
+    view = controls();
+    expect(view.html).toContain("Correlation length");
+    view.tree.find((n) => n.type === "input" && n.props.type === "checkbox")!.props.onChange({ target: { checked: false } });
+    expect(harness.states.get(13)).toBe(false);
+  });
+
+  it("keeps the primary add-layer action bounded, with editable thickness and secondary removal", () => {
+    harness.states.set(0, "layers");
+    harness.states.set(5, []);
+    let view = controls();
+    view.tree.find((n) => n.props.className === "sl-btn sl-btn-primary")!.props.onClick();
+    view = controls();
+    const thickness = view.tree.find((n) => n.props.label === LAB_TEXT.en.thickness)!;
+    thickness.props.onChange(3.25);
+    expect((harness.states.get(5) as any[])[0].cm).toBe(3.25);
+    view = controls();
+    view.tree.find((n) => n.props.className === "sl-btn is-danger")!.props.onClick();
+    expect(harness.states.get(5)).toEqual([]);
+    harness.states.set(5, Array.from({ length: LAB_MAX_BELOW }, () => ({ material: "glass", cm: 1, customEps: 4, customSigma: 0.05 })));
+    view = controls();
+    expect(view.tree.find((n) => n.props.className === "sl-btn sl-btn-primary")!.props.disabled).toBe(true);
+  });
+
+  it("preserves medium selection, inclusion toggle, fog and shared wave callbacks inside the grids", () => {
+    harness.states.set(0, "medium");
+    let view = controls();
+    view.tree.find((n) => n.type === "select" && n.props["aria-label"] === LAB_TEXT.en.target)!.props.onChange({ target: { value: "all" } });
+    expect(harness.states.get(7)).toBe("all");
+    view.tree.find((n) => n.type === "input" && n.props.type === "checkbox")!.props.onChange({ target: { checked: true } });
+    expect(harness.states.get(22)).toBe(true);
+    view.tree.find((n) => n.props.label === LAB_TEXT.en.fraction)!.props.onChange(0.2);
+    expect(harness.states.get(6)).toMatchObject({ fraction: 0.2 });
+    view.tree.find((n) => n.props.label === LAB_TEXT.en.lwc)!.props.onChange(0.3);
+    expect(harness.states.get(8)).toMatchObject({ lwc: 0.3 });
+    harness.states.set(0, "wave");
+    view = controls();
+    view.tree.find((n) => n.props.label === LAB_TEXT.en.frequency)!.props.onChange(7);
+    view.tree.find((n) => n.props.label === LAB_TEXT.en.angle)!.props.onChange(45);
+    expect(view.onFreq).toHaveBeenCalledWith(7);
+    expect(view.onAngle).toHaveBeenCalledWith(45);
+  });
+
+  it("keeps validity and solver failures outside collapsed method explanations", () => {
+    harness.states.set(0, "calc");
+    harness.states.set(9, "rigorous");
+    results();
+    const key = harness.effects.find(({ deps }) => deps?.length === 2 && deps[0] === "rigorous")!.deps[1];
+    harness.states.set(20, { key, message: "worker unavailable" });
+    const view = controls();
+    expect(view.html).toContain('role="alert">RCWA error : worker unavailable');
+    const help = view.tree.find((n) => n.type === "details" && n.props.className === "sl-help")!;
+    expect(renderToStaticMarkup(help)).not.toContain("worker unavailable");
+    expect(view.html).toContain(LAB_TEXT.en.validity);
+  });
+
   it.each(["TE", "TM", "AVG"] as const)("portals authoritative %s lab computations and metadata, not main-wall values", (pol) => {
     // A deliberately different experiment from the main stack, including a mixed profile and backing.
     const profile = { ...DEFAULT_LAB.profile, id: "triangle" as const, period: 1.2, depth: 1.7 };
@@ -272,5 +386,75 @@ describe("SurfaceLab shared detail rendering", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it.each(["en", "fr"] as const)("shows whole-wall controls and notifies App independently of profile display (%s)", (lang) => {
+    harness.states.set(0, "medium");
+    harness.states.set(7, "all");
+    harness.states.set(13, false); // inclusion toggle must not depend on showInMain
+    harness.states.set(22, true);
+    const inclusions = { ...DEFAULT_LAB.inclusions, fraction: 0.1, diameterMm: 30 };
+    harness.states.set(6, inclusions);
+    const notify = vi.fn();
+    const html = renderToStaticMarkup(<SurfaceLab freq={5} angle={30} pol="TE" lang={lang} pal={PALETTES.dark}
+      playing={false} fmtNum={String} onFreq={() => {}} onAngle={() => {}} onMainInclusions={notify} detailTarget={target} />);
+    expect(html).toContain(`<option value="all" selected="">${LAB_TEXT[lang].targetWholeWall}</option>`);
+    expect(html).toContain(LAB_TEXT[lang].applyInclusionsToMain);
+    expect(html).toContain(LAB_TEXT[lang].valid.invalid);
+    const notification = harness.effects.find(({ deps }) => deps?.length === 3 && deps[0] === notify)!;
+    notification.effect();
+    expect(notify).toHaveBeenLastCalledWith(inclusions);
+    const cleanup = harness.effects.find(({ deps }) => deps?.length === 1 && deps[0] === notify)!.effect();
+    cleanup?.();
+    expect(notify).toHaveBeenLastCalledWith(null);
+    // The same mixed wall and target reach both detail canvases.
+    harness.effects.find(({ deps }) => deps?.length === 5 && deps[4] === target)!.effect();
+    expect(harness.draw.mock.calls[0][4].bubbles.target).toBe("all");
+    const spec = { ...DEFAULT_LAB, inclusions, inclusionTarget: "all" as const };
+    const wall = wallAt(spec, 5);
+    const expected = emtSolve(spec.profile, wall.eta, wall.below, 5, 30, "TE", spec.slices);
+    expect(harness.draw.mock.calls[0][4]).toMatchObject({ R: expected.R, T: expected.T });
+  });
+
+  it("defaults the main-wall notification to off", () => {
+    const notify = vi.fn();
+    renderToStaticMarkup(<SurfaceLab freq={5} angle={30} pol="TE" lang="en" pal={PALETTES.dark}
+      playing={false} fmtNum={String} onFreq={() => {}} onAngle={() => {}} onMainInclusions={notify} />);
+    harness.effects.find(({ deps }) => deps?.length === 3 && deps[0] === notify)!.effect();
+    expect(notify).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it.each(["v1", "v2 omitted", "v2 enabled", "v2 disabled", "absent", "malformed"])("handles a %s hashchange from current main-wall mixing enabled", (kind) => {
+    const currentInclusions = { ...DEFAULT_LAB.inclusions, fraction: 0.2 };
+    harness.states.set(6, currentInclusions);
+    harness.states.set(22, true);
+    const shared = { ...DEFAULT_LAB, material: "brick" as const, applyInclusionsToMain: kind === "v2 enabled",
+      inclusions: { ...DEFAULT_LAB.inclusions, kind: "water" as const, fraction: 0.1 } };
+    const hash = kind === "v1"
+      ? `#s=${btoa(JSON.stringify({ v: 1, sim: DEFAULT_STATE, lang: "en", theme: "dark" })).replace(/=+$/, "")}`
+      : kind === "absent" ? "" : kind === "malformed" ? "#s=not-valid"
+      : `#s=${encodeShare(DEFAULT_STATE, "en", "dark", kind === "v2 omitted" ? undefined : shared)}`;
+    const events = new EventTarget();
+    Object.assign(window, { location: { hash }, addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events) });
+    const notify = vi.fn();
+    const render = () => {
+      harness.stateIndex = 0;
+      harness.refIndex = 0;
+      harness.effects = [];
+      renderToStaticMarkup(<SurfaceLab freq={5} angle={30} pol="TE" lang="en" pal={PALETTES.dark}
+        playing={false} fmtNum={String} onFreq={() => {}} onAngle={() => {}} onMainInclusions={notify} />);
+      harness.effects.find(({ deps }) => deps?.length === 3 && deps[0] === notify)!.effect();
+    };
+    render();
+    expect(notify).toHaveBeenLastCalledWith(currentInclusions);
+    const cleanup = harness.effects.find(({ deps }) => deps?.length === 0)!.effect();
+    events.dispatchEvent(new Event("hashchange"));
+    render();
+    const hasLab = kind === "v2 enabled" || kind === "v2 disabled";
+    const remainsEnabled = kind === "v2 enabled" || kind === "absent" || kind === "malformed";
+    expect(harness.states.get(22)).toBe(remainsEnabled);
+    expect(harness.states.get(6)).toEqual(hasLab ? shared.inclusions : currentInclusions);
+    expect(notify).toHaveBeenLastCalledWith(remainsEnabled ? (hasLab ? shared.inclusions : currentInclusions) : null);
+    cleanup?.();
   });
 });

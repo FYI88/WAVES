@@ -6,6 +6,8 @@ import { waterPermittivity } from "./water";
    diameter ≪ wavelength in the host and volume fraction ≲ 0.5. */
 
 export type InclusionKind = "air" | "water";
+/** Legacy −1/profile and backing indices remain valid in saved states/links. */
+export type InclusionTarget = number | "all";
 
 export interface Inclusions {
   kind: InclusionKind;
@@ -49,4 +51,10 @@ export function inclusionValidity(host: Cx, inc: Inclusions, fGHz: number): MixV
   if (r >= 0.25) return "invalid";
   if (r >= 0.1 || inc.fraction > 0.5) return "marginal";
   return "ok";
+}
+
+/** A wall is only as valid as its most restrictive unmixed host. */
+export function worstInclusionValidity(hosts: Cx[], inc: Inclusions, fGHz: number): MixValidity {
+  const ratings = hosts.map((host) => inclusionValidity(host, inc, fGHz));
+  return ratings.includes("invalid") ? "invalid" : ratings.includes("marginal") ? "marginal" : "ok";
 }

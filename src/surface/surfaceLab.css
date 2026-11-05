@@ -21,7 +21,7 @@
   container-type: inline-size;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   padding: 16px;
   min-width: 0;
   color: var(--sl-ink);
@@ -194,25 +194,26 @@
   min-width: 0;
 }
 .sl-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 2px;
   padding: 3px;
   border-radius: 10px;
   background: var(--sl-chip);
-  overflow-x: auto;
 }
 .sl-tabs button {
-  flex: 1 0 auto;
-  min-height: 32px;
-  padding: 7px 10px;
+  min-height: 40px;
+  min-width: 0;
+  padding: 7px 4px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--sl-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  overflow-wrap: anywhere;
 }
 .sl-tabs button:hover {
   color: var(--sl-ink);
@@ -225,26 +226,53 @@
 .sl-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 .sl-group {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--sl-line);
+  border-radius: 8px;
 }
 .sl-label {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
+  margin: 0;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--sl-faint);
+  color: var(--sl-muted);
+}
+.sl-side { container-type: inline-size; }
+.sl-label .sl-badge { max-width: 100%; white-space: normal; }
+.sl-control-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 12px 16px;
+}
+.sl-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sl-field-label { font-size: 12px; color: var(--sl-muted); }
+.sl-help { min-width: 0; font-size: 12px; color: var(--sl-muted); }
+.sl-help summary { display: list-item; align-content: center; min-height: 40px; cursor: pointer; }
+.sl-help[open] summary { margin-bottom: 8px; }
+.sl-lab :is(button, select, summary, [role="tabpanel"]):focus-visible {
+  outline: 2px solid var(--sl-acc);
+  outline-offset: 2px;
+}
+@container (min-width: 460px) {
+  .sl-control-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .sl-note {
   margin: 0;
+  overflow-wrap: anywhere;
   font-size: 11.5px;
   line-height: 1.45;
   color: var(--sl-muted);
@@ -267,15 +295,18 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
   font-size: 12px;
 }
 .sl-range-head {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
   gap: 8px;
   color: var(--sl-muted);
 }
 .sl-range-head b {
+  white-space: nowrap;
   color: var(--sl-ink);
   font-weight: 600;
 }
@@ -284,6 +315,7 @@
   font-weight: 500;
 }
 .sl-range input {
+  min-height: 40px;
   width: 100%;
   margin: 0;
   accent-color: var(--sl-accent, var(--sl-acc));
@@ -305,7 +337,8 @@
 }
 .sl-seg button {
   flex: 1;
-  min-height: 32px;
+  min-height: 40px;
+  min-width: 0;
   padding: 6px 8px;
   border: 0;
   border-radius: 6px;
@@ -325,8 +358,8 @@
 /* profile picker */
 .sl-profiles {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(min(86px, 100%), 1fr));
+  gap: 8px;
 }
 .sl-profile {
   display: flex;
@@ -334,6 +367,8 @@
   align-items: center;
   gap: 4px;
   padding: 7px 4px 6px;
+  min-height: 56px;
+  min-width: 0;
   border: 1px solid transparent;
   border-radius: 8px;
   background: var(--sl-chip);
@@ -372,7 +407,7 @@
 }
 .sl-btn {
   display: inline-flex;
-  min-height: 32px;
+  min-height: 40px;
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
@@ -384,6 +419,18 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.sl-btn.sl-btn-primary {
+  align-self: flex-start;
+  justify-content: center;
+  background: var(--sl-ink);
+  border-color: var(--sl-ink);
+  color: var(--om-card);
+}
+.sl-btn.sl-btn-primary:hover:not(:disabled) {
+  background: var(--sl-muted);
+  border-color: var(--sl-muted);
 }
 .sl-btn:hover:not(:disabled) {
   background: var(--sl-chip);
@@ -415,7 +462,9 @@
 /* select */
 .sl-select {
   width: 100%;
-  min-height: 32px;
+  min-height: 40px;
+  min-width: 0;
+  text-overflow: ellipsis;
   padding: 7px 9px;
   border: 1px solid var(--sl-line);
   border-radius: 6px;
@@ -437,7 +486,7 @@
 .sl-layers {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -445,21 +494,19 @@
 .sl-layer {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px;
+  gap: 12px;
+  padding: 12px;
   border-radius: 10px;
   background: var(--sl-chip);
   border-left: 3px solid var(--tint, var(--sl-line));
 }
 .sl-layer-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   font-size: 12px;
   font-weight: 700;
-}
-.sl-layer-head .sl-select {
-  flex: 1;
 }
 
 /* tables and readouts */
@@ -512,17 +559,19 @@
 }
 .sl-kv {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 4px 12px;
   margin: 0;
   font-size: 12px;
 }
 .sl-kv dt {
   color: var(--sl-muted);
+  overflow-wrap: anywhere;
 }
 .sl-kv dd {
   margin: 0;
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 @container (max-width: 760px) {
@@ -605,11 +654,14 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 40px;
+  line-height: 1.4;
   font-size: 12px;
   color: var(--sl-ink);
   cursor: pointer;
 }
 .sl-check input {
+  flex-shrink: 0;
   margin: 0;
   accent-color: var(--sl-acc);
 }

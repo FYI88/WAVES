@@ -5,15 +5,16 @@ import { DICTS, type Lang } from "./i18n";
 import { App } from "./App";
 import type { ReactNode } from "react";
 import { LAB_TEXT } from "./surface/labText";
+import { NO_INCLUSIONS } from "./media/mixing";
 
-const harness = vi.hoisted(() => ({ lang: "en" as Lang, index: 0, present: false, copied: false, scene: "main", target: {} }));
+const harness = vi.hoisted(() => ({ lang: "en" as Lang, index: 0, present: false, copied: false, scene: "main", target: {}, inclusions: null as null | typeof NO_INCLUSIONS }));
 vi.mock("react-dom", () => ({ createPortal: (node: ReactNode) => node }));
 vi.mock("react", async (original) => {
   const react = await original<typeof import("react")>();
   return { ...react, useState: (initial: unknown) => {
     // Drive App's presentation/copied slots without running browser effects.
     const index = harness.index++;
-    return react.useState(index === 4 ? harness.scene : index === 16 ? harness.target : index === 8 ? harness.present : index === 9 ? harness.copied : initial);
+    return react.useState(index === 4 ? harness.scene : index === 16 ? harness.target : index === 17 ? harness.inclusions : index === 8 ? harness.present : index === 9 ? harness.copied : initial);
   } };
 });
 vi.mock("./state/persistence", async (original) => ({
@@ -26,6 +27,7 @@ beforeEach(() => {
   harness.present = false;
   harness.scene = "main";
   harness.copied = false;
+  harness.inclusions = null;
   vi.stubGlobal("navigator", { userAgent: "Chrome/140", language: "en" });
   vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
 });
@@ -78,4 +80,21 @@ it("renders the copied SVG alongside translated success text and exposes present
   expect(html).toContain('<div class="om-presentbar">');
   expect(html).toContain(`aria-label="${DICTS.en.frequency}"`);
   expect(html).toContain(`aria-label="${DICTS.en.angle}"`);
+});
+
+it.each(["en", "fr"] as const)("renders compact SVG inclusion indicators and validity warnings only when active (%s)", (lang) => {
+  harness.lang = lang;
+  expect(renderToStaticMarkup(<App />)).not.toContain('class="om-inclusion-note');
+  harness.index = 0;
+  harness.inclusions = { ...NO_INCLUSIONS, fraction: 0.1, diameterMm: 30 };
+  const html = renderToStaticMarkup(<App />);
+  const label = `${LAB_TEXT[lang].inclusions} · ${LAB_TEXT[lang].air} 10 %`;
+  expect(html.match(new RegExp(label, "g"))).toHaveLength(2);
+  const line = html.match(/<p class="om-inclusion-note is-warn"[\s\S]*?<\/p>/)![0];
+  expect(line).toContain('role="status"');
+  expect(line).toContain('<svg viewBox="0 0 24 24" aria-hidden="true"');
+  expect(line).toContain(LAB_TEXT[lang].valid.invalid);
+  harness.index = 0;
+  harness.inclusions = { ...harness.inclusions, fraction: 0 };
+  expect(renderToStaticMarkup(<App />)).not.toContain('class="om-inclusion-note');
 });

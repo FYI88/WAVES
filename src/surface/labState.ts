@@ -1,6 +1,6 @@
 import { DEFAULT_PROFILE, PROFILE_IDS, type ProfileId, type ProfileParams } from "./profiles";
 import { SURFACE_MATERIAL_IDS, type SurfaceMaterialId } from "./materials";
-import { NO_INCLUSIONS, type InclusionKind, type Inclusions } from "../media/mixing";
+import { NO_INCLUSIONS, type InclusionKind, type Inclusions, type InclusionTarget } from "../media/mixing";
 import { NO_FOG, type Fog } from "../media/fog";
 import { decodeShare, shareHashOf } from "../share";
 
@@ -26,8 +26,9 @@ export interface LabState {
   customSigma: number;
   below: LabLayer[];
   inclusions: Inclusions;
-  /** −1: bubbles in the profile, otherwise index of the host flat layer */
-  incTarget: number;
+  /** −1: profile; backing index; all: each lab wall host independently. */
+  incTarget: InclusionTarget;
+  applyInclusionsToMain: boolean;
   fog: Fog;
   mode: LabMode;
   harmonics: number;
@@ -50,6 +51,7 @@ export const DEFAULT_LAB: LabState = {
   below: [{ material: "concrete", cm: 15, customEps: 4, customSigma: 0.05 }],
   inclusions: NO_INCLUSIONS,
   incTarget: -1,
+  applyInclusionsToMain: false,
   fog: NO_FOG,
   mode: "fast",
   harmonics: 10,
@@ -111,7 +113,8 @@ export function sanitizeLab(raw: unknown): LabState | null {
       diameterMm: num(inc.diameterMm, 0.1, 30, d.inclusions.diameterMm),
       tempC: num(inc.tempC, 0, 40, d.inclusions.tempC),
     },
-    incTarget: int(raw.incTarget, -1, below.length - 1, -1),
+    incTarget: raw.incTarget === "all" ? "all" : int(raw.incTarget, -1, below.length - 1, -1),
+    applyInclusionsToMain: bool(raw.applyInclusionsToMain, false),
     fog: {
       lwc: num(fog.lwc, 0, 1, d.fog.lwc),
       tempC: num(fog.tempC, -8, 30, d.fog.tempC),
@@ -127,26 +130,32 @@ export function sanitizeLab(raw: unknown): LabState | null {
   };
 }
 
-/** Lab state from a `#s=` share link, or null when the link has none. */
-export function labFromHash(locationHash: string): LabState | null {
+/** Lab state, undefined for a valid share without lab data, null for no/invalid share. */
+export function labFromHash(locationHash: string): LabState | null | undefined {
   const h = shareHashOf(locationHash);
   if (!h) return null;
   const payload = decodeShare(h);
-  if (!payload || payload.lab === undefined) return null;
+  if (!payload) return null;
+  if (payload.lab === undefined) return undefined;
   return sanitizeLab(payload.lab);
 }
 
 /** Boot state: a share link wins over saved storage, as for the main simulator. */
 export function loadLab(): LabState {
+  let sharedWithoutLab = false;
   try {
     const shared = labFromHash(window.location.hash);
     if (shared) return shared;
+    sharedWithoutLab = shared === undefined;
   } catch {
     /* malformed hash: fall through to storage */
   }
   try {
     const raw = window.localStorage.getItem(LAB_STORAGE_KEY);
-    if (raw) return sanitizeLab(JSON.parse(raw)) ?? DEFAULT_LAB;
+    if (raw) {
+      const saved = sanitizeLab(JSON.parse(raw)) ?? DEFAULT_LAB;
+      return sharedWithoutLab ? { ...saved, applyInclusionsToMain: false } : saved;
+    }
   } catch {
     /* storage unavailable or corrupt */
   }

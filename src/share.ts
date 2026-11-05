@@ -21,6 +21,7 @@ export interface ShareLayer {
   customMode: string;
   matching?: boolean;
   matchingDesign?: "quarter-wave-live";
+  embeddedInsert?: { enabled: boolean; eps: number; thickness: number };
 }
 
 export interface ShareState {
@@ -67,6 +68,7 @@ export function encodeShare(sim: ShareState, lang: string, theme: string, lab?: 
         customMode: l.customMode,
         ...(l.matching === true ? { matching: true } : {}),
         ...(l.matchingDesign === "quarter-wave-live" ? { matchingDesign: l.matchingDesign } : {}),
+        ...(l.embeddedInsert ? { embeddedInsert: { enabled: l.embeddedInsert.enabled, eps: l.embeddedInsert.eps, thickness: l.embeddedInsert.thickness } } : {}),
       })),
       sel: sim.sel,
       freq: sim.freq,

@@ -13,6 +13,7 @@ interface LayerView {
   fluxIn: number;
   fluxOut: number;
   name: string;
+  insert?: boolean;
 }
 interface Parameters {
   theta: number;
@@ -226,7 +227,7 @@ export function drawSpatialScene(
   order.forEach(index => {
     const layer = params.layers[index];
     const { start, end, sideX, face, front, top } = boxes[index];
-    const tint = tintOf(layer.mat);
+    const tint = layer.insert ? palette.tra : tintOf(layer.mat);
     const selected = index === params.sel;
     const air = layer.mat === "air";
     const glass = layer.mat === "glass";
@@ -428,6 +429,11 @@ export function drawSpatialScene(
   instrument(source, palette.inc, true, 1);
   instrument(receiver, palette.tra, false, params.T);
   if (options.annotations) {
+    params.layers.forEach((layer, index) => {
+      if (!layer.insert || index === params.sel) return;
+      const anchor = project({ x: (boundaries[index] + boundaries[index + 1]) / 2, y: -wallHalfDepth, z: wallTop });
+      label(`${layer.name.toUpperCase()} · ${format(layer.cm, 3)} cm`, { x: clamp(anchor.x, 85, width - 85), y: Math.max(110, anchor.y - 8) }, palette.tra);
+    });
     const reflectedLabel = project(reflectionEnd);
     label(`${params.labels.refl} · ${format(params.R * 100, 1)}%`, { x: clamp(reflectedLabel.x, 65, width - 65), y: reflectedLabel.y + 22 }, palette.ref);
     if (params.theta >= 8) {

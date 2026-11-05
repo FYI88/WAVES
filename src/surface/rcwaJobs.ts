@@ -1,7 +1,7 @@
 import { type Cx, type PolMode } from "../physics";
 import { type ProfileParams } from "./profiles";
 import { surfaceEta, type SurfaceMaterialId } from "./materials";
-import { mixedEta, type Inclusions } from "../media/mixing";
+import { mixedEta, worstInclusionValidity, type Inclusions, type InclusionTarget, type MixValidity } from "../media/mixing";
 import {
   rcwaAngleSweep,
   rcwaFreqSweep,
@@ -21,19 +21,28 @@ export interface WallSpec {
   material: SurfaceMaterialId;
   customEps: number;
   customSigma: number;
-  below: { material: SurfaceMaterialId; cm: number; customEps: number; customSigma: number }[];
-  /** optional bubbles, mixed into the profile (target −1) or a flat layer (target index) */
+  /** Main-wall air, matching coatings and ideal inserts are excluded. */
+  excludeInclusions?: boolean;
+  below: { material: SurfaceMaterialId; cm: number; customEps: number; customSigma: number; excludeInclusions?: boolean }[];
+  /** optional bubbles: profile (−1), backing index, or each host (all) */
   inclusions?: Inclusions;
-  inclusionTarget?: number;
+  inclusionTarget?: InclusionTarget;
 }
 
-export function wallAt(spec: WallSpec, fGHz: number): ProfiledWall {
-  const mix = (eta: Cx, index: number) =>
-    spec.inclusions && spec.inclusionTarget === index ? mixedEta(eta, spec.inclusions, fGHz) : eta;
+export function wallAt(spec: WallSpec, fGHz: number): ProfiledWall & { mixValidity: MixValidity } {
+  const hosts: Cx[] = [];
+  const mix = (eta: Cx, index: number, excluded = false) => {
+    if (!spec.inclusions || excluded || !(spec.inclusionTarget === "all" || spec.inclusionTarget === index)) return eta;
+    hosts.push(eta);
+    return mixedEta(eta, spec.inclusions, fGHz);
+  };
+  const eta = mix(surfaceEta(spec.material, fGHz, spec.customEps, spec.customSigma), -1, spec.excludeInclusions);
+  const below = spec.below.map((l, i) => ({ cm: l.cm, eta: mix(surfaceEta(l.material, fGHz, l.customEps, l.customSigma), i, l.excludeInclusions) }));
   return {
     profile: spec.profile,
-    eta: mix(surfaceEta(spec.material, fGHz, spec.customEps, spec.customSigma), -1),
-    below: spec.below.map((l, i) => ({ cm: l.cm, eta: mix(surfaceEta(l.material, fGHz, l.customEps, l.customSigma), i) })),
+    eta,
+    below,
+    mixValidity: spec.inclusions ? worstInclusionValidity(hosts, spec.inclusions, fGHz) : "ok",
   };
 }
 

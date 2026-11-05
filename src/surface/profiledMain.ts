@@ -1,5 +1,7 @@
 import type { PolMode } from "../physics";
-import type { Layer } from "../state/layers";
+import { expandLayers, type Layer, type PhysicalLayer } from "../state/layers";
+import { isInclusionHost } from "../state/inclusions";
+import type { Inclusions } from "../media/mixing";
 import { emtSolve, emtValidity, type EmtResult, type Validity } from "./emt";
 import type { SurfaceMaterialId } from "./materials";
 import type { ProfileParams } from "./profiles";
@@ -11,18 +13,21 @@ import { wallAt, type WallSpec } from "./rcwaJobs";
    inline; rigorous mode (RCWA) sends the same WallSpec to the worker.
    physics.ts is only reached through emtSolve / solveStack. */
 
-type MatSpec = { material: SurfaceMaterialId; customEps: number; customSigma: number };
+type MatSpec = { material: SurfaceMaterialId; customEps: number; customSigma: number; excludeInclusions?: boolean };
 
 const AIR: MatSpec = { material: "custom", customEps: 1, customSigma: 0 };
 
-function matSpec(l: Layer): MatSpec {
-  return l.mat === "air" ? AIR : { material: l.mat as SurfaceMaterialId, customEps: l.eps, customSigma: l.sigma };
+function matSpec(l: PhysicalLayer, mixing: boolean): MatSpec {
+  return { ...(l.mat === "air" ? AIR : { material: l.mat as SurfaceMaterialId, customEps: l.eps, customSigma: l.sigma }),
+    ...(mixing && !isInclusionHost(l) ? { excludeInclusions: true } : {}) };
 }
 
 /** Main stack + lab profile as a WallSpec (profile in the first layer's material). */
-export function mainWallSpec(profile: ProfileParams, layers: Layer[]): WallSpec {
-  const head = layers.length ? matSpec(layers[0]) : AIR;
-  return { profile, ...head, below: layers.map((l) => ({ ...matSpec(l), cm: l.thickness })) };
+export function mainWallSpec(profile: ProfileParams, layers: Layer[], inclusions?: Inclusions | null): WallSpec {
+  const physical = expandLayers(layers);
+  const head = physical.length ? matSpec(physical[0], !!inclusions) : { ...AIR, ...(inclusions ? { excludeInclusions: true } : {}) };
+  return { profile, ...head, below: physical.map((l) => ({ ...matSpec(l, !!inclusions), cm: l.thickness })),
+    ...(inclusions ? { inclusions, inclusionTarget: "all" as const } : {}) };
 }
 
 /** Zeroth-order (specular) R / T / A of the profiled main wall. */

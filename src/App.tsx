@@ -18,6 +18,8 @@ import { drawWaveRays } from "./waveRays";
 import { decodeShare, encodeShare, shareHashOf } from "./share";
 import { SurfaceLab } from "./surface/SurfaceLab";
 import { labForShare } from "./surface/labState";
+import { LAB_TEXT } from "./surface/labText";
+import type { Inclusions } from "./media/mixing";
 import { withSurface, type SceneSurface } from "./surface/sceneOverlay";
 import { loadRtView, saveRtView, useProfiledMain, type RtView } from "./surface/useProfiledMain";
 import { recordFrame } from "./perf";
@@ -38,15 +40,19 @@ import {
   mkLayer,
   newId,
   nkOf,
+  canEmbed,
+  embeddedQuarterWave,
+  physicalLayerCount,
   type CustomMode,
   type Layer,
   type LayerMat,
   type TemplateId,
 } from "./state/layers";
-import { applyMove, applyResize, applyStackCommand, stackKeyCommand } from "./scene/dragStack";
+import { applyStackCommand, stackKeyCommand } from "./scene/dragStack";
+import { movePhysical, physicalScene, resizePhysical, selectPhysical } from "./scene/physicalStack";
 import { computeResults, stackSweepKey, type LayerRes, type Results, type SimState } from "./state/results";
 import { DEFAULT_STATE, presetState } from "./state/presets";
-import { addMatching, isLiveMatching, matchingFeedback, matchingReference, resolveMatching, transitionMatching, type MatchingReason } from "./state/matching";
+import { addMatching, isLiveMatching, matchWall, recalculateMatching, matchingFeedback, matchingReference, resolveMatching, transitionMatching, type MatchingReason } from "./state/matching";
 import { STORAGE_KEY, STORAGE_VERSION, defaultPersisted, loadInitial, sanitizePersisted, type Persisted } from "./state/persistence";
 import { copyText, downloadText } from "./dom";
 import { cssZoom, prepCanvas, useCanvasSize, type CanvasSize } from "./scene/canvas";
@@ -56,7 +62,7 @@ import { PAD, dot, drawAxes, mixHex, pill, roundRect, strokeCurve, tooltip } fro
 import { AngleChart } from "./charts/AngleChart";
 import { FieldChart } from "./charts/FieldChart";
 import { Icon, Logo } from "./ui/icons";
-import { Segmented, Slider } from "./ui/controls";
+import { Check, Segmented, Slider } from "./ui/controls";
 import {
   C0,
   CUSTOM_SWATCH,
@@ -86,22 +92,7 @@ const CONTACT_EMAILS = [
   { labelKey: "emailPersonal", address: "youneschetaine@gmail.com" },
 ] as const;
 
-function Ring({ value, color }: { value: number; color: string }) {
-  const r = 30;
-  const c = 2 * Math.PI * r;
-  return (
-    <svg className="om-ring" viewBox="0 0 76 76" aria-hidden>
-      <circle cx="38" cy="38" r={r} className="om-ring-track" />
-      <circle
-        cx="38"
-        cy="38"
-        r={r}
-        className="om-ring-val"
-        style={{ stroke: color, strokeDasharray: `${clamp(value, 0, 1) * c} ${c}` }}
-      />
-    </svg>
-  );
-}
+import { Ring } from "./ui/Ring";
 
 
 function Eq({ tex }: { tex: string }) {
@@ -247,8 +238,8 @@ export function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [sceneSurface, setSceneSurface] = useState<SceneSurface | null>(null);
-  const [coatingSide, setCoatingSide] = useState("before");
-  const coatingStatus = matchingFeedback(simulation.reason, sim.layers.length >= MAX_LAYERS);
+  const [coatingSlot, setCoatingSlot] = useState(0);
+  const coatingStatus = matchingFeedback(simulation.reason?.startsWith("insert") ? null : simulation.reason, physicalLayerCount(sim.layers) >= MAX_LAYERS);
   const [rtView, setRtView] = useState<RtView>(loadRtView);
   useEffect(() => saveRtView(rtView), [rtView]);
   const [perfOn, setPerfOn] = useState(() => {
@@ -261,6 +252,7 @@ export function App() {
   const copyTimer = useRef(0);
   const [labResultsHost, setLabResultsHost] = useState<HTMLElement | null>(null);
   const labResultsRef = useCallback((node: HTMLElement | null) => setLabResultsHost(node), []);
+  const [mainInclusions, setMainInclusions] = useState<Inclusions | null>(null);
   const buildTaps = useRef({ count: 0, at: 0 });
   const presentRef = useRef(present);
   presentRef.current = present;
@@ -338,14 +330,14 @@ export function App() {
   const select = useCallback((i: number) => setSim((s) => (s.sel === i ? s : { ...s, sel: i })), []);
   const addLayer = () =>
     setSim((s) => {
-      if (s.layers.length >= MAX_LAYERS) return s;
+      if (physicalLayerCount(s.layers) >= MAX_LAYERS) return s;
       const layers = [...s.layers];
       layers.splice(s.sel + 1, 0, mkLayer("plasterboard", 1.3));
       return { ...s, layers, sel: s.sel + 1 };
     });
   const dupLayer = (i: number) =>
     setSim((s) => {
-      if (s.layers.length >= MAX_LAYERS || isLiveMatching(s.layers[i])) return s;
+      if (physicalLayerCount(s.layers) + (s.layers[i].embeddedInsert?.enabled ? 3 : 1) > MAX_LAYERS || isLiveMatching(s.layers[i])) return s;
       const layers = [...s.layers];
       layers.splice(i + 1, 0, { ...s.layers[i], id: newId() });
       return { ...s, layers, sel: i + 1 };
@@ -365,8 +357,9 @@ export function App() {
       return { ...s, layers, sel: s.sel === i ? j : s.sel === j ? i : s.sel };
     });
   // canvas drag (src/scene/dragStack.ts): same state, same results / share / storage path as the panel
-  const dragMove = useCallback((from: number, to: number) => setSim((s) => applyMove(s, from, to)), []);
-  const dragResize = useCallback((i: number, cm: number) => setSim((s) => applyResize(s, i, cm)), []);
+  const dragMove = useCallback((from: number, to: number) => setSim((s) => movePhysical(s, from, to)), []);
+  const dragResize = useCallback((i: number, cm: number) => setSim((s) => resizePhysical(s, i, cm)), []);
+  const selectDrawing = useCallback((i: number) => setSim((s) => selectPhysical(s, i)), []);
   const applyTemplate = (id: TemplateId) => {
     setSim((s) => ({ ...s, layers: TEMPLATES[id](), sel: 0 }));
     setFlash((f) => f + 1);
@@ -545,9 +538,9 @@ export function App() {
     };
   }, [setPresentFull]);
 
-  const res = useMemo(() => computeResults(sim), [sim]);
+  const res = useMemo(() => computeResults(sim, mainInclusions), [sim, mainInclusions]);
   // profiled main wall (lab profile on the first layer) when the profile is drawn and the view asks for it
-  const profiled = useProfiledMain(sceneSurface, sim.layers, sim.freq, sim.angle, sim.pol, rtView);
+  const profiled = useProfiledMain(sceneSurface, sim.layers, sim.freq, sim.angle, sim.pol, rtView, mainInclusions);
   const shown = profiled
     ? { R: profiled.R, T: profiled.T, A: Math.max(0, profiled.A) }
     : { R: res.R, T: res.T, A: res.A };
@@ -580,18 +573,7 @@ export function App() {
     // (all orders, every internal reflection and absorption already in the math)
     R: shown.R,
     T: shown.T,
-    layers: sim.layers.map((l, i) => ({
-      mat: l.mat,
-      readOnlyThickness: isLiveMatching(l),
-      cm: l.thickness,
-      thetaT: res.layers[i].thetaT,
-      nRe: res.layers[i].nRe,
-      absorbed: res.layers[i].absorbed,
-      fluxIn: res.layers[i].fluxIn,
-      fluxOut: i + 1 < sim.layers.length ? res.layers[i + 1].fluxIn : shown.T,
-      name: l.matching ? t.arMaterial : matName(l.mat),
-    })),
-    sel: sim.sel,
+    ...physicalScene(res, sim.sel, matName, t.insertMaterial, t.arMaterial, shown.T),
     hover: -1,
     freq: sim.freq,
     pol: sim.pol,
@@ -599,9 +581,9 @@ export function App() {
   };
 
   const bands = useMemo(
-    () => sim.layers.map((l) => ({ tint: matTint(l.mat), label: matName(l.mat).toUpperCase(), air: l.mat === "air" })),
+    () => res.physicalLayers.map((l) => ({ tint: l.part === "insert" ? pal.tra : matTint(l.mat), label: (l.part === "insert" ? t.insertMaterial : matName(l.mat)).toUpperCase(), air: l.mat === "air" })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sim.layers, lang],
+    [res.physicalLayers, lang, pal],
   );
 
   const applyPreset = (key: string) => {
@@ -636,6 +618,11 @@ export function App() {
 
   // which model gives the R / T on screen, and the switch between flat and profiled
   const fr = lang === "fr";
+  const mixText = LAB_TEXT[lang];
+  const inclusionLabel = mainInclusions && mainInclusions.fraction > 0
+    ? `${mixText.inclusions} · ${mainInclusions.kind === "water" ? mixText.water : mixText.air} ${fmt.num(mainInclusions.fraction * 100, 0)} %`
+    : null;
+  const inclusionWarning = res.mixValidity !== "ok" ? `${mixText.mixValidity} · ${mixText.valid[res.mixValidity]}` : null;
   const viewTools = (
     <div className="om-view-modes" role="group" aria-label={fr ? "Scène affichée" : "Displayed scene"}>
       <button type="button" aria-pressed={sceneView === "main"} className={sceneView === "main" ? "is-on" : ""} onClick={() => setSceneView("main")}>
@@ -667,14 +654,20 @@ export function App() {
       </button>
     </div>
   ) : null;
-  const full = sim.layers.length >= MAX_LAYERS;
-  const insertCoating = (slot: number) => {
-    const next = addMatching(sim, slot);
-    setSimulation((previous) => next.reason ? { ...previous, reason: next.reason } : transitionMatching(previous.sim, next.sim));
-    if (!next.reason) setRtView("flat");
+  const physicalCount = physicalLayerCount(sim.layers);
+  const full = physicalCount >= MAX_LAYERS;
+  const applyMatching = (action: (s: SimState) => { sim: SimState; reason: MatchingReason | null }) => {
+    const next = action(sim);
+    setSimulation(next);
+    if (next.sim !== sim) setRtView("flat");
   };
   const liveCoating = isLiveMatching(selL);
-  const matchRef = liveCoating ? matchingReference(sim.layers, sim.sel, sim.freq) : null;
+  const matchRef = selL.matching || liveCoating ? matchingReference(sim.layers, sim.sel, sim.freq) : null;
+  const insert = selL.embeddedInsert ?? { enabled: false, eps: 2.25, thickness: Math.min(0.1, selL.thickness / 10) };
+  const insertAllowed = canEmbed(selL);
+  const insertFull = !insert.enabled && physicalCount + 2 > MAX_LAYERS;
+  const insertQuarter = embeddedQuarterWave(Math.sqrt(insert.eps), sim.freq, selL.thickness);
+  const patchInsert = (patch: Partial<typeof insert>) => patchLayer({ embeddedInsert: { ...insert, ...patch } });
 
   const setMaterial = (m: LayerMat) => {
     if (m === selL.mat) return;
@@ -786,7 +779,7 @@ export function App() {
       <main className="om-layout" ref={frameHeightRef}>
         {/* ───────── Scene ───────── */}
         <section className="om-card om-scene om-enter" style={{ "--d": "60ms" } as CSSProperties}>
-          <RayScene active={sceneView === "main"} viewTools={viewTools} params={withSurface(sceneParams, sceneSurfaceShown)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} onMove={dragMove} onResize={dragResize} tools={rtTools} />
+          <RayScene active={sceneView === "main"} viewTools={viewTools} params={withSurface(sceneParams, sceneSurfaceShown)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={selectDrawing} onMove={dragMove} onResize={dragResize} tools={rtTools} />
           <div ref={detailHostRef} className="om-lab-host" hidden={sceneView !== "lab"} />
           {sceneView === "main" && <>
           <div className="om-hud om-hud-tl">
@@ -796,9 +789,10 @@ export function App() {
                   <i key={l.id} style={{ background: matSwatch(l.mat) }} />
                 ))}
               </span>
-              {tpl(sim.layers.length > 1 ? t.layersN : t.layer1, { n: String(sim.layers.length) })}
+              {tpl(physicalCount > 1 ? t.layersN : t.layer1, { n: String(physicalCount) })}
             </span>
             {sceneSurface && <span className="om-hud-chip om-mono" title={rtTitle}>{emtWarn && Icon.warn}{rtChip}</span>}
+            {inclusionLabel && <span className="om-hud-chip om-mono" title={inclusionWarning ?? mixText.mixNote}>{Icon.medium}{inclusionLabel}{inclusionWarning ? ` · ${inclusionWarning}` : ""}</span>}
             <span className="om-hud-chip om-mono">{fmt.num(sim.freq, sim.freq < 10 ? 2 : 1)} GHz</span>
             <span className="om-hud-chip om-mono">{polLabel}</span>
           </div>
@@ -818,7 +812,7 @@ export function App() {
             <span className="om-leg"><i style={{ background: "var(--om-tra)" }} />{t.transmitted}</span>
             {shown.A > 0.005 && <span className="om-leg"><i style={{ background: "var(--om-abs)" }} />{t.absorbed}</span>}
           </div>
-          <div className="om-hud om-hud-br"><span className="om-hint">{t.clickLayer}</span></div>
+          <div className="om-hud om-hud-br"><span className="om-hint">{physicalCount > sim.layers.length ? t.insertCanvasHint : t.clickLayer}</span></div>
           </>}
           {!playing && <div className="om-paused-badge">{t.pause}</div>}
         </section>
@@ -881,7 +875,7 @@ export function App() {
                     { v: 30, label: "30" },
                     { v: 60, label: "60" },
                     { v: 89, label: "89" },
-                    ...(Number.isFinite(selR.brewster) ? [{ v: Math.round(selR.brewster * 2) / 2, label: "θB", tone: "acc" as const }] : []),
+                    ...(Number.isFinite(selR.brewster) ? [{ v: Math.round(selR.brewster * 2) / 2, label: "θB", tone: "acc" as const, row: 2 as const }] : []),
                   ]} />
                 {Number.isFinite(selR.brewster) && (
                   <div className="om-presets" style={{ marginTop: 8 }}>
@@ -937,7 +931,7 @@ export function App() {
               <div className="om-group">
                 <div className="om-label om-label-row om-label-split">
                   <span>{t.stack}</span>
-                  <span className="om-mono om-faint">{fmt.num(res.totalCm, res.totalCm < 10 ? 2 : 1)} cm · {sim.layers.length}/{MAX_LAYERS}</span>
+                  <span className="om-mono om-faint">{fmt.num(res.totalCm, res.totalCm < 10 ? 2 : 1)} cm · {physicalCount}/{MAX_LAYERS}</span>
                 </div>
                 <div className="om-strip" aria-hidden>
                   <span className="om-strip-air">{t.airShort}</span>
@@ -961,7 +955,7 @@ export function App() {
                           <span className="om-layer-idx">{i + 1}</span>
                           <span className="om-layer-sw" style={{ background: matSwatch(l.mat) }} />
                           <span className="om-layer-txt">
-                            <b>{l.matching ? t.arMaterial : matName(l.mat)}</b>
+                            <b>{l.matching ? t.arMaterial : matName(l.mat)}{l.embeddedInsert?.enabled ? ` · ${t.insertMaterial}` : ""}</b>
                             <small className="om-mono">
                               {fmt.num(l.thickness, l.thickness < 1 ? 2 : 1)} cm · ε′ {fmt.num(r.epsR, 2)} · A {fmt.pct(r.absorbed)}%
                             </small>
@@ -970,7 +964,7 @@ export function App() {
                         <span className="om-layer-actions">
                           <button type="button" aria-label={t.moveUp} title={t.moveUp} disabled={i === 0} onClick={() => moveLayer(i, -1)}>{Icon.up}</button>
                           <button type="button" aria-label={t.moveDown} title={t.moveDown} disabled={i === sim.layers.length - 1} onClick={() => moveLayer(i, 1)}>{Icon.down}</button>
-                          <button type="button" aria-label={t.duplicate} title={t.duplicate} disabled={full || isLiveMatching(l)} onClick={() => dupLayer(i)}>{Icon.copy}</button>
+                          <button type="button" aria-label={t.duplicate} title={t.duplicate} disabled={physicalCount + (l.embeddedInsert?.enabled ? 3 : 1) > MAX_LAYERS || isLiveMatching(l)} onClick={() => dupLayer(i)}>{Icon.copy}</button>
                           <button type="button" aria-label={t.remove} title={t.remove} disabled={sim.layers.length <= 1} onClick={() => removeLayer(i)} className="is-danger">{Icon.trash}</button>
                         </span>
                       </li>
@@ -991,11 +985,14 @@ export function App() {
                 <div className="om-coating-tools">
                   <div className="om-coating-row">
                     <span className="om-label">{t.arAdaptation}</span>
-                    <select aria-label={t.arPosition} value={coatingSide} onChange={(e) => setCoatingSide(e.target.value)}>
-                      <option value="before">{t.arBefore}</option><option value="after">{t.arAfter}</option>
+                    <select aria-label={t.arPosition} value={Math.min(coatingSlot, sim.layers.length)} onChange={(e) => setCoatingSlot(Number(e.target.value))}>
+                      {Array.from({ length: sim.layers.length + 1 }, (_, slot) => <option key={slot} value={slot}>
+                        {slot === 0 ? (fr ? "Entrée · avant 1" : "Front · before 1") : slot === sim.layers.length ? (fr ? `Sortie · après ${slot}` : `Back · after ${slot}`) : (fr ? `Entre ${slot} et ${slot + 1}` : `Between ${slot} and ${slot + 1}`)}
+                      </option>)}
                     </select>
-                    <button type="button" className="om-preset" disabled={full} onClick={() => insertCoating(sim.sel + (coatingSide === "after" ? 1 : 0))}>{t.arAdd}</button>
+                    <button type="button" className="om-preset" disabled={full} onClick={() => applyMatching((s) => addMatching(s, Math.min(coatingSlot, s.layers.length)))}>{t.arAdd}</button>
                   </div>
+                  <button type="button" className="om-preset om-match-wall" onClick={() => applyMatching(matchWall)}>{t.arMatchWall}</button>
                   <details><summary>{t.arDetails}</summary><p>{t.arInsertHint}</p></details>
                   {sceneSurface?.profile && sceneSurface.profile.id !== "flat" && sim.layers[0].matching && <details><summary>{t.arProfileTitle}</summary><p>{t.arProfile}</p></details>}
                   <span className="om-coating-status" role="status">{coatingStatus ? t[coatingStatus] : null}</span>
@@ -1015,11 +1012,17 @@ export function App() {
                   <div className="om-mono">εᵣ = {fmt.sig(selL.eps, 6)} · σ = 0 S/m</div>
                   <div className="om-mono">d = {fmt.sig(selL.thickness, 6)} cm</div>
                   <details><summary>{t.arDetails}</summary>
-                    <p>{(sim.layers[sim.sel - 1] ? matName(sim.layers[sim.sel - 1].mat) : t.air)} → {(sim.layers[sim.sel + 1] ? matName(sim.layers[sim.sel + 1].mat) : t.air)}</p>
-                    <p className="om-mono">n₁ = {fmt.sig(matchRef.n1, 6)} · n₂ = {fmt.sig(matchRef.n2, 6)}<br />Z₁,ref = {fmt.sig(matchRef.z1, 6)} Ω · Z₂,ref = {fmt.sig(matchRef.z2, 6)} Ω<br />nₘ = √(n₁n₂) · εᵣ,ₘ = n₁n₂<br />ηₘ,ref = √(Z₁,ref Z₂,ref)<br />d = {matchRef.design?.order}λ₀/(4nₘ)</p>
+                    <p className="om-mono">nₘ = {fmt.sig(Math.sqrt(matchRef.n1 * matchRef.n2), 6)} · d = {matchRef.design ? `${fmt.sig(matchRef.design.cm, 6)} cm` : "—"}</p>
                     <p>{t.arInsertHint}</p>
                   </details>
                 </div> : <>
+                {selL.matching && matchRef && <div className="om-coating-tools">
+                  <button type="button" className="om-preset" onClick={() => applyMatching((s) => recalculateMatching(s, s.sel))}>{t.arRecalculate}</button>
+                  <details><summary>{t.arDetails}</summary>
+                    <p className="om-mono">nₘ = {fmt.sig(Math.sqrt(matchRef.n1 * matchRef.n2), 6)} · d = {matchRef.design ? `${fmt.sig(matchRef.design.cm, 6)} cm` : "—"} · {fmt.sig(sim.freq, 4)} GHz</p>
+                    <p>{t.arInsertHint}</p>
+                  </details>
+                </div>}
                 <div className="om-materials" role="radiogroup" aria-label={t.material}>
                   {LAYER_MATS.map((id) => {
                     const eps = id === "air" ? 1 : materialProps(id, sim.freq, selL.eps, selL.sigma).epsR;
@@ -1105,6 +1108,20 @@ export function App() {
                   </span>
                 </div>
                 </>}
+                <div className="om-insert-tools">
+                  <Check checked={insert.enabled} disabled={!insertAllowed || insertFull} label={t.insertTitle} onChange={(enabled) => patchInsert({ enabled })} />
+                  {!insertAllowed ? <div className="om-hint">{t.insertHost}</div> : insertFull ? <div className="om-hint">{t.insertCapacity}</div> : null}
+                  {(insert.enabled || (selL.embeddedInsert && insert.thickness >= selL.thickness)) && insertAllowed && <>
+                    <Slider label={t.insertIndex} value={Math.sqrt(insert.eps)} min={1} max={8} step={0.01} digits={3} fmtNum={fmt.num} onChange={(n) => patchInsert({ eps: n * n })} />
+                    <Slider label={t.insertThickness} value={insert.thickness} min={0.001} max={selL.thickness - 0.001} step={0.001} log unit="cm" digits={4} fmtNum={fmt.num} onChange={(thickness) => patchInsert({ thickness })} />
+                    <div className="om-insert-reference">
+                      <button type="button" className="om-preset" disabled={insertQuarter === null} onClick={() => { if (insertQuarter !== null) patchInsert({ thickness: insertQuarter }); }}>{t.insertQuarterAction} · {fmt.sig(sim.freq, 4)} GHz</button>
+                      {insertQuarter === null && <span className="om-hint">{t.insertQuarterFit}</span>}
+                    </div>
+                    <details className="om-insert-details"><summary>{t.arDetails}</summary><p>{t.insertHint}</p><p>{t.insertQuarterHint}</p></details>
+                  </>}
+                  <span className="om-coating-status" role="status">{simulation.reason && (simulation.reason.startsWith("insert") || simulation.reason === "arFull") ? t[simulation.reason] : null}</span>
+                </div>
                 </div>
               </div>
           <button
@@ -1175,6 +1192,7 @@ export function App() {
               <div><i style={{ background: "var(--om-abs)" }} />{t.absorbed}<b>{fmt.pct(shown.A)} %</b></div>
               <div><i style={{ background: "var(--om-tra)" }} />{t.transmitted}<b>{fmt.pct(shown.T)} %</b></div>
             </div>
+            {inclusionLabel && <p className={`om-inclusion-note${inclusionWarning ? " is-warn" : ""}`} role="status">{Icon.medium}{inclusionLabel}{inclusionWarning ? ` · ${inclusionWarning}` : ""}</p>}
             {sim.layers.length > 1 && !profiled && (
               <div className="om-budget-layers">
                 {res.layers.map((r, i) => (
@@ -1285,7 +1303,7 @@ export function App() {
             </div>
           </div>
         </section>
-        <SurfaceLab detailTarget={sceneView === "lab" ? detailHost : null} resultsTarget={sceneView === "lab" ? labResultsHost : null} freq={sim.freq} angle={sim.angle} pol={sim.pol} lang={lang} pal={pal} playing={playing} fmtNum={fmt.num} onFreq={(f) => update("freq", f)} onAngle={(a) => update("angle", a)} onSceneSurface={setSceneSurface} />
+        <SurfaceLab detailTarget={sceneView === "lab" ? detailHost : null} resultsTarget={sceneView === "lab" ? labResultsHost : null} freq={sim.freq} angle={sim.angle} pol={sim.pol} lang={lang} pal={pal} playing={playing} fmtNum={fmt.num} onFreq={(f) => update("freq", f)} onAngle={(a) => update("angle", a)} onSceneSurface={setSceneSurface} onMainInclusions={setMainInclusions} />
       </main>
 
       <footer className="om-foot">

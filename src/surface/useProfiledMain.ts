@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PolMode } from "../physics";
+import type { Inclusions } from "../media/mixing";
 import type { Layer } from "../state/layers";
 import type { Validity } from "./emt";
 import { mainEmt, mainEmtValidity, mainWallSpec } from "./profiledMain";
@@ -53,11 +54,12 @@ export function useProfiledMain(
   angle: number,
   pol: PolMode,
   view: RtView,
+  inclusions?: Inclusions | null,
 ): ProfiledRt | null {
   const calc = surface?.calc;
   const profile = surface?.profile;
   const active = view === "profiled" && !!profile && profile.id !== "flat" && !!calc;
-  const spec = useMemo(() => (active && profile ? mainWallSpec(profile, layers) : null), [active, profile, layers]);
+  const spec = useMemo(() => (active && profile ? mainWallSpec(profile, layers, inclusions) : null), [active, profile, layers, inclusions]);
   const slices = calc?.slices ?? 24;
   const harmonics = calc?.harmonics ?? 10;
   const rigorous = calc?.mode === "rigorous";

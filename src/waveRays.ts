@@ -6,7 +6,7 @@ import { drawWaveRibbon } from "./render/waveRibbon";
 import type { SceneSurface } from "./surface/sceneOverlay";
 
 interface Point { x: number; y: number }
-interface Layer { mat: MaterialId | "air"; cm: number; thetaT: number; nRe: number; fluxIn: number; fluxOut: number; absorbed?: number; name: string }
+interface Layer { mat: MaterialId | "air"; cm: number; thetaT: number; nRe: number; fluxIn: number; fluxOut: number; absorbed?: number; name: string; insert?: boolean }
 interface Parameters { layers: Layer[]; etas: Cx[]; ds: number[]; theta: number; freq: number; pol: PolMode; R: number; T: number; sel: number; hover: number; surface?: SceneSurface }
 interface Palette { dark: boolean; ink: string; muted: string; faint: string; inc: string; ref: string; tra: string; abs?: string; grid: string }
 export interface RayOptions { display: "field" | "fronts" | "both"; reflections: boolean; annotations: boolean; lang: "fr" | "en" }
@@ -175,7 +175,7 @@ export function drawWaveRays(
   const tileWidth = Math.min(compact ? 104 : 150, (width - 36 - gap * (count - 1)) / count);
   const tileStart = (width - (tileWidth + gap) * count + gap) / 2;
   params.layers.forEach((layer, index) => {
-    const tint = tintOf(layer.mat);
+    const tint = layer.insert ? palette.tra : tintOf(layer.mat);
     const selected = index === params.sel;
     const hovered = index === params.hover;
     const x = tileStart + index * (tileWidth + gap);
@@ -212,7 +212,7 @@ export function drawWaveRays(
   params.layers.forEach((layer, index) => {
     const x0 = bx[index];
     const x1 = bx[index + 1];
-    const tint = tintOf(layer.mat);
+    const tint = layer.insert ? palette.tra : tintOf(layer.mat);
     const air = layer.mat === "air";
     const glass = layer.mat === "glass";
     const opacity = air ? 0.05 : glass ? 0.2 : 0.7;

@@ -21,7 +21,7 @@ export interface SliderProps {
   /** CSS colour of the filled track; a wave colour token for wave parameters */
   accent?: string;
   onChange: (v: number) => void;
-  ticks?: { v: number; label: string; tone?: "acc" }[];
+  ticks?: { v: number; label: string; tone?: "acc"; row?: 2 }[];
   hint?: ReactNode;
   fmtNum: (v: number, d?: number) => string;
   icon?: ReactNode;
@@ -103,12 +103,12 @@ export function Slider(props: SliderProps) {
         </span>
       </div>
       {ticks && (
-        <div className="om-ticks">
+        <div className={`om-ticks${ticks.some((t) => t.row === 2) ? " om-ticks-two-rows" : ""}`}>
           {ticks.map((t) => (
             <button
               key={`${t.label}-${t.v}`}
               type="button"
-              className={`om-tick ${t.tone === "acc" ? "om-tick-acc" : ""} ${Math.abs(t.v - value) < step * 0.75 ? "is-on" : ""}`}
+              className={`om-tick ${t.tone === "acc" ? "om-tick-acc" : ""}${t.row === 2 ? " om-tick-row-2" : ""} ${Math.abs(t.v - value) < step * 0.75 ? "is-on" : ""}`}
               style={{ left: `${clamp(toPos(t.v), 0, 1) * 100}%` }}
               onClick={() => onChange(clamp(t.v, min, max))}
             >

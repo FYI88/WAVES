@@ -27,6 +27,8 @@ export interface SceneLayer {
   fluxOut: number;
   name: string;
   readOnlyThickness?: boolean;
+  readOnlyMove?: boolean;
+  insert?: boolean;
 }
 
 export interface SceneParams {
@@ -211,7 +213,7 @@ export function RayScene(props: {
     const h = hitLayer(lay, point);
     setHover(h.index);
     setEdge(nextEdge);
-    setCursor(nextEdge > 0 ? "is-resize" : h.index < 0 ? "" : h.tile ? "is-pointer" : "is-grab");
+    setCursor(nextEdge > 0 ? "is-resize" : h.index < 0 ? "" : h.tile || live.current.params.layers[h.index]?.readOnlyMove ? "is-pointer" : "is-grab");
   };
 
   return <>
@@ -292,7 +294,7 @@ export function RayScene(props: {
           }
           if (g.mode !== "resize") {
             const h = hitLayer(lay, point);
-            if (h.index >= 0 && !h.tile) Object.assign(g, { mode: "reorder", index: h.index });
+            if (h.index >= 0 && !h.tile && !live.current.params.layers[h.index]?.readOnlyMove) Object.assign(g, { mode: "reorder", index: h.index });
           }
         }
         drag.current = g;

@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { encodeShare, type ShareState } from "../share";
-import { DEFAULT_LAB, LAB_MAX_BELOW, labForShare, labFromHash, sanitizeLab, setLabSnapshot, type LabState } from "./labState";
+import { DEFAULT_LAB, LAB_MAX_BELOW, LAB_STORAGE_KEY, labForShare, labFromHash, loadLab, saveLab, sanitizeLab, setLabSnapshot, type LabState } from "./labState";
 
 const SIM: ShareState = {
   layers: [{ id: "a1", mat: "concrete", thickness: 20, eps: 4, sigma: 0.05, customMode: "eps" }],
@@ -74,7 +74,7 @@ describe("lab state", () => {
 
   it("round-trips through a share link", () => {
     expect(labFromHash(`#s=${encodeShare(SIM, "fr", "dark", LAB)}`)).toEqual(LAB);
-    expect(labFromHash(`#s=${encodeShare(SIM, "fr", "dark")}`)).toBeNull();
+    expect(labFromHash(`#s=${encodeShare(SIM, "fr", "dark")}`)).toBeUndefined();
     expect(labFromHash("#other=1")).toBeNull();
   });
 
@@ -83,5 +83,50 @@ describe("lab state", () => {
     expect(labForShare()).toBeUndefined();
     setLabSnapshot(LAB);
     expect(labForShare()).toEqual(LAB);
+  });
+
+  it("round-trips whole-wall scope and the opt-in main toggle through storage and share", () => {
+    const lab: LabState = { ...LAB, incTarget: "all", applyInclusionsToMain: true, inclusions: { ...LAB.inclusions, kind: "water", fraction: 0.1 } };
+    const values = new Map<string, string>();
+    vi.stubGlobal("window", { location: { hash: "" }, localStorage: {
+      setItem: (key: string, value: string) => values.set(key, value),
+      getItem: (key: string) => values.get(key) ?? null,
+    } });
+    try {
+      saveLab(lab);
+      expect(JSON.parse(values.get(LAB_STORAGE_KEY)!)).toEqual(lab);
+      expect(loadLab()).toEqual(lab);
+      setLabSnapshot(lab);
+      const hash = `#s=${encodeShare(SIM, "en", "dark", labForShare())}`;
+      expect(labFromHash(hash)).toEqual(lab);
+      window.location.hash = hash;
+      saveLab(DEFAULT_LAB);
+      expect(loadLab()).toEqual(lab); // shared config wins
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it("sanitizes unknown scope/toggle values and still accepts legacy numeric scopes", () => {
+    for (const incTarget of ["whole", "0", {}, null, NaN, Infinity]) expect(sanitizeLab({ incTarget })?.incTarget).toBe(-1);
+    for (const applyInclusionsToMain of ["true", 1, null, {}, undefined]) expect(sanitizeLab({ applyInclusionsToMain })?.applyInclusionsToMain).toBe(false);
+    for (const incTarget of [-1, 0]) expect(sanitizeLab({ incTarget })?.incTarget).toBe(incTarget);
+    expect(sanitizeLab({ below: [], incTarget: "all", applyInclusionsToMain: true })).toMatchObject({ incTarget: "all", applyInclusionsToMain: true });
+    expect(labFromHash(`#s=${encodeShare(SIM, "fr", "dark", { incTarget: 0 })}`)).toMatchObject({ incTarget: 0, applyInclusionsToMain: false });
+  });
+
+  it.each(["v1", "v2 omitted", "v2 enabled", "v2 disabled", "absent", "malformed"])("loads %s without inheriting unshared main-wall mixing", (kind) => {
+    const saved: LabState = { ...LAB, applyInclusionsToMain: true, inclusions: { ...LAB.inclusions, fraction: 0.2 } };
+    const shared: LabState = { ...DEFAULT_LAB, applyInclusionsToMain: kind === "v2 enabled", inclusions: { ...DEFAULT_LAB.inclusions, fraction: 0.1 } };
+    const hash = kind === "v1"
+      ? `#s=${btoa(JSON.stringify({ v: 1, sim: SIM, lang: "en", theme: "dark" })).replace(/=+$/, "")}`
+      : kind === "absent" ? "" : kind === "malformed" ? "#s=not-valid"
+      : `#s=${encodeShare(SIM, "en", "dark", kind === "v2 omitted" ? undefined : shared)}`;
+    vi.stubGlobal("window", { location: { hash }, localStorage: { getItem: () => JSON.stringify(saved) } });
+    try {
+      const expected = kind === "v1" || kind === "v2 omitted" ? { ...saved, applyInclusionsToMain: false }
+        : kind === "absent" || kind === "malformed" ? saved : shared;
+      expect(loadLab()).toEqual(expected);
+      expect(labFromHash(hash)).toEqual(kind === "v1" || kind === "v2 omitted" ? undefined
+        : kind === "absent" || kind === "malformed" ? null : shared);
+    } finally { vi.unstubAllGlobals(); }
   });
 });
