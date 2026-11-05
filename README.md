@@ -60,9 +60,34 @@ cd android && ./gradlew assembleDebug
 # → android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-- **Install** — sideload the APK. Each CI run generates a fresh debug keystore, so uninstall a previous debug build before installing a newer one.
+- **Install** — use the permanently signed release APK for updates. The same application ID and signing certificate, with a higher versionCode, allow installing over a previous signed release without uninstalling or losing settings. CI debug artifacts use temporary debug keys and cannot update release installations.
 - **Fonts** — Inter Tight and JetBrains Mono are bundled with Fontsource (Latin + Greek subsets); the app makes no network request at runtime.
-- **Version** — `package.json` is the single source of truth: `versionName` in `android/app/build.gradle` is read from it. Bump `versionCode` manually in that file for each release.
+- **Version** — `package.json` is the source of `versionName` (`version`) and `versionCode` (`androidVersionCode`). Current release: **1.1.0**, Android code **3** (previous signed release: code 2). Increase the Android code for every distributed update.
+
+### Signed release build
+
+Signing credentials remain outside the repository in
+`~/.waves/android-signing.properties` (`STORE_FILE`, `STORE_PASSWORD`,
+`KEY_ALIAS`, `KEY_PASSWORD`), or equivalent `WAVES_*` environment variables.
+Keep the existing keystore; do not generate a replacement or publish credentials.
+Release builds fail closed without signing configuration. CI debug builds remain
+separate from signed distributions.
+
+```powershell
+npm ci
+npm test -- --maxWorkers=1
+npm run build
+npx cap sync android
+cd android
+.\gradlew.bat assembleRelease --no-daemon --max-workers=1
+# app/build/outputs/apk/release/app-release.apk
+```
+
+Always rebuild and sync first: the APK bundles `dist` locally, not a live
+website. The native shell hides status/navigation bars on launch and focus
+return; edge swipes reveal them temporarily. Native exports use the system share
+sheet and setup links open the public website rather than the private WebView
+origin.
 
 ## Features
 

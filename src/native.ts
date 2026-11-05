@@ -12,6 +12,12 @@ import { Share } from "@capacitor/share";
 
 const isNative = () => Capacitor.isNativePlatform();
 
+/** Native WebView origins are private to the app; shared links must open on the web. */
+export function buildShareUrl(encodedState: string, location: Pick<Location, "origin" | "pathname">, native: boolean): string {
+  const base = native ? "https://waves-pearl.vercel.app/" : `${location.origin}${location.pathname}`;
+  return `${base}#s=${encodedState}`;
+}
+
 const safeName = (name: string) => name.replace(/[^A-Za-z0-9._-]+/g, "-");
 
 async function writeAndShare(filename: string, data: string, encoding?: Encoding): Promise<void> {

@@ -55,6 +55,7 @@ import { DEFAULT_STATE, presetState } from "./state/presets";
 import { addMatching, isLiveMatching, matchWall, recalculateMatching, matchingFeedback, matchingReference, resolveMatching, transitionMatching, type MatchingReason } from "./state/matching";
 import { STORAGE_KEY, STORAGE_VERSION, defaultPersisted, loadInitial, sanitizePersisted, type Persisted } from "./state/persistence";
 import { copyText, downloadText } from "./dom";
+import { buildShareUrl } from "./native";
 import { cssZoom, prepCanvas, useCanvasSize, type CanvasSize } from "./scene/canvas";
 import { RayScene, type SceneLayer, type SceneParams } from "./scene/RayScene";
 import { frameHeightRef } from "./scene/frameHeight";
@@ -414,7 +415,7 @@ export function App() {
   }, []);
 
   const shareUrl = () =>
-    `${window.location.origin}${window.location.pathname}#s=${encodeShare(sim, lang, theme, labForShare())}`;
+    buildShareUrl(encodeShare(sim, lang, theme, labForShare()), window.location, Capacitor.isNativePlatform());
 
   const share = async () => {
     setCopied(await copyText(shareUrl()));

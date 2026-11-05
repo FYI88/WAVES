@@ -1,5 +1,20 @@
 # WaveS - Android packaging handoff
 
+## Signed Android refresh — 2026-11-05
+
+- Release 1.1.0 / androidVersionCode 3 supersedes signed 1.0.0 / code 2,
+  preserving `io.github.fyi88.waves` and the existing private release keystore.
+- Release signing config mirrors the established local configuration; passwords
+  and keys stay in `~/.waves`, never in Git. CI debug APKs remain development-only.
+- Existing MainActivity immersive fullscreen is retained (launch + focus regain,
+  transient swipe system bars, cutouts). Rebuild web assets and run Capacitor sync
+  before Gradle so all new website features and worker bundles are packaged.
+- Native setup-share URLs now use the canonical public site; web-hosted links
+  keep their origin/path. App/Filesystem/Share plugins are retained.
+- Automated verification: 289 tests pass before release build. Final APK must
+  verify with the old certificate, package ID, versionCode 3 and byte-identical
+  `dist` assets. No Android device is connected for interaction smoke testing.
+
 ## About sheet refinement — 2026-11-05 (uncommitted, both app copies)
 
 - Academic info sheet in the simulation sans/token system: fixed translated heading/tagline + 44px close, credits/contact first, complete existing model note + ITU reference visible, one collapsed Physics equations disclosure (all math retained, joined permittivity/impedance split and labelled), build diagnostics inside scroll body. Five-tap perf toggle retained. Desktop 560px/760px bounded flex shell; safe-area phone bottom sheet, 18/24px spacing, 44px wrapping links, credits stack below 420px; fake drag handle and competing old About/coarse/large-screen rules removed. Equations remain 15px, start-aligned and locally keyboard-scrollable.
