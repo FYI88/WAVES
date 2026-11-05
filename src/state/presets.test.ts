@@ -1,11 +1,42 @@
 import { describe, expect, it } from "vitest";
 import { encodeShare } from "../share";
-import { insertMatchingLayer, mkLayer, quarterWaveMatch } from "./layers";
+import { embeddedQuarterWave, insertMatchingLayer, mkLayer, quarterWaveMatch } from "./layers";
 import { defaultPersisted, persistedFromHash, sanitizePersisted } from "./persistence";
 import { DEFAULT_STATE, presetState } from "./presets";
 import { computeResults } from "./results";
 
 describe("quarter-wave matching", () => {
+  it("offers an internal quarter-wave demo with a measurable nontrivial improvement", () => {
+    // Keep the numerical demonstration as a regression fixture, not a UI preset
+    // that would replace the user's existing walls.
+    const demo = { ...DEFAULT_STATE, layers: [{ ...mkLayer("custom", 3.55, 9, 0.01), embeddedInsert: {
+      enabled: false, eps: 4, thickness: embeddedQuarterWave(2, 10, 3.55)!,
+    } }], sel: 0, freq: 10, angle: 0, pol: "AVG" as const };
+    const wall = demo.layers[0];
+    expect(demo).toMatchObject({ sel: 0, freq: 10, angle: 0, pol: "AVG" });
+    expect(wall.embeddedInsert).toMatchObject({ enabled: false, eps: 4 });
+    expect(wall.embeddedInsert!.thickness).toBe(embeddedQuarterWave(2, 10, wall.thickness));
+    expect(wall.embeddedInsert!.thickness / wall.thickness).toBeLessThan(0.11);
+    for (const pol of ["TE", "TM", "AVG"] as const) {
+      const before = computeResults({ ...demo, pol });
+      const enabled = { ...demo, pol, layers: [{ ...wall, embeddedInsert: { ...wall.embeddedInsert!, enabled: true } }] };
+      const after = computeResults(enabled);
+      expect(before.R).toBeCloseTo(0.14813338110944957, 10);
+      expect(before.T).toBeCloseTo(0.7915840259421953, 10);
+      expect(after.R).toBeCloseTo(0.0038680438177606715, 10);
+      expect(after.T).toBeCloseTo(0.9301462920330921, 10);
+      expect(after.A).toBeGreaterThan(before.A); // Improvement is not just removal of absorption.
+      expect(after.A).toBeGreaterThan(0.06);
+      expect(after.T).toBeLessThan(1);
+      expect(after.totalCm).toBe(before.totalCm);
+      expect(after.R + after.T + after.A).toBeCloseTo(1, 12);
+      expect(computeResults({ ...enabled, freq: 12.5 }).R).toBeGreaterThan(0.3);
+      const restored = computeResults({ ...enabled, layers: [{ ...wall, embeddedInsert: { ...wall.embeddedInsert!, enabled: false } }] });
+      expect(restored.R).toBe(before.R);
+      expect(restored.T).toBe(before.T);
+    }
+    expect(persistedFromHash(`#s=${encodeShare(demo, "fr", "light")}`)?.sim).toEqual(demo);
+  });
   it("inserts a distinct coating between real materials without changing them", () => {
     const layers = [mkLayer("glass", 0.4), mkLayer("concrete", 12)];
     const original = JSON.stringify(layers);

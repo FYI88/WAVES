@@ -2,14 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PALETTES } from "../theme";
 import { RayScene, type SceneParams } from "./RayScene";
+import { prepCanvas } from "./canvas";
+import { drawWaveRays } from "../waveRays";
 
-const harness = vi.hoisted(() => ({ effects: [] as Array<() => void | (() => void)>, canvas: {} }));
-vi.mock("react", async (importOriginal) => ({
-  ...await importOriginal<typeof import("react")>(),
+const harness = vi.hoisted(() => ({ effects: [] as Array<() => void | (() => void)>, refs: [] as Array<{ current: unknown }>, canvas: { removeAttribute: vi.fn() } }));
+vi.mock("react", async (importOriginal) => {
+  const react = await importOriginal<typeof import("react")>();
+  return { ...react,
+  useRef: <T,>(value: T) => { const ref = react.useRef(value); harness.refs.push(ref); return ref; },
   // Run the component's actual effects explicitly: no DOM package is required.
   useEffect: (effect: () => void | (() => void)) => { harness.effects.push(effect); },
-}));
+}; });
+vi.mock("../waveRays", () => ({ drawWaveRays: vi.fn(() => ({ rects: [] })) }));
+vi.mock("../perf", () => ({ recordFrame: vi.fn() }));
 vi.mock("./canvas", () => ({
+  prepCanvas: vi.fn(() => ({})),
   useAdaptiveDprCap: () => 2,
   useCanvasSize: (ref: { current: unknown }) => {
     ref.current = harness.canvas;
@@ -34,15 +41,20 @@ describe("top scene simulation lifecycle", () => {
 
   beforeEach(() => {
     harness.effects = [];
+    harness.refs = [];
+    harness.canvas.removeAttribute.mockClear();
+    vi.mocked(drawWaveRays).mockClear();
+    vi.mocked(prepCanvas).mockClear();
     raf = vi.fn(() => 17);
     cancel = vi.fn();
     events = new EventTarget();
     vi.stubGlobal("requestAnimationFrame", raf);
     vi.stubGlobal("cancelAnimationFrame", cancel);
+    vi.stubGlobal("document", { hidden: false });
     vi.stubGlobal("window", {
       addEventListener: events.addEventListener.bind(events),
       removeEventListener: events.removeEventListener.bind(events),
-      matchMedia: () => ({ matches: false }),
+      matchMedia: () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }),
     });
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -73,7 +85,9 @@ describe("top scene simulation lifecycle", () => {
     const scene = html.slice(0, split);
     const display = html.slice(split);
     expect(scene).toContain(`role="group" aria-label="${lang === "fr" ? "Scène et vue" : "Scene and view"}"`);
-    for (const label of ["Surface Lab", "Flat R/T", "Spatial"]) expect(scene).toContain(`>${label}<`);
+    for (const label of ["Surface Lab", "Spatial"]) expect(scene).toContain(`>${label}<`);
+    expect(html).toContain('<details class="om-display-menu"><summary>');
+    expect(display).toContain('>Flat R/T<');
     expect(display).toContain(`role="group" aria-label="${lang === "fr" ? "Options d’affichage" : "Display utilities"}"`);
     expect(display).toContain('type="checkbox" checked=""');
     expect(display).toContain(`aria-pressed="true">${lang === "fr" ? "Repères" : "Labels"}`);
@@ -102,5 +116,24 @@ describe("top scene simulation lifecycle", () => {
     expect(raf).toHaveBeenCalledTimes(1);
     cleanups.forEach((cleanup) => cleanup?.());
     expect(cancel).toHaveBeenCalledWith(17);
+  });
+
+  it("keeps the canvas placeholder through missing context, then hides it only after a real draw", () => {
+    const html = render(true);
+    expect(html).toContain("Preparing scene…");
+    const placeholder = { hidden: false };
+    harness.refs[1].current = placeholder;
+    harness.effects.forEach((effect) => effect());
+    vi.mocked(prepCanvas).mockReturnValueOnce(null);
+    const firstFrame = raf.mock.calls[0][0] as FrameRequestCallback;
+    firstFrame(performance.now() + 1100);
+    expect(placeholder.hidden).toBe(false);
+    expect(drawWaveRays).not.toHaveBeenCalled();
+    // Even paused/reduced-motion frames must retry after a context miss.
+    const secondFrame = raf.mock.calls[1][0] as FrameRequestCallback;
+    secondFrame(performance.now() + 1200);
+    expect(drawWaveRays).toHaveBeenCalledOnce();
+    expect(placeholder.hidden).toBe(true);
+    expect(harness.canvas.removeAttribute).toHaveBeenCalledWith("aria-busy");
   });
 });

@@ -62,7 +62,7 @@ cd android && ./gradlew assembleDebug
 
 - **Install** — use the permanently signed release APK for updates. The same application ID and signing certificate, with a higher versionCode, allow installing over a previous signed release without uninstalling or losing settings. CI debug artifacts use temporary debug keys and cannot update release installations.
 - **Fonts** — Inter Tight and JetBrains Mono are bundled with Fontsource (Latin + Greek subsets); the app makes no network request at runtime.
-- **Version** — `package.json` is the source of `versionName` (`version`) and `versionCode` (`androidVersionCode`). Current release: **1.1.0**, Android code **3** (previous signed release: code 2). Increase the Android code for every distributed update.
+- **Version** — `package.json` is the source of `versionName` (`version`) and `versionCode` (`androidVersionCode`). Current release: **1.1.1**, Android code **4** (previous signed release: code 3). Increase the Android code for every distributed update.
 
 ### Signed release build
 

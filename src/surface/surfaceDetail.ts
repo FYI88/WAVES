@@ -265,9 +265,10 @@ export function drawSurfaceDetail(
       ctx.stroke();
     }
     ctx.fillStyle = pal.faint;
-    ctx.font = `500 ${compact ? 8.5 : 9.5}px ${MONO}`;
+    ctx.font = `500 ${compact ? 11.5 : 9.5}px ${MONO}`;
     ctx.textAlign = "center";
-    ctx.fillText(`${fmt(layer.cm, layer.cm < 10 ? 1 : 0)}`, x + lw / 2, bottom + 14);
+    const thickness = `${fmt(layer.cm, layer.cm < 10 ? 1 : 0)}`;
+    if (!compact || ctx.measureText(thickness).width < lw - 2) ctx.fillText(thickness, x + lw / 2, bottom + 14);
     x += lw;
   });
 
@@ -322,7 +323,7 @@ export function drawSurfaceDetail(
   ctx.strokeStyle = hexA(pal.ink, 0.6);
   ctx.fillStyle = pal.muted;
   ctx.lineWidth = 1;
-  ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
+  ctx.font = `600 ${compact ? 11.5 : 10}px ${MONO}`;
   if (periodPx > 10) {
     const dx = faceX - 16;
     ctx.beginPath();
@@ -363,7 +364,7 @@ export function drawSurfaceDetail(
       time, frequency: p.frequency, compact, dark: pal.dark, display: "both", pol: p.pol,
     });
     if (label) {
-      ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
+      ctx.font = `600 ${compact ? 11.5 : 10}px ${MONO}`;
       ctx.textAlign = dx < 0 ? "left" : "right";
       ctx.textBaseline = "middle";
       const tx = clamp(x1 + (dx < 0 ? 4 : -4), 4, w - 4);
@@ -397,7 +398,7 @@ export function drawSurfaceDetail(
     ctx.arc(hit.x, hit.y, 34, Math.PI, Math.PI + theta);
     ctx.stroke();
     ctx.fillStyle = pal.dark ? pal.inc : shade(pal.inc, -0.4);
-    ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
+    ctx.font = `600 ${compact ? 11.5 : 10}px ${MONO}`;
     ctx.textAlign = "right";
     ctx.fillText(`θ ${fmt(p.thetaDeg, 1)}°`, hit.x - 38, hit.y - 6);
     ctx.restore();
@@ -473,18 +474,18 @@ export function drawSurfaceDetail(
 
   /* titles */
   ctx.save();
-  ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
+  ctx.font = `600 ${compact ? 11.5 : 10}px ${MONO}`;
   ctx.fillStyle = pal.muted;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.fillText(fr ? "COUPE DÉTAILLÉE · PROFIL" : "DETAIL SECTION · PROFILE", 14, 16);
+  ctx.fillText(compact ? (fr ? "PROFIL" : "PROFILE") : fr ? "COUPE DÉTAILLÉE · PROFIL" : "DETAIL SECTION · PROFILE", 14, 16);
   ctx.textAlign = "right";
   ctx.fillStyle = pal.faint;
   ctx.fillText(p.materialName.toUpperCase(), w - 14, 16);
-  ctx.font = `500 ${compact ? 8 : 9}px ${SANS}`;
+  ctx.font = `500 ${compact ? 11.5 : 9}px ${SANS}`;
   ctx.textAlign = "left";
   ctx.fillText(
-    fr ? "Profil à l’échelle · couches planes comprimées · épaisseurs en cm" : "Profile to scale · flat layers compressed · thickness in cm",
+    compact ? (fr ? "Profil à l’échelle · couches comprimées" : "Profile to scale · layers compressed") : fr ? "Profil à l’échelle · couches planes comprimées · épaisseurs en cm" : "Profile to scale · flat layers compressed · thickness in cm",
     14,
     h - 10,
   );

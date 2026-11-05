@@ -1,5 +1,50 @@
 # WaveS - Android packaging handoff
 
+## Phone/startup test release — 1.1.1 / code 4
+
+Includes phone canvas geometry, reachable portrait/landscape toolbars, results
+before controls, compact Actions/Display disclosures, and selected-host λ/4
+insertion without replacing the existing wall. Native immersive fullscreen stays
+enabled. HTML skeleton replaces the branded splash; no forced 700ms timer.
+Explicit app commit dismisses placeholders, with nonfatal waiting and Retry
+for slow/failed startup. `public/startup.js` must be bundled with every asset.
+315 tests pass; Chrome production startup and responsive viewport/touch checks
+passed. Physical Android testing remains required. Signed update must reuse
+the existing certificate and increase Android code from 3 to 4.
+
+## Phone responsiveness — 2026-11-05 (uncommitted, both app copies)
+
+- Follow-up blocker fix: short-landscape deck now owns grid row1 ABOVE the canvas; simulation, Lab portal, HUD/paused chrome share row2. Canvas orbit/touch-action:none unchanged. Named `@container scene (width < 640px)` hides duplicate top HUDs on compact desktop canvases too. Both app copies receive only this CSS patch; App native and adaptive-DPR differences untouched. Focused39/3, primary303/34, local app-only296/32 pass; primary production build passes. Dev + production-preview Chromium CDP touch assertions:640×360/844×390 toolbar y57–168 visible, canvas heights320/327.59 unchanged; canvas touch pointer path reached with scrollTop0; exposed-toolbar native touch swipe scrollTop75. Lab portal row2 verified;1040px compact HUD computed displays none/none;1440px wide HUD retained. Evidence in existing responsive browser logs/metrics/screenshots. Captured images are not pixel-reviewed (tool cannot inspect pixels); no physical Android validation or release operations.
+
+- Phone/short-landscape layout is scene → results → controls → charts → lab. Header is 57 CSS px in the tested viewports: Actions is a native details disclosure (language/repository/help/About/theme/share retained), with labelled 44px fullscreen/pause buttons always exposed. Desktop controls stay expanded. No forced orientation, zoom, version, Android shell or splash changes.
+- The scene now has its own canvas-size grid row (400px/60svh portrait, 320px/84svh short landscape); toolbar/disclosures add height instead of consuming it. Explicit parent max-content track fixes the container-sizing zero-height row that let results overlay the scene. Simulation/Lab and Section/Spatial stay visible; secondary controls including Flat/Profiled R/T live in native Display details. Space on summary retains native behavior, not the simulation shortcut.
+- Section geometry uses measured canvas dimensions: 1–6 tiles wrap into readable rows, selected material/thickness gets its own line, stack takes 40% width on compact canvases with a 12px minimum visible layer (schematic, true solver thickness unchanged), and 11.5px Tx/R/T readouts own a separate rail clear of beams/horns. Spatial compact camera fits actual projected wall and instrument bounds across allowed orbit extremes; selected and Tx/R/T labels occupy reserved bands. Lab detail compact fonts are 11.5px; titles shorten and thickness labels omit when they cannot fit, rather than colliding. Existing physical selection/virtual drag guards untouched.
+- Files: `src/App.tsx`, `src/styles.css`, `src/scene/{RayScene.tsx,RayScene.test.tsx,sectionGeometry.ts,responsiveGeometry.test.ts}`, `src/ui/ResponsiveDisclosure.tsx`, `src/waveRays.ts`, `src/spatialScene.ts`, `src/surface/surfaceDetail.ts`, `HANDOFF.md`. Local sync was surgical: native/web App sharing/export/Back differences and primary adaptive DPR retained; local brand-size differences retained. Internal-quarter-wave corrections and generated Gradle dirt preserved.
+- Verification: primary **303 tests / 34 files**, `npm run build` pass (118 modules); local app-only `npm test -- --exclude "waves-gitlab/**" --maxWorkers=1` **296 / 32**. An initial mistaken local full run also passed **572 / 60**; nested files were not edited and no local build ran. Pure tests cover 1–6 positive geometry, thin insert width, ordinary drag tolerance and projected camera bounds. Existing portal/pause/drag tests pass.
+- Actual isolated headless installed-Chrome browser checks (existing temp puppeteer-core; no install/user browser session changes) passed on dev and production `dist` preview: 320×640, 360×800, 390×844, 430×932, 640×360, 844×390, 1040×800, 1440×900. Canvas heights 400/480/506/559/320/328px, no horizontal overflow/scene-result overlap; Display preserves canvas height; Actions reachable; keyboard summary does not pause; real pointer switch to Spatial, Lab/Simulation portal lifecycle, desktop 0.8 zoom verified. Extra dev screenshots cover FR/light six pieces at 0°/89° and presentation entry/Escape. Recorded real six-piece 320×400 canvas: min slab width12.03px, slab height207px, all drawn text11.5px.
+- Evidence outside repo: `C:/Users/HP/AppData/Local/Temp/opencode/check-waves-responsive.cjs`; `waves-shots/responsive-*.png`, `waves-shots/built/responsive-*.png`, `waves-shots/{responsive-metrics.json,responsive-browser.log,responsive-built-browser.log,responsive-build.log}`. Screenshots captured; pixel-level human/device review remains. No Android device/APK validation, commit/push, Capacitor sync, APK rebuild, versions or splash edits. Short landscape intentionally scrolls to the toolbar, instead of compressing the view to fit every control simultaneously. Parent owns independent review and any later release work.
+
+## Internal λ/4 action correction — 2026-11-05
+
+The previous `internalQuarterWave` scenario replaced the entire stack, contrary
+to the requested inline operation. Removed its UI entry; a selected-host action
+now computes and enables the embedded quarter-wave insert while preserving all
+materials, IDs, total thicknesses, neighbours, frequency, angle and polarization.
+It reuses a retained insert index (default n1.5), rejects invalid fit/capacity
+atomically, and retains reversible toggle behaviour. Tuned demo retained only
+as a numerical test fixture, not a general cancellation promise. No APK rebuilt.
+
+## Internal quarter-wave demo — 2026-11-05
+
+`internalQuarterWave` scenario starts with the insert disabled for on/off
+comparison. At 10 GHz, 0°, AVG, host eps9/sigma0.01/thickness3.55cm and n2
+insert0.3747405725cm give R14.8133%→0.3868%, T79.1584%→93.0146%.
+The insert occupies10.56% and A rises6.0283%→6.5986%, so the gain is not simply
+removing absorption. Preset uses Main scene/Flat R/T; extra bubble mixing must
+be off to reproduce these numbers. Fixed design detunes; no general matching
+or 100% promise. Existing ideal outer-coating preset unchanged. Tests cover
+TE/TM/AVG, total thickness, sharing, detuning and real on/off UI callbacks.
+
 ## Signed Android refresh — 2026-11-05
 
 - Release 1.1.0 / androidVersionCode 3 supersedes signed 1.0.0 / code 2,

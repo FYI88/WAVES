@@ -4,6 +4,7 @@ import { TAU, DEG, MONO, SANS, clamp, rgba, mix, tintOf } from "./render/util";
 import { profileHeight } from "./surface/profiles";
 import { drawWaveRibbon } from "./render/waveRibbon";
 import type { SceneSurface } from "./surface/sceneOverlay";
+import { sectionGeometry } from "./scene/sectionGeometry";
 
 interface Point { x: number; y: number }
 interface Layer { mat: MaterialId | "air"; cm: number; thetaT: number; nRe: number; fluxIn: number; fluxOut: number; absorbed?: number; name: string; insert?: boolean }
@@ -21,31 +22,21 @@ export function drawWaveRays(
   format: (value: number, decimals?: number) => string,
   options: RayOptions,
 ) {
-  const compact = width < 640;
+  const { compact, gap, columns, rows, tileY, tileH, tileWidth, tileStart, top, bottom, total, minWidth, stackWidth, bx } = sectionGeometry(width, height, params.layers.map(layer => layer.cm));
   const french = options.lang === "fr";
   const dark = palette.dark;
   const absColor = palette.abs ?? (dark ? "#edc17f" : "#8d5b13");
   const count = params.layers.length;
 
   /* ── Geometry ─────────────────────────────────────────────────────── */
-  const titleY = compact ? 68 : 82;
-  const tileY = compact ? 48 : 54;
-  const tileH = compact ? 22 : 24;
-  const top = compact ? 118 : 140;
-  const bottom = height - (compact ? 96 : 86);
   const middle = top + (bottom - top) * 0.4;
-  const total = params.layers.reduce((sum, layer) => sum + layer.cm, 0) || 1;
-  const minWidth = compact ? 14 : 20;
-  const stackWidth = Math.max(minWidth * count + 12, clamp(width * 0.24, compact ? 92 : 150, 300));
-  const bx = [width / 2 - stackWidth / 2];
-  params.layers.forEach(layer => bx.push(bx[bx.length - 1] + minWidth + (stackWidth - minWidth * count) * layer.cm / total));
   const left = bx[0];
   const right = bx[count];
   const depth = { x: compact ? 7 : 12, y: compact ? -5 : -8 };
   const theta = params.theta * DEG;
   const cos = Math.cos(theta);
   const sin = Math.sin(theta);
-  const margin = compact ? 40 : 70;
+  const margin = compact ? 36 : 70;
   const entry = { x: left, y: middle };
   const drops = params.layers.map((layer, index) => (bx[index + 1] - bx[index]) * Math.tan(Math.min(85, layer.thetaT) * DEG));
   const dropTotal = drops.reduce((sum, drop) => sum + drop, 0);
@@ -88,13 +79,13 @@ export function drawWaveRays(
   };
   const pill = (text: string, at: Point, color: string, sub?: string) => {
     ctx.save();
-    const size = compact ? 9.5 : 11;
+    const size = compact ? 11.5 : 11;
     ctx.font = `600 ${size}px ${MONO}`;
     const textWidth = ctx.measureText(text).width;
     ctx.font = `500 ${size}px ${MONO}`;
     const subWidth = sub ? ctx.measureText(sub).width + 8 : 0;
     const w = textWidth + subWidth + 32;
-    const h = compact ? 22 : 26;
+    const h = 26;
     const x = clamp(at.x - w / 2, 8, width - w - 8);
     const y = clamp(at.y, h / 2 + 4, height - h / 2 - 4);
     ctx.shadowColor = dark ? "rgba(0,0,0,.5)" : "rgba(30,60,80,.16)";
@@ -147,6 +138,8 @@ export function drawWaveRays(
   ctx.restore();
 
   /* ── Title row ────────────────────────────────────────────────────── */
+  if (!compact) {
+  const titleY = 82;
   ctx.save();
   ctx.textBaseline = "middle";
   ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
@@ -158,6 +151,7 @@ export function drawWaveRays(
   const lambda0 = 30 / params.freq;
   ctx.fillText(`${format(params.freq, 2)} GHz · λ₀ ${format(lambda0, lambda0 < 10 ? 2 : 1)} cm · ${params.pol === "AVG" ? (french ? "MOY." : "AVG") : params.pol}`, width - 18, titleY);
   ctx.restore();
+  }
 
   /* ── Floor shadow ─────────────────────────────────────────────────── */
   ctx.save();
@@ -171,42 +165,54 @@ export function drawWaveRays(
   ctx.restore();
 
   /* ── Layer tiles ──────────────────────────────────────────────────── */
-  const gap = 6;
-  const tileWidth = Math.min(compact ? 104 : 150, (width - 36 - gap * (count - 1)) / count);
-  const tileStart = (width - (tileWidth + gap) * count + gap) / 2;
   params.layers.forEach((layer, index) => {
     const tint = layer.insert ? palette.tra : tintOf(layer.mat);
     const selected = index === params.sel;
     const hovered = index === params.hover;
-    const x = tileStart + index * (tileWidth + gap);
-    tiles.push({ x0: x, x1: x + tileWidth, y0: tileY, y1: tileY + tileH, index });
+    const x = tileStart + (index % columns) * (tileWidth + gap);
+    const y = tileY + Math.floor(index / columns) * (tileH + gap);
+    tiles.push({ x0: x, x1: x + tileWidth, y0: y, y1: y + tileH, index });
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(x, tileY, tileWidth, tileH, tileH / 2);
+    ctx.roundRect(x, y, tileWidth, tileH, tileH / 2);
     ctx.fillStyle = selected ? rgba(palette.inc, dark ? 0.16 : 0.1) : rgba(tint, hovered ? 0.16 : 0.07);
     ctx.fill();
     ctx.strokeStyle = selected ? rgba(palette.inc, 0.75) : rgba(tint, hovered ? 0.6 : 0.32);
     ctx.lineWidth = selected ? 1.2 : 0.8;
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(x + 12, tileY + tileH / 2, 4, 0, TAU);
+    ctx.arc(x + 12, y + tileH / 2, 4, 0, TAU);
     ctx.fillStyle = layer.mat === "air" ? rgba(tint, 0.35) : tint;
     ctx.fill();
-    ctx.font = `600 ${compact ? 9 : 10.5}px ${SANS}`;
+    ctx.font = `600 ${compact ? 11.5 : 10.5}px ${SANS}`;
     let text = `${index + 1} · ${layer.name}`;
     while (ctx.measureText(text).width > tileWidth - 28 && text.length > 4) text = text.slice(0, -2) + "…";
     ctx.fillStyle = selected ? palette.ink : palette.muted;
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText(text, x + 21, tileY + tileH / 2 + 0.5);
+    ctx.fillText(text, x + 21, y + tileH / 2 + 0.5);
+    if (!compact) {
     const anchor = (bx[index] + bx[index + 1]) / 2 + depth.x / 2;
     ctx.setLineDash([2, 3]);
     path([{ x: x + tileWidth / 2, y: tileY + tileH + 2 }, { x: x + tileWidth / 2, y: tileY + tileH + 8 }, { x: anchor, y: top + depth.y - 4 }]);
     ctx.strokeStyle = selected ? rgba(palette.inc, 0.6) : rgba(tint, 0.3);
     ctx.lineWidth = 0.9;
     ctx.stroke();
+    }
     ctx.restore();
   });
+  if (compact && params.layers[params.sel]) {
+    const selected = params.layers[params.sel];
+    ctx.save();
+    ctx.font = `600 11.5px ${SANS}`;
+    ctx.fillStyle = palette.ink;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    let name = `${params.sel + 1} · ${selected.name} · ${format(selected.cm, selected.cm < 1 ? 3 : 1)} cm`;
+    while (ctx.measureText(name).width > width - 24 && name.length > 4) name = name.slice(0, -2) + "…";
+    ctx.fillText(name, width / 2, tileY + rows * (tileH + gap) + 10);
+    ctx.restore();
+  }
 
   /* ── Material slabs ───────────────────────────────────────────────── */
   params.layers.forEach((layer, index) => {
@@ -336,7 +342,7 @@ export function drawWaveRays(
     ctx.stroke();
     ctx.setLineDash([]);
     if (params.theta >= 3) {
-      const radius = compact ? 32 : 46;
+      const radius = compact ? 22 : 46;
       ctx.beginPath();
       ctx.arc(left, middle, radius, Math.PI, Math.PI + theta);
       ctx.strokeStyle = rgba(palette.inc, 0.85);
@@ -347,7 +353,7 @@ export function drawWaveRays(
       ctx.fillStyle = palette.inc;
       ctx.textAlign = "right";
       ctx.textBaseline = "middle";
-      ctx.fillText(`θi ${format(params.theta, 1)}°`, left + Math.cos(mid) * (radius + 8), middle + Math.sin(mid) * (radius + 8) - 2);
+      if (!compact) ctx.fillText(`θi ${format(params.theta, 1)}°`, left + Math.cos(mid) * (radius + 8), middle + Math.sin(mid) * (radius + 8) - 2);
       const sel = clamp(params.sel, 0, count - 1);
       const layer = params.layers[sel];
       const w = bx[sel + 1] - bx[sel];
@@ -563,8 +569,9 @@ export function drawWaveRays(
         wave(from, to, color, known ? e : null, known ? e : null, 1,
           side === "R" ? reflectionPhase + Math.PI : phase, 0.7);
         if (options.annotations) {
-          const label = `${o.m > 0 ? "+" : ""}${o.m} · ${format(o.angleDeg, 1)}°${known ? ` · ${format(e * 100, e < 0.1 ? 1 : 0)} %` : (french ? " · schém." : " · schematic")}`;
-          ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
+          if (compact && Math.abs(o.m) > 1) continue;
+          const label = compact ? `m${o.m > 0 ? "+" : ""}${o.m}` : `${o.m > 0 ? "+" : ""}${o.m} · ${format(o.angleDeg, 1)}°${known ? ` · ${format(e * 100, e < 0.1 ? 1 : 0)} %` : (french ? " · schém." : " · schematic")}`;
+          ctx.font = `600 ${compact ? 11.5 : 10}px ${MONO}`;
           ctx.textBaseline = "middle";
           ctx.textAlign = dx < 0 ? "left" : "right";
           const tx = clamp(to.x + (dx < 0 ? 6 : -6), 6, width - 6);
@@ -601,13 +608,15 @@ export function drawWaveRays(
 
   if (options.annotations) {
     const polGlyph = params.pol === "TE" ? "E ⊙" : params.pol === "TM" ? "E ↕" : "TE+TM";
-    pill(french ? "INCIDENTE" : "INCIDENT", { x: source.x, y: source.y - (compact ? 30 : 38) }, palette.inc, polGlyph);
-    pill(french ? "TRANSMISE" : "TRANSMITTED", { x: receiver.x, y: Math.min(bottom + 4, receiver.y + (compact ? 30 : 38)) }, palette.tra, `${format(params.T * 100, params.T < 0.01 ? 2 : 1)} %`);
-    pill(french ? "RÉFLÉCHIE" : "REFLECTED", { x: refEnd.x, y: Math.min(bottom + 4, refEnd.y + (compact ? 30 : 38)) }, palette.ref, `${format(params.R * 100, 1)} %`);
+    // A dedicated phone readout rail stays clear of horns, beams and slabs,
+    // including normal/grazing incidence where labels otherwise collide.
+    pill(compact ? "Tx" : french ? "INCIDENTE" : "INCIDENT", compact ? { x: width / 6, y: bottom + 22 } : { x: source.x, y: source.y - 38 }, palette.inc, compact ? params.pol : polGlyph);
+    pill(compact ? "T" : french ? "TRANSMISE" : "TRANSMITTED", compact ? { x: width * 5 / 6, y: bottom + 22 } : { x: receiver.x, y: Math.min(bottom + 4, receiver.y + 38) }, palette.tra, `${format(params.T * 100, params.T < 0.01 ? 2 : 1)} %`);
+    pill(compact ? "R" : french ? "RÉFLÉCHIE" : "REFLECTED", compact ? { x: width / 2, y: bottom + 22 } : { x: refEnd.x, y: Math.min(bottom + 4, refEnd.y + 38) }, palette.ref, `${format(params.R * 100, 1)} %`);
   }
 
   /* ── Dimension ruler ──────────────────────────────────────────────── */
-  const ruler = bottom + 22;
+  const ruler = bottom + (compact ? 48 : 22);
   ctx.save();
   path([{ x: left, y: ruler }, { x: right, y: ruler }]);
   ctx.strokeStyle = rgba(palette.muted, 0.55);
@@ -622,9 +631,9 @@ export function drawWaveRays(
   }
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  ctx.font = `600 ${compact ? 9.5 : 10.5}px ${MONO}`;
+  ctx.font = `600 ${compact ? 11.5 : 10.5}px ${MONO}`;
   ctx.fillStyle = palette.muted;
-  ctx.fillText(`${format(total, total < 10 ? 2 : 1)} cm${count > 1 ? ` · ${count} ${french ? "milieux" : "media"}` : ""}`, width / 2, ruler + 8);
+  ctx.fillText(`${format(total, total < 10 ? 2 : 1)} cm${count > 1 ? ` · ${count} ${french ? "milieux" : "media"}` : ""}${compact ? ` · θi ${format(params.theta, 1)}°` : ""}`, width / 2, ruler + 8);
   ctx.restore();
 
   /** `boundaries` / `minWidth`: geometry for edge hit-testing (thickness drag) */

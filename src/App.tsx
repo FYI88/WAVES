@@ -2,6 +2,7 @@ import {
   Component,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -52,7 +53,7 @@ import { applyStackCommand, stackKeyCommand } from "./scene/dragStack";
 import { movePhysical, physicalScene, resizePhysical, selectPhysical } from "./scene/physicalStack";
 import { computeResults, stackSweepKey, type LayerRes, type Results, type SimState } from "./state/results";
 import { DEFAULT_STATE, presetState } from "./state/presets";
-import { addMatching, isLiveMatching, matchWall, recalculateMatching, matchingFeedback, matchingReference, resolveMatching, transitionMatching, type MatchingReason } from "./state/matching";
+import { addMatching, insertInternalQuarterWave, isLiveMatching, matchWall, recalculateMatching, matchingFeedback, matchingReference, resolveMatching, transitionMatching, type MatchingReason } from "./state/matching";
 import { STORAGE_KEY, STORAGE_VERSION, defaultPersisted, loadInitial, sanitizePersisted, type Persisted } from "./state/persistence";
 import { copyText, downloadText } from "./dom";
 import { buildShareUrl } from "./native";
@@ -65,6 +66,7 @@ import { FieldChart } from "./charts/FieldChart";
 import { Icon, Logo } from "./ui/icons";
 import { Check, Segmented, Slider } from "./ui/controls";
 import { containModal } from "./ui/modalFocus";
+import { ResponsiveDisclosure } from "./ui/ResponsiveDisclosure";
 import {
   C0,
   CUSTOM_SWATCH,
@@ -145,7 +147,7 @@ interface BoundaryState {
   error: Error | null;
 }
 
-export class AppErrorBoundary extends Component<{ children: ReactNode }, BoundaryState> {
+export class AppErrorBoundary extends Component<{ children: ReactNode; onError?: () => void }, BoundaryState> {
   state: BoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): BoundaryState {
@@ -154,6 +156,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, Boundar
 
   componentDidCatch(error: Error): void {
     console.error("[WaveS] render crash captured:", error);
+    this.props.onError?.();
   }
 
   render(): ReactNode {
@@ -220,7 +223,9 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, Boundar
   }
 }
 
-export function App() {
+export function App({ onReady }: { onReady?: () => void } = {}) {
+  // Only a real commit may dismiss the static shell, never a module download.
+  useLayoutEffect(() => { onReady?.(); }, [onReady]);
   const initial = useMemo(loadInitial, []);
   const [simulation, setSimulation] = useState<{ sim: SimState; reason: MatchingReason | null }>({ sim: initial.sim, reason: null });
   const sim = simulation.sim;
@@ -489,7 +494,7 @@ export function App() {
         setSim((s) => applyStackCommand(s, stackCmd));
         return;
       }
-      if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag) || (e.target instanceof Element && e.target.closest(".om-eq")) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (["INPUT", "TEXTAREA", "SELECT", "BUTTON", "SUMMARY"].includes(tag) || (e.target instanceof Element && e.target.closest(".om-eq")) || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.code === "Space") {
         e.preventDefault();
         setPlaying((p) => !p);
@@ -601,7 +606,10 @@ export function App() {
   );
 
   const applyPreset = (key: string) => {
-    if (key === "antireflection") setRtView("flat");
+    if (key === "antireflection") {
+      setRtView("flat");
+      setSceneView("main");
+    }
     setSim(presetState(key, sim));
     setFlash((f) => f + 1);
   };
@@ -708,6 +716,7 @@ export function App() {
           </div>
         </div>
         <div className="om-top-actions">
+          <ResponsiveDisclosure className="om-header-menu" label="Actions">
           <Segmented<Lang>
             size="sm"
             ariaLabel={t.language}
@@ -766,20 +775,24 @@ export function App() {
           >
             {copied && Icon.check}{copied ? t.copied : t.share}
           </button>
+          </ResponsiveDisclosure>
           <button
             type="button"
             className={`om-presentbtn om-present-action ${present ? "is-on" : ""}`}
             onClick={() => setPresentFull(!presentRef.current)}
             aria-pressed={present}
+            aria-label={present ? t.exitPresent : t.present}
             title={present ? t.exitPresent : t.present}
           >
-            {present ? t.exitPresent : t.present}
+            <svg className="om-present-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8"><path d={present ? "M9 3v6H3m12-6v6h6M3 15h6v6m6 0v-6h6" : "M9 3H3v6m12-6h6v6M3 15v6h6m6 0h6v-6"} /></svg>
+            <span>{present ? t.exitPresent : t.present}</span>
           </button>
           <button
             type="button"
             className={`om-play ${playing ? "is-playing" : ""}`}
             onClick={() => setPlaying((p) => !p)}
             aria-pressed={playing}
+            aria-label={playing ? t.pause : t.play}
           >
             <span className={`om-swap ${playing ? "is-b" : "is-a"}`}>
               <span>{Icon.play}</span>
@@ -1124,6 +1137,12 @@ export function App() {
                 </>}
                 <div className="om-insert-tools">
                   <Check checked={insert.enabled} disabled={!insertAllowed || insertFull} label={t.insertTitle} onChange={(enabled) => patchInsert({ enabled })} />
+                  {!insert.enabled && insertAllowed && <>
+                    <button type="button" className="om-preset" disabled={insertFull || insertQuarter === null}
+                      onClick={() => setSimulation((previous) => insertInternalQuarterWave(previous.sim))}>{t.insertQuarterCreate}</button>
+                    {!insertFull && insertQuarter === null && <div className="om-hint">{t.insertQuarterFit}</div>}
+                  </>}
+                  {!insert.enabled && insertAllowed && selL.embeddedInsert && <div className="om-hint">{t.insertReady}</div>}
                   {!insertAllowed ? <div className="om-hint">{t.insertHost}</div> : insertFull ? <div className="om-hint">{t.insertCapacity}</div> : null}
                   {(insert.enabled || (selL.embeddedInsert && insert.thickness >= selL.thickness)) && insertAllowed && <>
                     <Slider label={t.insertIndex} value={Math.sqrt(insert.eps)} min={1} max={8} step={0.01} digits={3} fmtNum={fmt.num} onChange={(n) => patchInsert({ eps: n * n })} />

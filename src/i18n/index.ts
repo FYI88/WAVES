@@ -7,7 +7,7 @@ import type { LayerMat, TemplateId } from "../state/layers";
 export type Lang = "fr" | "en";
 
 export const en = {
-  sub: "Wave & Wall Simulator",
+  sub: "Simulation",
   school: "ENSA · GSR1",
   madeBy: "Made by",
   author: "CHETAINE YOUNES",
@@ -104,6 +104,8 @@ export const en = {
   arInsertHint: "Normal incidence, design frequency; real-part index reference, σ = 0. One coating matches one boundary; the whole wall needs both outer faces. Internal interfaces still reflect; losses remain. Fixed coatings are editable: recalculate after neighbour/frequency changes. Smallest supported odd λ/4 multiple.",
   arLossless: "Lossless · σ = 0",
   insertTitle: "Internal layer",
+  insertReady: "Enable to compare with the original wall.",
+  insertQuarterCreate: "Insert λ/4 in selected layer",
   insertMaterial: "Insert",
   insertIndex: "Insert index n",
   insertThickness: "Insert thickness",
@@ -195,7 +197,7 @@ export const en = {
 export type Dict = typeof en;
 
 export const fr: Dict = {
-  sub: "Simulateur onde & paroi",
+  sub: "Simulation",
   school: "ENSA · GSR1",
   madeBy: "Réalisé par",
   author: "CHETAINE YOUNES",
@@ -292,6 +294,8 @@ export const fr: Dict = {
   arInsertHint: "Incidence normale, fréquence de calcul ; indice réel de référence, σ = 0. Un revêtement adapte une interface ; le mur demande les deux faces externes. Les interfaces internes réfléchissent encore ; les pertes restent. Revêtements fixes modifiables : recalculer après changement des voisins/fréquence. Plus petit multiple impair de λ/4 compatible.",
   arLossless: "Sans pertes · σ = 0",
   insertTitle: "Couche interne",
+  insertReady: "Activer pour comparer avec le mur d’origine.",
+  insertQuarterCreate: "Insérer λ/4 dans cette couche",
   insertMaterial: "Insert",
   insertIndex: "Indice de l’insert n",
   insertThickness: "Épaisseur de l’insert",

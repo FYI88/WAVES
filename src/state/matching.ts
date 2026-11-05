@@ -1,7 +1,7 @@
-import { MAX_LAYERS, insertMatchingLayer, insertReason, physicalLayerCount, layerEpsSigma, nkOf, quarterWaveMatch, type Layer, type InsertReason } from "./layers";
+import { MAX_LAYERS, canEmbed, embeddedQuarterWave, insertMatchingLayer, insertReason, physicalLayerCount, layerEpsSigma, nkOf, quarterWaveMatch, type Layer, type InsertReason } from "./layers";
 import type { SimState } from "./results";
 
-export type MatchingReason = "arAdjacent" | "arRange" | "arEqual" | "arFull" | "arReadOnly" | "arFrontSkipped" | "arBackSkipped" | "arCoated" | InsertReason;
+export type MatchingReason = "arAdjacent" | "arRange" | "arEqual" | "arFull" | "arReadOnly" | "arFrontSkipped" | "arBackSkipped" | "arCoated" | "insertQuarterFit" | InsertReason;
 /** A rejected edit is more informative than the passive capacity reminder. */
 export const matchingFeedback = (reason: MatchingReason | null, full: boolean): MatchingReason | null =>
   reason ?? (full ? "arFull" : null);
@@ -45,6 +45,19 @@ export function transitionMatching(previous: SimState, candidate: SimState) {
   }
   const resolved = resolveMatching(candidate);
   return resolved.reason ? { sim: previous, reason: resolved.reason } : resolved;
+}
+
+/** Add a fixed quarter-wave insert to the selected host, never replace the stack. */
+export function insertInternalQuarterWave(sim: SimState) {
+  const host = sim.layers[sim.sel];
+  if (!host || !canEmbed(host)) return { sim, reason: "insertHost" as const };
+  if (!host.embeddedInsert?.enabled && physicalLayerCount(sim.layers) + 2 > MAX_LAYERS) return { sim, reason: "arFull" as const };
+  const eps = host.embeddedInsert?.eps ?? 2.25;
+  const thickness = embeddedQuarterWave(Math.sqrt(eps), sim.freq, host.thickness);
+  if (thickness === null) return { sim, reason: "insertQuarterFit" as const };
+  const layers = sim.layers.map((layer, index) => index === sim.sel
+    ? { ...layer, embeddedInsert: { enabled: true, eps, thickness } } : layer);
+  return transitionMatching(sim, { ...sim, layers });
 }
 
 export function addMatching(sim: SimState, slot: number) {

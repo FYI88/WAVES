@@ -12,6 +12,7 @@ import { cssZoom, prepCanvas, useAdaptiveDprCap, useCanvasSize } from "./canvas"
 import { DRAG_THRESHOLD, EDGE_BAND, dropSlot, hitBoundary, isNoopDrop, nearestSlot, slotToIndex, thicknessFromBoundaryDrag, type Pt } from "./dragStack";
 import { drawDragOverlay, type DragUi } from "./dragOverlay";
 import { hitLayer, inWallBand, pointOf, type SceneLayout } from "./hitTest";
+import { ResponsiveDisclosure } from "../ui/ResponsiveDisclosure";
 
 /* ════════════════════════════════════════════════════════════════════════
    Ray scene: animation loop + view switching (Section / Spatial)
@@ -84,6 +85,7 @@ export function RayScene(props: {
 }) {
   const active = props.active ?? true;
   const ref = useRef<HTMLCanvasElement>(null);
+  const pendingRef = useRef<HTMLDivElement>(null);
   const dprCap = useAdaptiveDprCap(active);
   const size = useCanvasSize(ref, dprCap);
   const [hover, setHover] = useState(-1);
@@ -145,10 +147,10 @@ export function RayScene(props: {
       const moving = cur.playing && !motionPreference.matches;
       const intro = motionPreference.matches ? 1 : Math.min(1, (now - (introStart.current ?? now)) / 1000);
       if (!moving && intro === 1 && previous === cur) return;
-      previous = cur;
       if (moving) clock.current += dt * cur.speed;
       const ctx = prepCanvas(canvas, size);
       if (!ctx) return;
+      previous = cur;
       const parameters = { ...cur.params, hover: cur.hover };
       layout.current = cur.view === "spatial"
         ? drawSpatialScene(ctx, size.w, size.h, clock.current, intro, parameters, cur.pal, cur.fmtNum, { display: cur.display, annotations: cur.annotations, az: cur.orbit.az, el: cur.orbit.el, lang: cur.lang })
@@ -160,6 +162,11 @@ export function RayScene(props: {
         ctx.restore();
       }
       recordFrame(elapsed, { dpr: size.dpr, width: canvas.width, height: canvas.height });
+      // Keep a neutral, non-intercepting placeholder until pixels really exist.
+      if (pendingRef.current && !pendingRef.current.hidden) {
+        pendingRef.current.hidden = true;
+        canvas.removeAttribute("aria-busy");
+      }
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
@@ -222,6 +229,7 @@ export function RayScene(props: {
       className={`om-canvas ${cursor}`}
       style={{ display: active ? "block" : "none" }}
       aria-label={DICTS[props.lang].canvasAria}
+      aria-busy="true"
       role="img"
       onPointerMove={event => {
         const g = drag.current;
@@ -317,6 +325,9 @@ export function RayScene(props: {
       }}
       onPointerCancel={() => cancelDrag(true)}
     />
+    <div ref={pendingRef} className="om-scene-pending" role="status" aria-live="polite" hidden={!active}>
+      {french ? "Préparation de la scène…" : "Preparing scene…"}
+    </div>
     <div className="om-scene-toolbar" data-view={active ? view : "lab"} aria-label={french ? "Affichage de la simulation" : "Simulation display"}>
       <div className="om-scene-tool-group om-scene-view-tools" role="group" aria-label={french ? "Scène et vue" : "Scene and view"}>
       <span className="om-scene-tool-label">{french ? "Scène / vue" : "Scene / view"}</span>
@@ -326,11 +337,12 @@ export function RayScene(props: {
         <button type="button" aria-pressed={view === "wave"} className={view === "wave" ? "is-on" : ""} onClick={() => setView("wave")}>{french ? "Coupe" : "Section"}</button>
         <button type="button" aria-pressed={view === "spatial"} className={view === "spatial" ? "is-on" : ""} onClick={() => setView("spatial")}>Spatial</button>
       </div>
-      {props.tools}
       </>}
       </div>
-      {active && <div className="om-scene-tool-group om-scene-display-tools" role="group" aria-label={french ? "Options d’affichage" : "Display utilities"}>
+      {active && <ResponsiveDisclosure className="om-display-menu" label={french ? "Affichage" : "Display"}>
+      <div className="om-scene-tool-group om-scene-display-tools" role="group" aria-label={french ? "Options d’affichage" : "Display utilities"}>
       <span className="om-scene-tool-label">{french ? "Affichage" : "Display"}</span>
+      {props.tools}
       {view === "wave" && <>
         <div className="om-view-modes" role="group" aria-label={french ? "Dessin des ondes" : "Wave drawing"}>
           {(["field", "fronts", "both"] as const).map(mode => <button key={mode} type="button" aria-pressed={display === mode} className={display === mode ? "is-on" : ""} onClick={() => setDisplay(mode)}>{mode === "field" ? (french ? "Courbes" : "Curves") : mode === "fronts" ? (french ? "Crêtes" : "Crests") : (french ? "Les deux" : "Both")}</button>)}
@@ -368,7 +380,7 @@ export function RayScene(props: {
       >
         PNG
       </button>
-      </div>}
+      </div></ResponsiveDisclosure>}
     </div>
   </>;
 }

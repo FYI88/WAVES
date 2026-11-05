@@ -2,16 +2,16 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DEFAULT_STATE } from "./state/presets";
 import { DICTS, type Lang } from "./i18n";
-import { App } from "./App";
+import { App, AppErrorBoundary } from "./App";
 import type { ReactNode } from "react";
 import { LAB_TEXT } from "./surface/labText";
 import { NO_INCLUSIONS } from "./media/mixing";
 
-const harness = vi.hoisted(() => ({ lang: "en" as Lang, index: 0, present: false, copied: false, help: false, about: false, scene: "main", target: {}, inclusions: null as null | typeof NO_INCLUSIONS }));
+const harness = vi.hoisted(() => ({ commits: [] as Array<() => void>, lang: "en" as Lang, index: 0, present: false, copied: false, help: false, about: false, scene: "main", target: {}, inclusions: null as null | typeof NO_INCLUSIONS }));
 vi.mock("react-dom", () => ({ createPortal: (node: ReactNode) => node }));
 vi.mock("react", async (original) => {
   const react = await original<typeof import("react")>();
-  return { ...react, useState: (initial: unknown) => {
+  return { ...react, useLayoutEffect: (effect: () => void) => { harness.commits.push(effect); }, useState: (initial: unknown) => {
     // Drive App's presentation/copied slots without running browser effects.
     const index = harness.index++;
     return react.useState(index === 4 ? harness.scene : index === 16 ? harness.target : index === 17 ? harness.inclusions : index === 8 ? harness.present : index === 9 ? harness.copied : index === 10 ? harness.help : index === 11 ? harness.about : initial);
@@ -24,6 +24,7 @@ vi.mock("./state/persistence", async (original) => ({
 
 beforeEach(() => {
   harness.index = 0;
+  harness.commits = [];
   harness.present = false;
   harness.scene = "main";
   harness.copied = false;
@@ -58,6 +59,26 @@ it.each(["en", "fr"] as const)("renders results for the selected scene without a
   expect(restored).toBe(mainResults);
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it("signals readiness from the App commit callback, not synchronous render", () => {
+  const onReady = vi.fn();
+  renderToStaticMarkup(<App onReady={onReady} />);
+  expect(onReady).not.toHaveBeenCalled();
+  harness.commits.forEach((commit) => commit());
+  expect(onReady).toHaveBeenCalledOnce();
+});
+
+it("dismisses the loading shell when the existing render-error fallback commits", () => {
+  const onError = vi.fn();
+  const error = new Error("invalid saved render state");
+  const log = vi.spyOn(console, "error").mockImplementation(() => {});
+  const boundary = new AppErrorBoundary({ children: null, onError });
+  boundary.state = AppErrorBoundary.getDerivedStateFromError(error);
+  expect(renderToStaticMarkup(boundary.render())).toContain("Reset my settings");
+  boundary.componentDidCatch(error);
+  expect(onError).toHaveBeenCalledOnce();
+  log.mockRestore();
+});
 
 it.each(["en", "fr"] as const)("renders an academic About sheet with visible model text and one equations disclosure (%s)", (lang) => {
   harness.lang = lang;

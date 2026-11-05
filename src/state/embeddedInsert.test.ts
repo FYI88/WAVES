@@ -12,7 +12,7 @@ import { drawWaveRays } from "../waveRays";
 import { drawSpatialScene } from "../spatialScene";
 import { PALETTES } from "../theme";
 import { embeddedQuarterWave, expandLayers, insertMatchingLayer, insertReason, mkLayer, physicalLayerCount, type EmbeddedInsert, type Layer } from "./layers";
-import { addMatching, matchingReference, transitionMatching } from "./matching";
+import { addMatching, insertInternalQuarterWave, matchingReference, transitionMatching } from "./matching";
 import { defaultPersisted, persistedFromHash, sanitizePersisted } from "./persistence";
 import { computeResults, type SimState } from "./results";
 
@@ -23,6 +23,32 @@ const withInsert = (s: SimState, insert = design, index = 0) => ({ ...s, layers:
 const off = (s: SimState, index = 0) => withInsert(s, { ...s.layers[index].embeddedInsert!, enabled: false }, index);
 
 describe("embedded physical insert", () => {
+  it("creates a quarter-wave insert only inside the selected host and preserves its retained index", () => {
+    const s = { ...base(), sel: 1, layers: [mkLayer("brick", 3), { ...host(), embeddedInsert: { enabled: false, eps: 4, thickness: 0.1 } }, mkLayer("glass", 0.4)] };
+    const result = insertInternalQuarterWave(s);
+    expect(result.reason).toBeNull();
+    expect(result.sim.layers).toHaveLength(3);
+    expect(result.sim.layers[0]).toBe(s.layers[0]);
+    expect(result.sim.layers[2]).toBe(s.layers[2]);
+    expect(result.sim.layers[1]).toEqual({ ...s.layers[1], embeddedInsert: { enabled: true, eps: 4, thickness: embeddedQuarterWave(2, s.freq, 2)! } });
+    expect(result.sim).toMatchObject({ freq: s.freq, angle: s.angle, pol: s.pol, sel: s.sel });
+    const repeated = insertInternalQuarterWave(result.sim);
+    expect(repeated.reason).toBeNull();
+    expect(physicalLayerCount(repeated.sim.layers)).toBe(5);
+    expect(repeated.sim.layers).toEqual(result.sim.layers);
+    expect(persistedFromHash(`#s=${encodeShare(result.sim, "en", "light")}`)?.sim).toEqual(result.sim);
+  });
+
+  it("rejects a quarter-wave creation atomically if it cannot fit, has no slots or has an ineligible host", () => {
+    const thin = base(mkLayer("marble", 0.1));
+    expect(insertInternalQuarterWave(thin)).toEqual({ sim: thin, reason: "insertQuarterFit" });
+    const full = { ...base(), layers: Array.from({ length: 5 }, () => mkLayer("glass", 1)) };
+    expect(insertInternalQuarterWave(full)).toEqual({ sim: full, reason: "arFull" });
+    for (const l of [mkLayer("air", 2), { ...host(), matching: true }]) {
+      const s = base(l);
+      expect(insertInternalQuarterWave(s)).toEqual({ sim: s, reason: "insertHost" });
+    }
+  });
   it.each([0, 0.08])("physically changes R/T and restores the exact host on off (sigma %s)", (sigma) => {
     const s = base(host(sigma));
     const before = computeResults(s);

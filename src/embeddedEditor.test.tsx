@@ -26,6 +26,7 @@ vi.mock("react", async (original) => ({
   useMemo: (fn: () => unknown) => fn(),
   useCallback: (fn: unknown) => fn,
   useRef: (current: unknown) => ({ current }),
+  useLayoutEffect: (effect: () => unknown) => { harness.effects.push(effect); },
   useEffect: (effect: () => unknown) => { harness.effects.push(effect); },
   useState: (initial: unknown) => {
     const index = harness.index++;
@@ -242,6 +243,47 @@ it("applies lambda/4 once, keeps the design when frequency changes and shows a d
   tree = render();
   const disabled = tree.find((n) => n.type === "button" && Array.isArray(n.props.children) && n.props.children[0] === DICTS.en.insertQuarterAction)!;
   expect(disabled.props.disabled).toBe(true);
+  expect(tree.some((n) => n.props.children === DICTS.en.insertQuarterFit)).toBe(true);
+});
+
+it.each(["en", "fr"] as const)("creates an internal quarter-wave insert without replacing the current walls or wave settings (%s)", (lang) => {
+  harness.lang = lang;
+  const t = DICTS[lang];
+  harness.sim = { layers: [mkLayer("brick", 4), mkLayer("marble", 1), mkLayer("glass", 0.4)],
+    sel: 1, freq: 5.5, angle: 25, pol: "TM" };
+  const original = harness.sim;
+  const before = computeResults(original);
+  let tree = render();
+  expect(Object.keys(t.presetNames)).not.toContain("internalQuarterWave");
+  expect(get(tree, Check, t.insertTitle).props.checked).toBe(false);
+  const action = button(tree, t.insertQuarterCreate);
+  expect(action.props.disabled).toBe(false);
+  action.props.onClick();
+  tree = render();
+  const s = current().sim;
+  expect(s.layers).toHaveLength(3);
+  expect(s.layers[0]).toBe(original.layers[0]);
+  expect(s.layers[2]).toBe(original.layers[2]);
+  const { embeddedInsert, ...host } = s.layers[1];
+  expect(host).toEqual(original.layers[1]);
+  expect(embeddedInsert).toMatchObject({ enabled: true, eps: 2.25 });
+  expect(embeddedInsert!.thickness).toBe(100 * C0 / (4 * 5.5e9 * 1.5));
+  expect(s).toMatchObject({ sel: 1, freq: 5.5, angle: 25, pol: "TM" });
+  expect(get(tree, Check, t.insertTitle).props.checked).toBe(true);
+  const after = get(tree, RayScene).props.params;
+  expect(after.layers.map((l: { mat: string }) => l.mat)).toEqual(["brick", "marble", "custom", "marble", "glass"]);
+  expect(after.ds.reduce((sum: number, d: number) => sum + d, 0)).toBeCloseTo(before.totalCm / 100, 14);
+  get(tree, Check, t.insertTitle).props.onChange(false);
+  tree = render();
+  expect(get(tree, RayScene).props.params.R).toBe(before.R);
+  expect(get(tree, RayScene).props.params.T).toBe(before.T);
+});
+
+it("keeps the quarter-wave insertion action disabled with a fit reason for a thin wall", () => {
+  harness.lang = "en";
+  harness.sim = { ...harness.sim, layers: [mkLayer("marble", 0.1)], freq: 5.5 };
+  const tree = render();
+  expect(button(tree, DICTS.en.insertQuarterCreate).props.disabled).toBe(true);
   expect(tree.some((n) => n.props.children === DICTS.en.insertQuarterFit)).toBe(true);
 });
 
