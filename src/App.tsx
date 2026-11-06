@@ -806,7 +806,7 @@ export function App({ onReady }: { onReady?: () => void } = {}) {
       <main className="om-layout" ref={frameHeightRef}>
         {/* ───────── Scene ───────── */}
         <section className="om-card om-scene om-enter" style={{ "--d": "60ms" } as CSSProperties}>
-          <RayScene active={sceneView === "main"} viewTools={viewTools} params={withSurface(sceneParams, sceneSurfaceShown)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={selectDrawing} onMove={dragMove} onResize={dragResize} tools={rtTools} />
+          <RayScene active={sceneView === "main"} viewTools={viewTools} params={withSurface(sceneParams, sceneSurfaceShown)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={selectDrawing} onMove={dragMove} onResize={dragResize} onAngle={angle => update("angle", angle)} tools={rtTools} />
           <div ref={detailHostRef} className="om-lab-host" hidden={sceneView !== "lab"} />
           {sceneView === "main" && <>
           <div className="om-hud om-hud-tl">

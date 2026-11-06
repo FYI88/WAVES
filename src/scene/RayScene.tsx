@@ -11,7 +11,7 @@ import type { LayerMat } from "../state/layers";
 import { cssZoom, prepCanvas, useAdaptiveDprCap, useCanvasSize } from "./canvas";
 import { DRAG_THRESHOLD, EDGE_BAND, dropSlot, hitBoundary, isNoopDrop, nearestSlot, slotToIndex, thicknessFromBoundaryDrag, type Pt } from "./dragStack";
 import { drawDragOverlay, type DragUi } from "./dragOverlay";
-import { hitLayer, inWallBand, pointOf, type SceneLayout } from "./hitTest";
+import { hitIncident, incidentAngle, hitLayer, inWallBand, pointOf, type SceneLayout } from "./hitTest";
 import { ResponsiveDisclosure } from "../ui/ResponsiveDisclosure";
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -53,7 +53,9 @@ interface Gesture {
   x: number;
   y: number;
   moved: boolean;
-  mode: "click" | "orbit" | "reorder" | "resize";
+  mode: "click" | "orbit" | "reorder" | "resize" | "incident";
+  startAngle?: number;
+  entry?: Pt;
   /** layer being moved, or layer on the left of the dragged boundary */
   index: number;
   start: Pt;
@@ -82,10 +84,12 @@ export function RayScene(props: {
   onResize: (index: number, cm: number) => void;
   /** Extra simulation controls (e.g. the Flat / Profiled R/T switch). */
   tools?: ReactNode;
+  onAngle?: (angle: number) => void;
 }) {
   const active = props.active ?? true;
   const ref = useRef<HTMLCanvasElement>(null);
   const pendingRef = useRef<HTMLDivElement>(null);
+  const incidentRef = useRef<SVGLineElement>(null);
   const dprCap = useAdaptiveDprCap(active);
   const size = useCanvasSize(ref, dprCap);
   const [hover, setHover] = useState(-1);
@@ -155,6 +159,16 @@ export function RayScene(props: {
       layout.current = cur.view === "spatial"
         ? drawSpatialScene(ctx, size.w, size.h, clock.current, intro, parameters, cur.pal, cur.fmtNum, { display: cur.display, annotations: cur.annotations, az: cur.orbit.az, el: cur.orbit.el, lang: cur.lang })
         : drawWaveRays(ctx, size.w, size.h, clock.current, parameters, cur.pal, cur.fmtNum, { display: cur.display, reflections: cur.reflections, annotations: cur.annotations, lang: cur.lang });
+      const ray = layout.current.incident;
+      const target = incidentRef.current;
+      if (target) {
+        target.style.display = ray && cur.onAngle ? "" : "none";
+        if (ray) {
+          target.setAttribute("x1", String(ray.source.x)); target.setAttribute("y1", String(ray.source.y));
+          target.setAttribute("x2", String(ray.source.x + (ray.entry.x - ray.source.x) * 0.7));
+          target.setAttribute("y2", String(ray.source.y + (ray.entry.y - ray.source.y) * 0.7));
+        }
+      }
       // drag affordances: only while a boundary is hovered or a drag is active
       if (cur.dragUi || cur.edge > 0) {
         ctx.save();
@@ -184,6 +198,7 @@ export function RayScene(props: {
     const g = drag.current;
     drag.current = null;
     if (g?.mode === "resize" && g.moved && revert && g.lastCm !== g.startCm) live.current.onResize(g.index, g.startCm);
+    if (g?.mode === "incident" && g.moved && revert) live.current.onAngle?.(g.startAngle!);
     setDragUi(null);
     setCursor("");
   }, []);
@@ -220,7 +235,17 @@ export function RayScene(props: {
     const h = hitLayer(lay, point);
     setHover(h.index);
     setEdge(nextEdge);
-    setCursor(nextEdge > 0 ? "is-resize" : h.index < 0 ? "" : h.tile || live.current.params.layers[h.index]?.readOnlyMove ? "is-pointer" : "is-grab");
+    setCursor(view === "wave" && props.onAngle && hitIncident(lay, point, bandOf(event)) ? "is-grab" : nextEdge > 0 ? "is-resize" : h.index < 0 ? "" : h.tile || live.current.params.layers[h.index]?.readOnlyMove ? "is-pointer" : "is-grab");
+  };
+
+  const startIncident = (event: ReactPointerEvent<SVGLineElement>) => {
+    if (!active || view !== "wave" || !props.onAngle || !layout.current.incident || (event.pointerType === "mouse" && event.button !== 0)) return;
+    event.preventDefault();
+    const canvas = ref.current!;
+    const point = pointOf({ clientX: event.clientX, clientY: event.clientY, currentTarget: canvas });
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, mode: "incident", startAngle: props.params.theta, entry: { ...layout.current.incident.entry }, index: -1, start: point, startCm: 0, cms: [], boundaries: [], minWidth: 0, lastCm: 0, slot: -1 };
+    setCursor("is-grabbing");
   };
 
   return <>
@@ -228,7 +253,7 @@ export function RayScene(props: {
       ref={ref}
       className={`om-canvas ${cursor}`}
       style={{ display: active ? "block" : "none" }}
-      aria-label={DICTS[props.lang].canvasAria}
+      aria-label={`${DICTS[props.lang].canvasAria}${props.onAngle ? (french ? " Faites glisser l’onde incidente en vue Coupe pour changer son angle." : " Drag the incoming wave in Section view to change its angle.") : ""}`}
       aria-busy="true"
       role="img"
       onPointerMove={event => {
@@ -317,7 +342,7 @@ export function RayScene(props: {
           if (g.slot >= 0 && !isNoopDrop(g.index, g.slot)) props.onMove(g.index, slotToIndex(g.index, g.slot));
           return;
         }
-        if (g.mode === "resize" && g.moved) return;
+        if ((g.mode === "resize" || g.mode === "incident") && g.moved) return;
         if (!g.moved) {
           const h = hitLayer(layout.current, pointOf(event));
           if (h.index >= 0) props.onSelect(h.index);
@@ -325,6 +350,19 @@ export function RayScene(props: {
       }}
       onPointerCancel={() => cancelDrag(true)}
     />
+    {active && props.onAngle && view === "wave" && <svg className="om-incident-touch" aria-hidden="true">
+      <line ref={incidentRef} stroke="transparent" strokeWidth="44" strokeLinecap="round" onPointerDown={startIncident}
+        onPointerMove={event => {
+          const g = drag.current;
+          if (g?.mode !== "incident" || g.id !== event.pointerId) return;
+          const point = pointOf({ clientX: event.clientX, clientY: event.clientY, currentTarget: ref.current! });
+          if (!g.moved && Math.hypot(point.x - g.start.x, point.y - g.start.y) <= DRAG_THRESHOLD) return;
+          g.moved = true;
+          live.current.onAngle?.(incidentAngle(g.entry!, point));
+        }}
+        onPointerUp={event => { if (drag.current?.id === event.pointerId) cancelDrag(false); }}
+        onPointerCancel={() => cancelDrag(true)} />
+    </svg>}
     <div ref={pendingRef} className="om-scene-pending" role="status" aria-live="polite" hidden={!active}>
       {french ? "Préparation de la scène…" : "Preparing scene…"}
     </div>

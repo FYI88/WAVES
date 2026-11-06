@@ -637,5 +637,5 @@ export function drawWaveRays(
   ctx.restore();
 
   /** `boundaries` / `minWidth`: geometry for edge hit-testing (thickness drag) */
-  return { rects, tiles, boundaries: bx, minWidth };
+  return { rects, tiles, boundaries: bx, minWidth, incident: { source, entry } };
 }

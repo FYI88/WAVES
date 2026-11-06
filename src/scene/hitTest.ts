@@ -14,8 +14,24 @@ export interface SceneLayout {
   /** Section view: x of the n + 1 layer boundaries and the minimum layer width */
   boundaries?: number[];
   minWidth?: number;
+  /** Section view: incoming ray and its fixed wall-entry pivot. */
+  incident?: { source: Pt; entry: Pt };
   /** Spatial view: screen position of each of the n + 1 boundaries (stack axis) */
   slots?: Pt[];
+}
+
+export function hitIncident(layout: SceneLayout, point: Pt, band: number): boolean {
+  const ray = layout.incident;
+  if (!ray || point.x >= ray.entry.x - 8) return false;
+  const dx = ray.entry.x - ray.source.x, dy = ray.entry.y - ray.source.y;
+  const length2 = dx * dx + dy * dy;
+  if (!length2) return false;
+  const t = Math.max(0, Math.min(1, ((point.x - ray.source.x) * dx + (point.y - ray.source.y) * dy) / length2));
+  return Math.hypot(point.x - ray.source.x - t * dx, point.y - ray.source.y - t * dy) <= band;
+}
+
+export function incidentAngle(entry: Pt, point: Pt): number {
+  return Math.max(0, Math.min(89, Math.round(Math.atan2(entry.y - point.y, Math.max(0, entry.x - point.x)) * 180 / Math.PI * 2) / 2));
 }
 
 /** Pointer position in layout px (client coordinates divided by the body zoom). */

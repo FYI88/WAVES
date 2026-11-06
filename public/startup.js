@@ -11,19 +11,17 @@
   var frame = 0;
   var unmount;
   var reload = function () { window.location.reload(); };
-  var message = function (text) {
-    if (status) status.textContent = text;
-    if (retry) retry.hidden = false;
-  };
+  var credit = document.getElementById("startup-credit-label");
   if (status) status.textContent = fr ? "Chargement de la simulation…" : "Loading simulation…";
+  if (credit && fr) credit.textContent = "Réalisé par";
   if (retry) {
-    retry.textContent = fr ? "Réessayer" : "Retry";
+    retry.textContent = fr ? "Recharger l’application" : "Reload app";
     retry.addEventListener("click", reload);
   }
   // A slow device is not a fatal error. Keep the shell and accept a late commit.
   var deadline = window.setTimeout(function () {
     if (finished || disposed) return;
-    message(fr ? "Le chargement prend plus de temps que prévu. Vous pouvez patienter ou réessayer." : "Loading is taking longer than expected. You can keep waiting or retry.");
+    if (status) status.textContent = fr ? "Chargement en cours… vérifiez votre connexion." : "Still loading… check connection.";
   }, 8000);
   var stopWaiting = function () {
     window.clearTimeout(deadline);
@@ -46,7 +44,9 @@
   var fail = function () {
     if (finished || disposed) return;
     stopWaiting();
-    message(fr ? "Impossible de charger l’application. Réessayez ; si vous êtes en ligne, vérifiez votre connexion." : "The app could not load. Retry; if using the web, check your connection.");
+    if (shell) shell.setAttribute("data-state", "error");
+    if (status) status.textContent = fr ? "Impossible de charger l’application. Vérifiez votre connexion, puis rechargez l’application." : "The app could not load. Check your connection, then reload the app.";
+    if (retry) retry.hidden = false;
   };
   // Vite moves the module script into <head> and drops inline onerror. Capture
   // resource errors here as well, before deferred modules execute.

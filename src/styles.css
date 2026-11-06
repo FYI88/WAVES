@@ -1471,6 +1471,7 @@ a:hover {
    nothing below the gate. */
 @media (min-width: 1040px) {
   body { zoom: 0.8; }
+  #startup-shell { zoom: 1.25; }
 }
 /* never matches under zoom (kept for shape): browser 80% zoom would apply
    single-column charts only below the 1040px gate */
@@ -2303,6 +2304,11 @@ a:hover {
 }
 
 /* Own only the unpainted canvas row; never intercept the usable controls. */
+.om-scene > .om-incident-touch { grid-area: 1 / 1 / 2 / 2; width: 100%; height: 100%; min-height: 0; z-index: 1; pointer-events: none; touch-action: none; overflow: hidden; }
+.om-incident-touch > line { pointer-events: stroke; touch-action: none; cursor: grab; }
+@media (max-width: 900px) and (max-height: 560px) and (orientation: landscape) {
+  .om-scene > .om-incident-touch { grid-area: 2 / 1 / 3 / 2; }
+}
 .om-scene > .om-scene-pending {
   grid-area: 1 / 1 / 2 / 2; z-index: 2; align-self: stretch; justify-self: stretch;
   display: grid; place-items: center; pointer-events: none;

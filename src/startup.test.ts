@@ -76,20 +76,19 @@ describe("static startup lifecycle", () => {
     expect(cleanup).toHaveBeenCalledOnce();
   });
 
-  it("keeps a slow shell at 8 seconds, offers reload without clearing state, and accepts a late ready", () => {
-    const startup = boot("fr-FR");
+  it.each(["en", "fr-FR"])("keeps slow %s startup pending after 8 seconds without retry or reload, and accepts a late ready", (lang) => {
+    const startup = boot(lang);
     vi.advanceTimersByTime(7999);
     expect(elements["startup-retry"].hidden).toBe(true);
     vi.advanceTimersByTime(1);
-    expect(elements["startup-status"].textContent).toContain("patienter");
-    expect(elements["startup-retry"].hidden).toBe(false);
+    expect(elements["startup-status"].textContent).toContain(lang === "en" ? "Still loading" : "Chargement en cours");
+    expect(elements["startup-retry"].hidden).toBe(true);
     expect(elements["startup-shell"].removed).toBe(false);
-    elements["startup-retry"].dispatchEvent(new Event("click"));
-    expect(reload).toHaveBeenCalledOnce();
-    Object.assign(document, { activeElement: elements["startup-retry"] });
+    expect(elements["startup-shell"].attributes.get("data-state")).not.toBe("error");
+    vi.advanceTimersByTime(60000);
+    expect(reload).not.toHaveBeenCalled();
     startup.ready();
     expect(elements["startup-shell"].removed).toBe(true);
-    expect(elements.root.focus).toHaveBeenCalledOnce();
   });
 
   it.each(["en", "fr"])("catches rejected chunk imports and retains a useful %s retry, not a blank screen", async (lang) => {
@@ -100,10 +99,17 @@ describe("static startup lifecycle", () => {
     expect(elements["startup-shell"].removed).toBe(false);
     expect(elements["startup-status"].textContent).toContain(lang === "fr" ? "Impossible" : "could not load");
     expect(elements["startup-retry"].hidden).toBe(false);
+    expect(elements["startup-shell"].attributes.get("data-state")).toBe("error");
+    expect(elements["startup-retry"].textContent).toBe(lang === "fr" ? "Recharger l’application" : "Reload app");
+    elements["startup-retry"].click();
+    expect(reload).toHaveBeenCalledOnce();
+    Object.assign(document, { activeElement: elements["startup-retry"] });
     expect(vi.getTimerCount()).toBe(0);
     const error = elements["startup-status"].textContent;
     vi.advanceTimersByTime(9000);
     expect(elements["startup-status"].textContent).toBe(error); // timeout cannot overwrite failure
+    startup.ready();
+    expect(elements.root.focus).toHaveBeenCalledOnce();
   });
 
   it("captures an entry failure before imports start", () => {
