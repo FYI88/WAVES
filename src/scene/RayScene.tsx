@@ -235,7 +235,7 @@ export function RayScene(props: {
     const h = hitLayer(lay, point);
     setHover(h.index);
     setEdge(nextEdge);
-    setCursor(view === "wave" && props.onAngle && hitIncident(lay, point, bandOf(event)) ? "is-grab" : nextEdge > 0 ? "is-resize" : h.index < 0 ? "" : h.tile || live.current.params.layers[h.index]?.readOnlyMove ? "is-pointer" : "is-grab");
+    setCursor(view === "wave" && props.onAngle && hitIncident(lay, point, bandOf(event)) ? "is-pointer" : nextEdge > 0 ? "is-resize" : h.index < 0 ? "" : h.tile || live.current.params.layers[h.index]?.readOnlyMove ? "is-pointer" : "is-grab");
   };
 
   const startIncident = (event: ReactPointerEvent<SVGLineElement>) => {
@@ -245,7 +245,7 @@ export function RayScene(props: {
     const point = pointOf({ clientX: event.clientX, clientY: event.clientY, currentTarget: canvas });
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, mode: "incident", startAngle: props.params.theta, entry: { ...layout.current.incident.entry }, index: -1, start: point, startCm: 0, cms: [], boundaries: [], minWidth: 0, lastCm: 0, slot: -1 };
-    setCursor("is-grabbing");
+    setCursor("is-pointer");
   };
 
   return <>
