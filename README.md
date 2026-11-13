@@ -8,7 +8,9 @@
 
 **Physique exacte ITU-R P.2040 · React + Vite + TypeScript · zéro dépendance runtime.**
 
-**Live demo : https://waves-pearl.vercel.app/**
+[**⬇️ Download App (Android)**](https://github.com/FYI88/WAVES/releases/latest) · [**🌐 Open Web App (PC & Mobile)**](https://waves-pearl.vercel.app/)
+
+Android: open the latest release and download the `.apk` under **Assets**. On PC or iPhone, use the web app—no installation needed.
 
 ![QR code — live demo](public/qr-code.png)
 
