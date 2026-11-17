@@ -39,10 +39,13 @@ export interface DetailParams {
   thetaDeg: number;
   frequency: number;
   pol: PolMode;
-  orders: DetailOrder[];
-  rigorous: boolean;
+  /** resultant reflectance / transmittance (sum of all orders), drawn as the single R and T beams */
+  R: number;
+  T: number;
+  /** diffracted orders drawn as extra beams; null (default): only the summed R and T */
+  orders: DetailOrder[] | null;
   slices: ProfileSlice[] | null;
-  bubbles: { fraction: number; water: boolean; diameterMm: number; target: number } | null;
+  bubbles: { fraction: number; water: boolean; diameterMm: number; target: number | "all" } | null;
   fog: number;
   lang: "fr" | "en";
   /** draw the local surface normals (outward, towards the air) */
@@ -262,34 +265,38 @@ export function drawSurfaceDetail(
       ctx.stroke();
     }
     ctx.fillStyle = pal.faint;
-    ctx.font = `500 ${compact ? 8.5 : 9.5}px ${MONO}`;
+    ctx.font = `500 ${compact ? 11.5 : 9.5}px ${MONO}`;
     ctx.textAlign = "center";
-    ctx.fillText(`${fmt(layer.cm, layer.cm < 10 ? 1 : 0)}`, x + lw / 2, bottom + 14);
+    const thickness = `${fmt(layer.cm, layer.cm < 10 ? 1 : 0)}`;
+    if (!compact || ctx.measureText(thickness).width < lw - 2) ctx.fillText(thickness, x + lw / 2, bottom + 14);
     x += lw;
   });
 
   /* bubbles */
   if (p.bubbles && p.bubbles.fraction > 0) {
     const b = p.bubbles;
-    const rand = seeded(17 + b.target * 31);
     const r = clamp(((b.diameterMm / 10) * scale) / 2, 1.2, 14);
-    const regionX0 = b.target < 0 ? faceX : baseX + belowPx.slice(0, b.target).reduce((s, v) => s + v, 0);
-    const regionX1 = b.target < 0 ? baseX : regionX0 + (belowPx[b.target] ?? 0);
-    const area = Math.max(0, regionX1 - regionX0) * span;
-    const count = Math.min(500, Math.round((b.fraction * area) / (Math.PI * r * r)));
+    const targets = b.target === "all" ? [-1, ...p.below.map((_, i) => i)] : [b.target];
     ctx.save();
-    for (let k = 0, tries = 0; k < count && tries < count * 4; tries++) {
-      const bx = regionX0 + r + rand() * Math.max(0, regionX1 - regionX0 - 2 * r);
-      const by = top + r + rand() * (span - 2 * r);
-      if (b.target < 0 && bx - r < surfaceX(by)) continue;
-      k++;
-      ctx.beginPath();
-      ctx.arc(bx, by, r, 0, Math.PI * 2);
-      ctx.fillStyle = b.water ? "rgba(70,160,255,.55)" : pal.dark ? "rgba(10,20,32,.55)" : "rgba(255,255,255,.7)";
-      ctx.fill();
-      ctx.strokeStyle = b.water ? "rgba(170,215,255,.7)" : "rgba(255,255,255,.45)";
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
+    for (const target of targets) {
+      const rand = seeded(17 + target * 31);
+      const regionX0 = target < 0 ? faceX : baseX + belowPx.slice(0, target).reduce((s, v) => s + v, 0);
+      const regionX1 = target < 0 ? baseX : regionX0 + (belowPx[target] ?? 0);
+      const area = Math.max(0, regionX1 - regionX0) * span;
+      const count = Math.min(500, Math.round((b.fraction * area) / (Math.PI * r * r)));
+      for (let k = 0, tries = 0; k < count && tries < count * 4; tries++) {
+        const bx = regionX0 + r + rand() * Math.max(0, regionX1 - regionX0 - 2 * r);
+        const by = top + r + rand() * (span - 2 * r);
+        if (target < 0 && bx - r < surfaceX(by)) continue;
+        k++;
+        ctx.beginPath();
+        ctx.arc(bx, by, r, 0, Math.PI * 2);
+        ctx.fillStyle = b.water ? "rgba(70,160,255,.55)" : pal.dark ? "rgba(10,20,32,.55)" : "rgba(255,255,255,.7)";
+        ctx.fill();
+        ctx.strokeStyle = b.water ? "rgba(170,215,255,.7)" : "rgba(255,255,255,.45)";
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }
@@ -316,7 +323,7 @@ export function drawSurfaceDetail(
   ctx.strokeStyle = hexA(pal.ink, 0.6);
   ctx.fillStyle = pal.muted;
   ctx.lineWidth = 1;
-  ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
+  ctx.font = `600 ${compact ? 11.5 : 10}px ${MONO}`;
   if (periodPx > 10) {
     const dx = faceX - 16;
     ctx.beginPath();
@@ -357,7 +364,7 @@ export function drawSurfaceDetail(
       time, frequency: p.frequency, compact, dark: pal.dark, display: "both", pol: p.pol,
     });
     if (label) {
-      ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
+      ctx.font = `600 ${compact ? 11.5 : 10}px ${MONO}`;
       ctx.textAlign = dx < 0 ? "left" : "right";
       ctx.textBaseline = "middle";
       const tx = clamp(x1 + (dx < 0 ? 4 : -4), 4, w - 4);
@@ -391,14 +398,16 @@ export function drawSurfaceDetail(
     ctx.arc(hit.x, hit.y, 34, Math.PI, Math.PI + theta);
     ctx.stroke();
     ctx.fillStyle = pal.dark ? pal.inc : shade(pal.inc, -0.4);
-    ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
+    ctx.font = `600 ${compact ? 11.5 : 10}px ${MONO}`;
     ctx.textAlign = "right";
     ctx.fillText(`θ ${fmt(p.thetaDeg, 1)}°`, hit.x - 38, hit.y - 6);
     ctx.restore();
   }
 
   /* order 0 inside the wall: refraction per segment and a partial reflection at
-     each interface behind the front face (profile base, layer boundaries, back face) */
+     each interface behind the front face (profile base, layer boundaries, back face).
+     These stay inside the wall: their share of the power is already in the
+     resultant R and T beams drawn below. */
   let exitY = yc;
   const segs = p.paths ?? [];
   if (segs.length) {
@@ -429,51 +438,54 @@ export function drawSurfaceDetail(
         ctx.save();
         drawWaveRibbon(ctx, end, back, pal.ref, s.back, s.back, s.n, phase + Math.PI, style, 0.55);
         ctx.restore();
-        // the reflection from the first interface behind the face comes back out into the air
-        if (i === 0) {
-          const dx = -Math.cos(theta);
-          const dy = Math.sin(theta);
-          const len = Math.min(rayLength(faceX, back.y, dx, dy, w, h, 14), faceX - 14) * 0.8;
-          beam(faceX, back.y, dx, dy, pal.ref, s.back * Math.max(0, segs[0].fluxIn), len,
-            s.kind === "profile" ? (fr ? "↩ base du profil · partiel" : "↩ profile base · partial") : (fr ? "↩ interface 2 · partiel" : "↩ interface 2 · partial"));
-        }
       }
     });
     exitY = ys[ys.length - 1];
   }
 
-  const pct = (e: number) => (Number.isFinite(e) ? ` · ${fmt(e * 100, e < 0.1 ? 1 : 0)}%` : (fr ? " · schém." : " · schematic"));
-  for (const o of p.orders) {
+  // one reflected and one transmitted beam: the resultant R and T
+  // (sum of all orders, every internal reflection and absorption included)
+  const pct = (e: number) => `${fmt(e * 100, e < 0.1 ? 2 : 1)} %`;
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  const rLen = Math.min(rayLength(hit.x, hit.y, -cos, sin, w, h, 14), faceX - 14) * 0.92;
+  beam(hit.x, hit.y, -cos, sin, pal.ref, p.R, rLen, `R · ${pct(p.R)}`);
+  beam(backX, exitY, cos, sin, pal.tra, p.T, rayLength(backX, exitY, cos, sin, w, h, 14) * 0.9, `T · ${pct(p.T)}`);
+
+  // optional: the diffracted orders as extra beams (m = 0 is the specular direction of R and T)
+  const orderPct = (e: number) => (Number.isFinite(e) ? ` · ${fmt(e * 100, e < 0.1 ? 1 : 0)}%` : fr ? " · schém." : " · schematic");
+  for (const o of p.orders ?? []) {
+    if (o.m === 0) continue;
     const a = o.angleDeg * DEG;
-    if (!p.rigorous || o.R > 1e-4) {
+    const tag = `${o.m > 0 ? "+" : ""}${o.m}`;
+    if (!(o.R <= 1e-4)) {
       const dx = -Math.cos(a);
       const dy = Math.sin(a);
       const len = Math.min(rayLength(hit.x, hit.y, dx, dy, w, h, 14), faceX - 14) * 0.92;
-      beam(hit.x, hit.y, dx, dy, pal.ref, p.rigorous ? o.R : null, len, `${o.m > 0 ? "+" : ""}${o.m}${pct(p.rigorous ? o.R : NaN)}`);
+      beam(hit.x, hit.y, dx, dy, pal.ref, Number.isFinite(o.R) ? o.R : null, len, `${tag}${orderPct(o.R)}`);
     }
-    if (!p.rigorous || o.T > 1e-4) {
-      if (p.rigorous && !(o.T > 1e-4)) continue;
+    if (!(o.T <= 1e-4)) {
       const dx = Math.cos(a);
       const dy = Math.sin(a);
       const len = rayLength(backX, exitY, dx, dy, w, h, 14) * 0.9;
-      beam(backX, exitY, dx, dy, pal.tra, p.rigorous ? o.T : null, len, `${o.m > 0 ? "+" : ""}${o.m}${pct(p.rigorous ? o.T : NaN)}`);
+      beam(backX, exitY, dx, dy, pal.tra, Number.isFinite(o.T) ? o.T : null, len, `${tag}${orderPct(o.T)}`);
     }
   }
 
   /* titles */
   ctx.save();
-  ctx.font = `600 ${compact ? 9 : 10}px ${MONO}`;
+  ctx.font = `600 ${compact ? 11.5 : 10}px ${MONO}`;
   ctx.fillStyle = pal.muted;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.fillText(fr ? "COUPE DÉTAILLÉE · PROFIL" : "DETAIL SECTION · PROFILE", 14, 16);
+  ctx.fillText(compact ? (fr ? "PROFIL" : "PROFILE") : fr ? "COUPE DÉTAILLÉE · PROFIL" : "DETAIL SECTION · PROFILE", 14, 16);
   ctx.textAlign = "right";
   ctx.fillStyle = pal.faint;
   ctx.fillText(p.materialName.toUpperCase(), w - 14, 16);
-  ctx.font = `500 ${compact ? 8 : 9}px ${SANS}`;
+  ctx.font = `500 ${compact ? 11.5 : 9}px ${SANS}`;
   ctx.textAlign = "left";
   ctx.fillText(
-    fr ? "Profil à l’échelle · couches planes comprimées · épaisseurs en cm" : "Profile to scale · flat layers compressed · thickness in cm",
+    compact ? (fr ? "Profil à l’échelle · couches comprimées" : "Profile to scale · layers compressed") : fr ? "Profil à l’échelle · couches planes comprimées · épaisseurs en cm" : "Profile to scale · flat layers compressed · thickness in cm",
     14,
     h - 10,
   );
@@ -483,10 +495,6 @@ export function drawSurfaceDetail(
       14,
       29,
     );
-  }
-  if (!p.rigorous) {
-    ctx.textAlign = "right";
-    ctx.fillText(fr ? "directions seules (mode rapide)" : "directions only (fast mode)", w - 14, h - 10);
   }
   ctx.restore();
 }
@@ -561,12 +569,10 @@ export function drawOrderSweep(
     ctx.stroke();
     ctx.restore();
   };
-  Object.entries(sweep.orderR).forEach(([m, ys]) => {
-    if (Number(m) !== 0 && ys.some((v) => v > 0.005)) line(ys, hexA(pal.inc, 0.85), 1.2, true);
-  });
+  // resultant R and T (sum of all orders), so R + T + A = 1 at every point
   line(sweep.A, hexA(pal.abs, 0.9), 1.2, true);
-  line(sweep.R0, pal.ref, 2);
-  line(sweep.T0, pal.tra, 2);
+  line(sweep.R, pal.ref, 2);
+  line(sweep.T, pal.tra, 2);
   ctx.save();
   ctx.strokeStyle = hexA(pal.ink, 0.5);
   ctx.setLineDash([2, 3]);

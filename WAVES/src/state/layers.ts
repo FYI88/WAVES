@@ -1,4 +1,4 @@
-import { CUSTOM_SWATCH, MATERIALS, MATERIAL_IDS, materialProps, type MaterialId } from "../physics";
+import { C0, CUSTOM_SWATCH, MATERIALS, MATERIAL_IDS, materialProps, type MaterialId } from "../physics";
 import { tintOf } from "../render/util";
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -17,12 +17,86 @@ export interface Layer {
   eps: number; // custom ε′
   sigma: number; // custom σ
   customMode: CustomMode; // how the custom medium is edited
+  matching?: boolean; // matching coating label, electrically an editable custom medium
+  matchingDesign?: "quarter-wave-live"; // absent: fixed numerical snapshot
+  embeddedInsert?: EmbeddedInsert; // replaces the centre of this host, not added thickness
+}
+
+export interface EmbeddedInsert { enabled: boolean; eps: number; thickness: number }
+export type InsertReason = "insertHost" | "insertRange" | "insertFit" | "arFull";
+export const canEmbed = (l: Layer) => l.mat !== "air" && !l.matching && !l.matchingDesign;
+export const validInsert = (v: EmbeddedInsert) => typeof v.enabled === "boolean" && Number.isFinite(v.eps) && v.eps >= 1 && v.eps <= 64 && Number.isFinite(v.thickness) && v.thickness > 0;
+export const physicalLayerCount = (layers: Layer[]) => layers.reduce((n, l) => n + (l.embeddedInsert?.enabled ? 3 : 1), 0);
+
+/** Atomic edit validation: never silently discard insert or host material. */
+export function insertReason(layers: Layer[]): InsertReason | null {
+  for (const l of layers) {
+    const v = l.embeddedInsert;
+    if (!v) continue;
+    if (!validInsert(v)) return "insertRange";
+    if (!v.enabled) continue;
+    if (!canEmbed(l)) return "insertHost";
+    if (!(v.thickness < l.thickness) || !((l.thickness - v.thickness) / 2 > 0)) return "insertFit";
+  }
+  return physicalLayerCount(layers) > MAX_LAYERS ? "arFull" : null;
+}
+
+/** A fixed lossless reference at the current design frequency; no matching claim. */
+export function embeddedQuarterWave(n: number, fGHz: number, hostCm: number): number | null {
+  if (![n, fGHz, hostCm].every((v) => Number.isFinite(v) && v > 0) || n < 1 || n > 8) return null;
+  const cm = 100 * C0 / (4 * fGHz * 1e9 * n);
+  return cm > 0 && cm < hostCm ? cm : null;
+}
+
+export interface PhysicalLayer extends Layer { owner: number; part: "whole" | "front" | "insert" | "back" }
+/** The single physical subdivision used by flat solvers, charts, scenes and profiles.
+ * IDs are deterministic; editor ownership always remains on the original host. */
+export function expandLayers(layers: Layer[]): PhysicalLayer[] {
+  return layers.flatMap((l, owner): PhysicalLayer[] => {
+    const { embeddedInsert: v, ...host } = l;
+    if (!v?.enabled || !validInsert(v) || !canEmbed(l) || !(v.thickness < l.thickness)) return [{ ...host, owner, part: "whole" }];
+    const half = (l.thickness - v.thickness) / 2;
+    return [
+      { ...host, id: `${l.id}:front`, thickness: half, owner, part: "front" },
+      { id: `${l.id}:insert`, mat: "custom", eps: v.eps, sigma: 0, thickness: v.thickness, customMode: "nk", owner, part: "insert" },
+      { ...host, id: `${l.id}:back`, thickness: half, owner, part: "back" },
+    ];
+  });
 }
 
 export type CustomMode = "eps" | "nk";
 
 export const newId = () => Math.random().toString(36).slice(2, 10);
 export const mkLayer = (mat: LayerMat, thickness: number, eps = 4, sigma = 0.05): Layer => ({ id: newId(), mat, thickness, eps, sigma, customMode: "eps" });
+
+/** Normal-incidence, lossless matching estimate; not an optimizer for a lossy stack.
+ * Keep the thickness within the editor range using an odd quarter-wave multiple. */
+export function quarterWaveMatch(n1: number, n2: number, fGHz: number): { eps: number; cm: number; order: number } | null {
+  if (![n1, n2, fGHz].every((v) => Number.isFinite(v) && v > 0)) return null;
+  const eps = n1 * n2;
+  const quarter = (100 * C0) / (fGHz * 1e9 * 4 * Math.sqrt(eps));
+  if (eps < 1 || eps > 30 || !Number.isFinite(quarter) || quarter <= 0) return null;
+  const multiple = Math.max(1, 2 * Math.ceil((0.1 / quarter - 1) / 2) + 1);
+  const cm = quarter * multiple;
+  return cm <= 100 ? { eps, cm, order: multiple } : null;
+}
+
+/** Insert a coating at a boundary without replacing either neighbouring material. */
+export function insertMatchingLayer(layers: Layer[], slot: number, fGHz: number): Layer[] | null {
+  if (physicalLayerCount(layers) >= MAX_LAYERS || !Number.isInteger(slot) || slot < 0 || slot > layers.length) return null;
+  if ([layers[slot - 1], layers[slot]].some((l) => l && (l.matching || l.matchingDesign))) return null;
+  const index = (l: Layer | undefined) => {
+    if (!l) return 1;
+    const { epsR, sigma } = layerEpsSigma(l, fGHz);
+    return nkOf(epsR, sigma, fGHz).n;
+  };
+  const n1 = index(layers[slot - 1]), n2 = index(layers[slot]);
+  if (Math.abs(n1 - n2) < 1e-6) return null;
+  const match = quarterWaveMatch(n1, n2, fGHz);
+  if (!match) return null;
+  const coating: Layer = { ...mkLayer("custom", match.cm, match.eps, 0), matching: true };
+  return [...layers.slice(0, slot), coating, ...layers.slice(slot)];
+}
 
 /** refractive index n − jκ from custom ε′, σ at f */
 export function nkOf(eps: number, sigma: number, f: number): { n: number; k: number } {

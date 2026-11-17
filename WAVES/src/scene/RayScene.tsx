@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { drawSpatialScene, type SceneOptions } from "../spatialScene";
 import { drawWaveRays } from "../waveRays";
 import { recordFrame } from "../perf";
+import { downloadFile } from "../dom";
 import { clamp } from "../render/util";
 import type { Cx, PolMode } from "../physics";
 import { DICTS, type Lang } from "../i18n";
@@ -10,7 +11,8 @@ import type { LayerMat } from "../state/layers";
 import { cssZoom, prepCanvas, useCanvasSize } from "./canvas";
 import { DRAG_THRESHOLD, EDGE_BAND, dropSlot, hitBoundary, isNoopDrop, nearestSlot, slotToIndex, thicknessFromBoundaryDrag, type Pt } from "./dragStack";
 import { drawDragOverlay, type DragUi } from "./dragOverlay";
-import { hitLayer, inWallBand, pointOf, type SceneLayout } from "./hitTest";
+import { hitIncident, incidentAngle, hitLayer, inWallBand, pointOf, type SceneLayout } from "./hitTest";
+import { ResponsiveDisclosure } from "../ui/ResponsiveDisclosure";
 
 /* ════════════════════════════════════════════════════════════════════════
    Ray scene: animation loop + view switching (Section / Spatial)
@@ -25,6 +27,9 @@ export interface SceneLayer {
   fluxIn: number;
   fluxOut: number;
   name: string;
+  readOnlyThickness?: boolean;
+  readOnlyMove?: boolean;
+  insert?: boolean;
 }
 
 export interface SceneParams {
@@ -48,7 +53,9 @@ interface Gesture {
   x: number;
   y: number;
   moved: boolean;
-  mode: "click" | "orbit" | "reorder" | "resize";
+  mode: "click" | "orbit" | "reorder" | "resize" | "incident";
+  startAngle?: number;
+  entry?: Pt;
   /** layer being moved, or layer on the left of the dragged boundary */
   index: number;
   start: Pt;
@@ -62,6 +69,9 @@ interface Gesture {
 }
 
 export function RayScene(props: {
+  active?: boolean;
+  /** Leading scene switch, always available even while the simulation is inactive. */
+  viewTools?: ReactNode;
   params: SceneParams;
   pal: Palette;
   playing: boolean;
@@ -72,10 +82,14 @@ export function RayScene(props: {
   onMove: (from: number, to: number) => void;
   /** set the thickness (cm) of layer `index` (same state update as the panel) */
   onResize: (index: number, cm: number) => void;
-  /** extra controls shown in the canvas toolbar in both views (e.g. the Flat / Profiled R/T switch) */
+  /** Extra simulation controls (e.g. the Flat / Profiled R/T switch). */
   tools?: ReactNode;
+  onAngle?: (angle: number) => void;
 }) {
+  const active = props.active ?? true;
   const ref = useRef<HTMLCanvasElement>(null);
+  const pendingRef = useRef<HTMLDivElement>(null);
+  const incidentRef = useRef<SVGLineElement>(null);
   const size = useCanvasSize(ref);
   const [hover, setHover] = useState(-1);
   const [view, setView] = useState<"wave" | "spatial">("wave");
@@ -100,11 +114,13 @@ export function RayScene(props: {
   // state — "waves:set-view"/"waves:set-display" events connect the two
   useEffect(() => {
     const onView = (e: Event) => {
+      if (!active) return;
       const v = (e as CustomEvent).detail;
       if (v === "wave" || v === "spatial") setView(v);
       else setView((cur) => (cur === "wave" ? "spatial" : "wave"));
     };
     const onDisplay = (e: Event) => {
+      if (!active) return;
       const d = (e as CustomEvent).detail;
       if (d === "field" || d === "fronts" || d === "both") setDisplay(d);
     };
@@ -114,11 +130,11 @@ export function RayScene(props: {
       window.removeEventListener("waves:set-view", onView);
       window.removeEventListener("waves:set-display", onDisplay);
     };
-  }, []);
+  }, [active]);
 
   useEffect(() => {
     const canvas = ref.current;
-    if (!canvas || size.w === 0) return;
+    if (!active || !canvas || size.w === 0) return;
     const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
     let raf = 0;
     let last = performance.now();
@@ -134,14 +150,24 @@ export function RayScene(props: {
       const moving = cur.playing && !motionPreference.matches;
       const intro = motionPreference.matches ? 1 : Math.min(1, (now - (introStart.current ?? now)) / 1000);
       if (!moving && intro === 1 && previous === cur) return;
-      previous = cur;
       if (moving) clock.current += dt * cur.speed;
       const ctx = prepCanvas(canvas, size);
       if (!ctx) return;
+      previous = cur;
       const parameters = { ...cur.params, hover: cur.hover };
       layout.current = cur.view === "spatial"
         ? drawSpatialScene(ctx, size.w, size.h, clock.current, intro, parameters, cur.pal, cur.fmtNum, { display: cur.display, annotations: cur.annotations, az: cur.orbit.az, el: cur.orbit.el, lang: cur.lang })
         : drawWaveRays(ctx, size.w, size.h, clock.current, parameters, cur.pal, cur.fmtNum, { display: cur.display, reflections: cur.reflections, annotations: cur.annotations, lang: cur.lang });
+      const ray = layout.current.incident;
+      const target = incidentRef.current;
+      if (target) {
+        target.style.display = ray && cur.onAngle ? "" : "none";
+        if (ray) {
+          target.setAttribute("x1", String(ray.source.x)); target.setAttribute("y1", String(ray.source.y));
+          target.setAttribute("x2", String(ray.source.x + (ray.entry.x - ray.source.x) * 0.7));
+          target.setAttribute("y2", String(ray.source.y + (ray.entry.y - ray.source.y) * 0.7));
+        }
+      }
       // drag affordances: only while a boundary is hovered or a drag is active
       if (cur.dragUi || cur.edge > 0) {
         ctx.save();
@@ -149,10 +175,15 @@ export function RayScene(props: {
         ctx.restore();
       }
       recordFrame(elapsed, { dpr: size.dpr, width: canvas.width, height: canvas.height });
+      // Keep a neutral, non-intercepting placeholder until pixels really exist.
+      if (pendingRef.current && !pendingRef.current.hidden) {
+        pendingRef.current.hidden = true;
+        canvas.removeAttribute("aria-busy");
+      }
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [size]);
+  }, [size, active]);
 
   // wider grab band for touch / pen and on coarse-pointer devices
   const coarse = useRef<MediaQueryList | null>(null);
@@ -166,9 +197,19 @@ export function RayScene(props: {
     const g = drag.current;
     drag.current = null;
     if (g?.mode === "resize" && g.moved && revert && g.lastCm !== g.startCm) live.current.onResize(g.index, g.startCm);
+    if (g?.mode === "incident" && g.moved && revert) live.current.onAngle?.(g.startAngle!);
     setDragUi(null);
     setCursor("");
   }, []);
+
+  useEffect(() => {
+    if (active) return;
+    const pointerId = drag.current?.id;
+    cancelDrag(true);
+    if (pointerId !== undefined && ref.current?.hasPointerCapture(pointerId)) ref.current.releasePointerCapture(pointerId);
+    setHover(-1);
+    setEdge(0);
+  }, [active, cancelDrag]);
 
   // Escape cancels an active drag (capture phase, so App's own Escape handling,
   // e.g. leaving present mode, does not also fire)
@@ -189,17 +230,30 @@ export function RayScene(props: {
     const lay = layout.current;
     let nextEdge = 0;
     if (view === "wave" && lay.boundaries && inWallBand(lay, point)) nextEdge = Math.max(0, hitBoundary(point.x, lay.boundaries, bandOf(event)));
+    if (live.current.params.layers[nextEdge - 1]?.readOnlyThickness) nextEdge = 0;
     const h = hitLayer(lay, point);
     setHover(h.index);
     setEdge(nextEdge);
-    setCursor(nextEdge > 0 ? "is-resize" : h.index < 0 ? "" : h.tile ? "is-pointer" : "is-grab");
+    setCursor(view === "wave" && props.onAngle && hitIncident(lay, point, bandOf(event)) ? "is-pointer" : nextEdge > 0 ? "is-resize" : h.index < 0 ? "" : h.tile || live.current.params.layers[h.index]?.readOnlyMove ? "is-pointer" : "is-grab");
+  };
+
+  const startIncident = (event: ReactPointerEvent<SVGLineElement>) => {
+    if (!active || view !== "wave" || !props.onAngle || !layout.current.incident || (event.pointerType === "mouse" && event.button !== 0)) return;
+    event.preventDefault();
+    const canvas = ref.current!;
+    const point = pointOf({ clientX: event.clientX, clientY: event.clientY, currentTarget: canvas });
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false, mode: "incident", startAngle: props.params.theta, entry: { ...layout.current.incident.entry }, index: -1, start: point, startCm: 0, cms: [], boundaries: [], minWidth: 0, lastCm: 0, slot: -1 };
+    setCursor("is-pointer");
   };
 
   return <>
     <canvas
       ref={ref}
       className={`om-canvas ${cursor}`}
-      aria-label={DICTS[props.lang].canvasAria}
+      style={{ display: active ? "block" : "none" }}
+      aria-label={`${DICTS[props.lang].canvasAria}${props.onAngle ? (french ? " Faites glisser l’onde incidente en vue Coupe pour changer son angle." : " Drag the incoming wave in Section view to change its angle.") : ""}`}
+      aria-busy="true"
       role="img"
       onPointerMove={event => {
         const g = drag.current;
@@ -265,14 +319,14 @@ export function RayScene(props: {
         if (event.button === 0 || event.pointerType !== "mouse") {
           if (view === "wave" && lay.boundaries && inWallBand(lay, point)) {
             const j = hitBoundary(point.x, lay.boundaries, bandOf(event));
-            if (j > 0) {
+            if (j > 0 && !live.current.params.layers[j - 1]?.readOnlyThickness) {
               const cms = live.current.params.layers.map(l => l.cm);
               Object.assign(g, { mode: "resize", index: j - 1, cms, boundaries: lay.boundaries.slice(), minWidth: lay.minWidth ?? 0, startCm: cms[j - 1], lastCm: cms[j - 1] });
             }
           }
           if (g.mode !== "resize") {
             const h = hitLayer(lay, point);
-            if (h.index >= 0 && !h.tile) Object.assign(g, { mode: "reorder", index: h.index });
+            if (h.index >= 0 && !h.tile && !live.current.params.layers[h.index]?.readOnlyMove) Object.assign(g, { mode: "reorder", index: h.index });
           }
         }
         drag.current = g;
@@ -287,7 +341,7 @@ export function RayScene(props: {
           if (g.slot >= 0 && !isNoopDrop(g.index, g.slot)) props.onMove(g.index, slotToIndex(g.index, g.slot));
           return;
         }
-        if (g.mode === "resize" && g.moved) return;
+        if ((g.mode === "resize" || g.mode === "incident") && g.moved) return;
         if (!g.moved) {
           const h = hitLayer(layout.current, pointOf(event));
           if (h.index >= 0) props.onSelect(h.index);
@@ -295,11 +349,36 @@ export function RayScene(props: {
       }}
       onPointerCancel={() => cancelDrag(true)}
     />
-    <div className="om-scene-toolbar" data-view={view} aria-label={french ? "Affichage de la simulation" : "Simulation display"}>
+    {active && props.onAngle && view === "wave" && <svg className="om-incident-touch" aria-hidden="true">
+      <line ref={incidentRef} stroke="transparent" strokeWidth="44" strokeLinecap="round" onPointerDown={startIncident}
+        onPointerMove={event => {
+          const g = drag.current;
+          if (g?.mode !== "incident" || g.id !== event.pointerId) return;
+          const point = pointOf({ clientX: event.clientX, clientY: event.clientY, currentTarget: ref.current! });
+          if (!g.moved && Math.hypot(point.x - g.start.x, point.y - g.start.y) <= DRAG_THRESHOLD) return;
+          g.moved = true;
+          live.current.onAngle?.(incidentAngle(g.entry!, point));
+        }}
+        onPointerUp={event => { if (drag.current?.id === event.pointerId) cancelDrag(false); }}
+        onPointerCancel={() => cancelDrag(true)} />
+    </svg>}
+    <div ref={pendingRef} className="om-scene-pending" role="status" aria-live="polite" hidden={!active}>
+      {french ? "Préparation de la scène…" : "Preparing scene…"}
+    </div>
+    <div className="om-scene-toolbar" data-view={active ? view : "lab"} aria-label={french ? "Affichage de la simulation" : "Simulation display"}>
+      <div className="om-scene-tool-group om-scene-view-tools" role="group" aria-label={french ? "Scène et vue" : "Scene and view"}>
+      <span className="om-scene-tool-label">{french ? "Scène / vue" : "Scene / view"}</span>
+      {props.viewTools}
+      {active && <>
       <div className="om-view-modes" role="group" aria-label={french ? "Vue" : "View"}>
         <button type="button" aria-pressed={view === "wave"} className={view === "wave" ? "is-on" : ""} onClick={() => setView("wave")}>{french ? "Coupe" : "Section"}</button>
         <button type="button" aria-pressed={view === "spatial"} className={view === "spatial" ? "is-on" : ""} onClick={() => setView("spatial")}>Spatial</button>
       </div>
+      </>}
+      </div>
+      {active && <ResponsiveDisclosure className="om-display-menu" label={french ? "Affichage" : "Display"}>
+      <div className="om-scene-tool-group om-scene-display-tools" role="group" aria-label={french ? "Options d’affichage" : "Display utilities"}>
+      <span className="om-scene-tool-label">{french ? "Affichage" : "Display"}</span>
       {props.tools}
       {view === "wave" && <>
         <div className="om-view-modes" role="group" aria-label={french ? "Dessin des ondes" : "Wave drawing"}>
@@ -333,14 +412,12 @@ export function RayScene(props: {
           octx.fillStyle = props.pal.bg0;
           octx.fillRect(0, 0, out.width, out.height);
           octx.drawImage(canvas, 0, 0);
-          const a = document.createElement("a");
-          a.download = `waves-${props.params.freq}GHz-${props.params.theta}deg-${props.params.pol}-${view}.png`;
-          a.href = out.toDataURL("image/png");
-          a.click();
+          void downloadFile(out.toDataURL("image/png"), `waves-${props.params.freq}GHz-${props.params.theta}deg-${props.params.pol}-${view}.png`);
         }}
       >
         PNG
       </button>
+      </div></ResponsiveDisclosure>}
     </div>
   </>;
 }

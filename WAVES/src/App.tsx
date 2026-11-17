@@ -2,6 +2,7 @@ import {
   Component,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -9,12 +10,15 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
+  type SetStateAction,
 } from "react";
 import { drawSpatialScene, type SceneOptions } from "./spatialScene";
 import { drawWaveRays } from "./waveRays";
 import { decodeShare, encodeShare, shareHashOf } from "./share";
 import { SurfaceLab } from "./surface/SurfaceLab";
 import { labForShare } from "./surface/labState";
+import { LAB_TEXT } from "./surface/labText";
+import type { Inclusions } from "./media/mixing";
 import { withSurface, type SceneSurface } from "./surface/sceneOverlay";
 import { loadRtView, saveRtView, useProfiledMain, type RtView } from "./surface/useProfiledMain";
 import { recordFrame } from "./perf";
@@ -35,14 +39,19 @@ import {
   mkLayer,
   newId,
   nkOf,
+  canEmbed,
+  embeddedQuarterWave,
+  physicalLayerCount,
   type CustomMode,
   type Layer,
   type LayerMat,
   type TemplateId,
 } from "./state/layers";
-import { applyMove, applyResize, applyStackCommand, stackKeyCommand } from "./scene/dragStack";
+import { applyStackCommand, stackKeyCommand } from "./scene/dragStack";
+import { movePhysical, physicalScene, resizePhysical, selectPhysical } from "./scene/physicalStack";
 import { computeResults, stackSweepKey, type LayerRes, type Results, type SimState } from "./state/results";
 import { DEFAULT_STATE, presetState } from "./state/presets";
+import { addMatching, insertInternalQuarterWave, isLiveMatching, matchWall, recalculateMatching, matchingFeedback, matchingReference, resolveMatching, transitionMatching, type MatchingReason } from "./state/matching";
 import { STORAGE_KEY, STORAGE_VERSION, defaultPersisted, loadInitial, sanitizePersisted, type Persisted } from "./state/persistence";
 import { copyText, downloadFile } from "./dom";
 import { cssZoom, prepCanvas, useCanvasSize, type CanvasSize } from "./scene/canvas";
@@ -52,7 +61,9 @@ import { PAD, dot, drawAxes, mixHex, pill, roundRect, strokeCurve, tooltip } fro
 import { AngleChart } from "./charts/AngleChart";
 import { FieldChart } from "./charts/FieldChart";
 import { Icon, Logo } from "./ui/icons";
-import { Segmented, Slider } from "./ui/controls";
+import { Check, Segmented, Slider } from "./ui/controls";
+import { containModal } from "./ui/modalFocus";
+import { ResponsiveDisclosure } from "./ui/ResponsiveDisclosure";
 import {
   C0,
   CUSTOM_SWATCH,
@@ -82,41 +93,15 @@ const CONTACT_EMAILS = [
   { labelKey: "emailPersonal", address: "youneschetaine@gmail.com" },
 ] as const;
 
-function Ring({ value, color }: { value: number; color: string }) {
-  const r = 30;
-  const c = 2 * Math.PI * r;
-  return (
-    <svg className="om-ring" viewBox="0 0 76 76" aria-hidden>
-      <circle cx="38" cy="38" r={r} className="om-ring-track" />
-      <circle
-        cx="38"
-        cy="38"
-        r={r}
-        className="om-ring-val"
-        style={{ stroke: color, strokeDasharray: `${clamp(value, 0, 1) * c} ${c}` }}
-      />
-    </svg>
-  );
-}
+import { Ring } from "./ui/Ring";
+import { MathText } from "./ui/MathText";
 
 
-function Eq({ tex }: { tex: string }) {
-  const [html, setHtml] = useState<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    void import("katex/dist/katex.min.css");
-    import("katex").then(({ default: katex }) => {
-      if (!alive) return;
-      setHtml(katex.renderToString(tex, { throwOnError: false, displayMode: true }));
-    });
-    return () => {
-      alive = false;
-    };
-  }, [tex]);
-
-  if (!html) return <div className="om-eq om-eq-pending" aria-hidden />;
-  return <div className="om-eq" dangerouslySetInnerHTML={{ __html: html }} />;
+function Eq({ tex, label }: { tex: string; label: string }) {
+  return <figure className="om-about-equation">
+    <figcaption>{label}</figcaption>
+    <div className="om-eq" role="group" aria-label={label} tabIndex={0}><MathText tex={tex} display label={label} /></div>
+  </figure>;
 }
 
 function Stat(props: { label: string; value: string; unit?: string; sub?: string; tone?: string; delay: number }) {
@@ -144,7 +129,7 @@ interface BoundaryState {
   error: Error | null;
 }
 
-export class AppErrorBoundary extends Component<{ children: ReactNode }, BoundaryState> {
+export class AppErrorBoundary extends Component<{ children: ReactNode; onError?: () => void }, BoundaryState> {
   state: BoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): BoundaryState {
@@ -153,6 +138,7 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, Boundar
 
   componentDidCatch(error: Error): void {
     console.error("[WaveS] render crash captured:", error);
+    this.props.onError?.();
   }
 
   render(): ReactNode {
@@ -162,6 +148,9 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, Boundar
     const reset = () => {
       try {
         window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem("waves:lab:v1");
+        window.localStorage.removeItem("waves:rt-view");
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
       } catch {
         /* ignore */
       }
@@ -216,12 +205,25 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, Boundar
   }
 }
 
-export function App() {
+export function App({ onReady }: { onReady?: () => void } = {}) {
+  // Only a real commit may dismiss the static shell, never a module download.
+  useLayoutEffect(() => { onReady?.(); }, [onReady]);
   const initial = useMemo(loadInitial, []);
-  const [sim, setSim] = useState<SimState>(initial.sim);
+  const [simulation, setSimulation] = useState<{ sim: SimState; reason: MatchingReason | null }>({ sim: initial.sim, reason: null });
+  const sim = simulation.sim;
+  // All interactive paths commit a fully resolved stack, never an effect-delayed coating.
+  const setSim = useCallback((action: SetStateAction<SimState>, imported = false) => {
+    setSimulation((previous) => {
+      const candidate = typeof action === "function" ? action(previous.sim) : action;
+      return imported ? resolveMatching(candidate) : transitionMatching(previous.sim, candidate);
+    });
+  }, []);
   const [lang, setLang] = useState<Lang>(initial.lang);
   const [theme, setTheme] = useState<Theme>(initial.theme);
   const [playing, setPlaying] = useState(true);
+  const [sceneView, setSceneView] = useState<"main" | "lab">("main");
+  const [detailHost, setDetailHost] = useState<HTMLDivElement | null>(null);
+  const detailHostRef = useCallback((node: HTMLDivElement | null) => setDetailHost(node), []);
   const [fieldScale, setFieldScale] = useState<"lin" | "db">("lin");
   const [flash, setFlash] = useState(0);
   const [present, setPresent] = useState(false);
@@ -229,6 +231,8 @@ export function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [sceneSurface, setSceneSurface] = useState<SceneSurface | null>(null);
+  const [coatingSlot, setCoatingSlot] = useState(0);
+  const coatingStatus = matchingFeedback(simulation.reason?.startsWith("insert") ? null : simulation.reason, physicalLayerCount(sim.layers) >= MAX_LAYERS);
   const [rtView, setRtView] = useState<RtView>(loadRtView);
   useEffect(() => saveRtView(rtView), [rtView]);
   const [perfOn, setPerfOn] = useState(() => {
@@ -239,6 +243,9 @@ export function App() {
     }
   });
   const copyTimer = useRef(0);
+  const [labResultsHost, setLabResultsHost] = useState<HTMLElement | null>(null);
+  const labResultsRef = useCallback((node: HTMLElement | null) => setLabResultsHost(node), []);
+  const [mainInclusions, setMainInclusions] = useState<Inclusions | null>(null);
   const buildTaps = useRef({ count: 0, at: 0 });
   const presentRef = useRef(present);
   presentRef.current = present;
@@ -316,14 +323,14 @@ export function App() {
   const select = useCallback((i: number) => setSim((s) => (s.sel === i ? s : { ...s, sel: i })), []);
   const addLayer = () =>
     setSim((s) => {
-      if (s.layers.length >= MAX_LAYERS) return s;
+      if (physicalLayerCount(s.layers) >= MAX_LAYERS) return s;
       const layers = [...s.layers];
       layers.splice(s.sel + 1, 0, mkLayer("plasterboard", 1.3));
       return { ...s, layers, sel: s.sel + 1 };
     });
   const dupLayer = (i: number) =>
     setSim((s) => {
-      if (s.layers.length >= MAX_LAYERS) return s;
+      if (physicalLayerCount(s.layers) + (s.layers[i].embeddedInsert?.enabled ? 3 : 1) > MAX_LAYERS || isLiveMatching(s.layers[i])) return s;
       const layers = [...s.layers];
       layers.splice(i + 1, 0, { ...s.layers[i], id: newId() });
       return { ...s, layers, sel: i + 1 };
@@ -343,8 +350,9 @@ export function App() {
       return { ...s, layers, sel: s.sel === i ? j : s.sel === j ? i : s.sel };
     });
   // canvas drag (src/scene/dragStack.ts): same state, same results / share / storage path as the panel
-  const dragMove = useCallback((from: number, to: number) => setSim((s) => applyMove(s, from, to)), []);
-  const dragResize = useCallback((i: number, cm: number) => setSim((s) => applyResize(s, i, cm)), []);
+  const dragMove = useCallback((from: number, to: number) => setSim((s) => movePhysical(s, from, to)), []);
+  const dragResize = useCallback((i: number, cm: number) => setSim((s) => resizePhysical(s, i, cm)), []);
+  const selectDrawing = useCallback((i: number) => setSim((s) => selectPhysical(s, i)), []);
   const applyTemplate = (id: TemplateId) => {
     setSim((s) => ({ ...s, layers: TEMPLATES[id](), sel: 0 }));
     setFlash((f) => f + 1);
@@ -385,7 +393,7 @@ export function App() {
         },
         defaultPersisted(),
       );
-      setSim(next.sim);
+      setSim(next.sim, true);
       setLang(next.lang);
       setTheme(next.theme);
     };
@@ -464,6 +472,7 @@ export function App() {
         else setPresentFull(false);
         return;
       }
+      if (showHelp || showAbout) return;
       const tag = (e.target as HTMLElement | null)?.tagName ?? "";
       const stackCmd = stackKeyCommand(e, tag, (e.target as HTMLInputElement | null)?.type);
       if (stackCmd) {
@@ -471,7 +480,7 @@ export function App() {
         setSim((s) => applyStackCommand(s, stackCmd));
         return;
       }
-      if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (["INPUT", "TEXTAREA", "SELECT", "BUTTON", "SUMMARY"].includes(tag) || (e.target instanceof Element && e.target.closest(".om-eq")) || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.code === "Space") {
         e.preventDefault();
         setPlaying((p) => !p);
@@ -502,18 +511,28 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [showHelp, showAbout, setPresentFull]);
 
-  const res = useMemo(() => computeResults(sim), [sim]);
+  const helpDialog = useRef<HTMLDivElement>(null);
+  const aboutDialog = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const dialog = showAbout ? aboutDialog.current : showHelp ? helpDialog.current : null;
+    if (dialog) return containModal(dialog);
+  }, [showAbout, showHelp]);
+
+  const res = useMemo(() => computeResults(sim, mainInclusions), [sim, mainInclusions]);
   // profiled main wall (lab profile on the first layer) when the profile is drawn and the view asks for it
-  const profiled = useProfiledMain(sceneSurface, sim.layers, sim.freq, sim.angle, sim.pol, rtView);
+  const profiled = useProfiledMain(sceneSurface, sim.layers, sim.freq, sim.angle, sim.pol, rtView, mainInclusions);
   const shown = profiled
     ? { R: profiled.R, T: profiled.T, A: Math.max(0, profiled.A) }
     : { R: res.R, T: res.T, A: res.A };
   const shownRdB = 10 * Math.log10(Math.max(shown.R, 1e-30));
   const shownTdB = 10 * Math.log10(Math.max(shown.T, 1e-30));
   const sceneSurfaceShown: SceneSurface | null = sceneSurface
-    ? profiled?.orders
-      ? { ...sceneSurface, orders: profiled.orders, efficiencies: true, rt: { source: "rcwa", busy: false } }
-      : { ...sceneSurface, rt: { source: profiled ? profiled.source : "flat", busy: profiled?.busy ?? false } }
+    ? {
+        ...sceneSurface,
+        // orders are opt-in; with an RCWA result they carry the main wall's efficiencies
+        orders: sceneSurface.orders && (profiled?.orders ?? sceneSurface.orders),
+        rt: { source: profiled ? profiled.source : "flat", busy: profiled?.busy ?? false },
+      }
     : null;
   // keyed on values: res arrays are rebuilt on every state change, so angle,
   // polarization and selection changes reuse the previous 181-point sweep
@@ -530,20 +549,11 @@ export function App() {
     etas: res.etas,
     ds: res.ds,
     theta: sim.angle,
-    // beams carry the specular order; diffracted orders are drawn separately
-    R: profiled ? profiled.R0 : res.R,
-    T: profiled ? profiled.T0 : res.T,
-    layers: sim.layers.map((l, i) => ({
-      mat: l.mat,
-      cm: l.thickness,
-      thetaT: res.layers[i].thetaT,
-      nRe: res.layers[i].nRe,
-      absorbed: res.layers[i].absorbed,
-      fluxIn: res.layers[i].fluxIn,
-      fluxOut: i + 1 < sim.layers.length ? res.layers[i + 1].fluxIn : profiled ? profiled.T0 : res.T,
-      name: matName(l.mat),
-    })),
-    sel: sim.sel,
+    // one reflected and one transmitted beam, carrying the resultant R and T
+    // (all orders, every internal reflection and absorption already in the math)
+    R: shown.R,
+    T: shown.T,
+    ...physicalScene(res, sim.sel, matName, t.insertMaterial, t.arMaterial, shown.T),
     hover: -1,
     freq: sim.freq,
     pol: sim.pol,
@@ -551,12 +561,16 @@ export function App() {
   };
 
   const bands = useMemo(
-    () => sim.layers.map((l) => ({ tint: matTint(l.mat), label: matName(l.mat).toUpperCase(), air: l.mat === "air" })),
+    () => res.physicalLayers.map((l) => ({ tint: l.part === "insert" ? pal.tra : matTint(l.mat), label: (l.part === "insert" ? t.insertMaterial : matName(l.mat)).toUpperCase(), air: l.mat === "air" })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sim.layers, lang],
+    [res.physicalLayers, lang, pal],
   );
 
   const applyPreset = (key: string) => {
+    if (key === "antireflection") {
+      setRtView("flat");
+      setSceneView("main");
+    }
     setSim(presetState(key, sim));
     setFlash((f) => f + 1);
   };
@@ -564,7 +578,7 @@ export function App() {
   const freqHint = (
     <>
       <span className="om-chip-mini">{bandName(sim.freq)}</span>
-      λ₀ = {fmt.len(res.lambda0)}
+       <MathText formula={`\\lambda_0 = ${fmt.len(res.lambda0)}`} label={`Wavelength lambda naught equals ${fmt.len(res.lambda0)}`} />
     </>
   );
 
@@ -578,18 +592,33 @@ export function App() {
         : t.customRange;
   const formula =
     selL.mat === "air"
-      ? "ε′ = 1 · σ = 0"
+      ? String.raw`\varepsilon' = 1,\quad \sigma = 0`
       : selDef
-        ? `ε′ = ${fmt.sig(selDef.a, 4)} · σ = ${fmt.sig(selDef.c, 4)}·f^${fmt.sig(selDef.d, 4)} S/m`
-        : `ε′ = ${fmt.sig(selL.eps, 4)} · σ = ${fmt.sig(selL.sigma, 3)} S/m`;
+        ? String.raw`\varepsilon' = ${fmt.sig(selDef.a, 4)},\quad \sigma = ${fmt.sig(selDef.c, 4)} f^{${fmt.sig(selDef.d, 4)}}\,\mathrm{S/m}`
+        : String.raw`\varepsilon' = ${fmt.sig(selL.eps, 4)},\quad \sigma = ${fmt.sig(selL.sigma, 3)}\,\mathrm{S/m}`;
 
   const polLabel = sim.pol === "AVG" ? t.avg : sim.pol;
 
   // which model gives the R / T on screen, and the switch between flat and profiled
   const fr = lang === "fr";
+  const mixText = LAB_TEXT[lang];
+  const inclusionLabel = mainInclusions && mainInclusions.fraction > 0
+    ? `${mixText.inclusions} · ${mainInclusions.kind === "water" ? mixText.water : mixText.air} ${fmt.num(mainInclusions.fraction * 100, 0)} %`
+    : null;
+  const inclusionWarning = res.mixValidity !== "ok" ? `${mixText.mixValidity} · ${mixText.valid[res.mixValidity]}` : null;
+  const viewTools = (
+    <div className="om-view-modes" role="group" aria-label={fr ? "Scène affichée" : "Displayed scene"}>
+      <button type="button" aria-pressed={sceneView === "main"} className={sceneView === "main" ? "is-on" : ""} onClick={() => setSceneView("main")}>
+        Simulation
+      </button>
+      <button type="button" aria-pressed={sceneView === "lab"} className={sceneView === "lab" ? "is-on" : ""} onClick={() => setSceneView("lab")}>
+        {fr ? "Labo de surface" : "Surface Lab"}
+      </button>
+    </div>
+  );
   const emtWarn = profiled !== null && profiled.source === "emt" && profiled.validity === "invalid";
   const rtChip = profiled
-    ? `R/T · ${fr ? "profilé" : "profiled"} · ${profiled.source === "rcwa" ? "RCWA" : profiled.busy ? "EMT…" : "EMT"}${emtWarn ? " ⚠" : ""}`
+    ? `R/T · ${fr ? "profilé" : "profiled"} · ${profiled.source === "rcwa" ? "RCWA" : profiled.busy ? "EMT…" : "EMT"}${emtWarn ? (fr ? " · hors validité" : " · outside validity") : ""}`
     : `R/T · ${fr ? "mur plan" : "flat wall"}`;
   const rtTitle = emtWarn
     ? fr
@@ -608,14 +637,27 @@ export function App() {
       </button>
     </div>
   ) : null;
-  const full = sim.layers.length >= MAX_LAYERS;
+  const physicalCount = physicalLayerCount(sim.layers);
+  const full = physicalCount >= MAX_LAYERS;
+  const applyMatching = (action: (s: SimState) => { sim: SimState; reason: MatchingReason | null }) => {
+    const next = action(sim);
+    setSimulation(next);
+    if (next.sim !== sim) setRtView("flat");
+  };
+  const liveCoating = isLiveMatching(selL);
+  const matchRef = selL.matching || liveCoating ? matchingReference(sim.layers, sim.sel, sim.freq) : null;
+  const insert = selL.embeddedInsert ?? { enabled: false, eps: 2.25, thickness: Math.min(0.1, selL.thickness / 10) };
+  const insertAllowed = canEmbed(selL);
+  const insertFull = !insert.enabled && physicalCount + 2 > MAX_LAYERS;
+  const insertQuarter = embeddedQuarterWave(Math.sqrt(insert.eps), sim.freq, selL.thickness);
+  const patchInsert = (patch: Partial<typeof insert>) => patchLayer({ embeddedInsert: { ...insert, ...patch } });
 
   const setMaterial = (m: LayerMat) => {
     if (m === selL.mat) return;
     if (m === "custom") {
       const cur = layerEpsSigma(selL, sim.freq);
-      patchLayer({ mat: m, eps: clamp(Number(cur.epsR.toFixed(2)), 1, 30), sigma: clamp(Number(cur.sigma.toPrecision(3)), 0.0001, 10) });
-    } else patchLayer({ mat: m });
+      patchLayer({ mat: m, matching: undefined, eps: clamp(Number(cur.epsR.toFixed(2)), 1, 30), sigma: clamp(Number(cur.sigma.toPrecision(3)), 0.0001, 10) });
+    } else patchLayer({ mat: m, matching: undefined });
   };
 
   return (
@@ -635,6 +677,7 @@ export function App() {
           </div>
         </div>
         <div className="om-top-actions">
+          <ResponsiveDisclosure className="om-header-menu" label="Actions">
           <Segmented<Lang>
             size="sm"
             ariaLabel={t.language}
@@ -646,7 +689,7 @@ export function App() {
             ]}
           />
           <a
-            className="om-icon-btn om-icon-link"
+            className="om-icon-btn om-icon-link om-header-repo"
             href={REPO_URL}
             target="_blank"
             rel="noopener noreferrer"
@@ -655,6 +698,15 @@ export function App() {
           >
             {Icon.github}
           </a>
+          <button
+            type="button"
+            className="om-icon-btn om-header-help"
+            aria-label={t.helpTitle}
+            title={t.helpTitle}
+            onClick={() => setShowHelp(true)}
+          >
+            ?
+          </button>
           <button
             type="button"
             className="om-icon-btn"
@@ -682,22 +734,26 @@ export function App() {
             onClick={share}
             title={t.shareTitle}
           >
-            {copied ? t.copied : t.share}
+            {copied && Icon.check}{copied ? t.copied : t.share}
           </button>
+          </ResponsiveDisclosure>
           <button
             type="button"
-            className={`om-presentbtn ${present ? "is-on" : ""}`}
+            className={`om-presentbtn om-present-action ${present ? "is-on" : ""}`}
             onClick={() => setPresentFull(!presentRef.current)}
             aria-pressed={present}
+            aria-label={present ? t.exitPresent : t.present}
             title={present ? t.exitPresent : t.present}
           >
-            {present ? t.exitPresent : t.present}
+            <svg className="om-present-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8"><path d={present ? "M9 3v6H3m12-6v6h6M3 15h6v6m6 0v-6h6" : "M9 3H3v6m12-6h6v6M3 15v6h6m6 0h6v-6"} /></svg>
+            <span>{present ? t.exitPresent : t.present}</span>
           </button>
           <button
             type="button"
             className={`om-play ${playing ? "is-playing" : ""}`}
             onClick={() => setPlaying((p) => !p)}
             aria-pressed={playing}
+            aria-label={playing ? t.pause : t.play}
           >
             <span className={`om-swap ${playing ? "is-b" : "is-a"}`}>
               <span>{Icon.play}</span>
@@ -711,7 +767,9 @@ export function App() {
       <main className="om-layout" ref={frameHeightRef}>
         {/* ───────── Scene ───────── */}
         <section className="om-card om-scene om-enter" style={{ "--d": "60ms" } as CSSProperties}>
-          <RayScene params={withSurface(sceneParams, sceneSurfaceShown)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={select} onMove={dragMove} onResize={dragResize} tools={rtTools} />
+          <RayScene active={sceneView === "main"} viewTools={viewTools} params={withSurface(sceneParams, sceneSurfaceShown)} pal={pal} playing={playing} lang={lang} fmtNum={fmt.num} onSelect={selectDrawing} onMove={dragMove} onResize={dragResize} onAngle={angle => update("angle", angle)} tools={rtTools} />
+          <div ref={detailHostRef} className="om-lab-host" hidden={sceneView !== "lab"} />
+          {sceneView === "main" && <>
           <div className="om-hud om-hud-tl">
             <span className="om-hud-chip">
               <span className="om-stackdots">
@@ -719,9 +777,10 @@ export function App() {
                   <i key={l.id} style={{ background: matSwatch(l.mat) }} />
                 ))}
               </span>
-              {tpl(sim.layers.length > 1 ? t.layersN : t.layer1, { n: String(sim.layers.length) })}
+              {tpl(physicalCount > 1 ? t.layersN : t.layer1, { n: String(physicalCount) })}
             </span>
-            {sceneSurface && <span className="om-hud-chip om-mono" title={rtTitle}>{rtChip}</span>}
+            {sceneSurface && <span className="om-hud-chip om-mono" title={rtTitle}>{emtWarn && Icon.warn}{rtChip}</span>}
+            {inclusionLabel && <span className="om-hud-chip om-mono" title={inclusionWarning ?? mixText.mixNote}>{Icon.medium}{inclusionLabel}{inclusionWarning ? ` · ${inclusionWarning}` : ""}</span>}
             <span className="om-hud-chip om-mono">{fmt.num(sim.freq, sim.freq < 10 ? 2 : 1)} GHz</span>
             <span className="om-hud-chip om-mono">{polLabel}</span>
           </div>
@@ -741,7 +800,8 @@ export function App() {
             <span className="om-leg"><i style={{ background: "var(--om-tra)" }} />{t.transmitted}</span>
             {shown.A > 0.005 && <span className="om-leg"><i style={{ background: "var(--om-abs)" }} />{t.absorbed}</span>}
           </div>
-          <div className="om-hud om-hud-br"><span className="om-hint">{t.clickLayer}</span></div>
+          <div className="om-hud om-hud-br"><span className="om-hint">{physicalCount > sim.layers.length ? t.insertCanvasHint : t.clickLayer}</span></div>
+          </>}
           {!playing && <div className="om-paused-badge">{t.pause}</div>}
         </section>
 
@@ -750,7 +810,7 @@ export function App() {
             <span className="om-presentbar-label om-mono">{fmt.num(sim.freq, 2)} GHz</span>
             <input
               type="range" className="om-range om-presentbar-range" min={0.5} max={40} step={0.1}
-              value={sim.freq} aria-label={t.frequency}
+              value={sim.freq} aria-label={t.frequency} aria-valuetext={`${fmt.num(sim.freq, 2)} GHz`}
               style={{ "--pf": Math.min(1, Math.max(0, (sim.freq - 0.5) / 39.5)) } as CSSProperties}
               onChange={(e) => update("freq", Number(e.target.value))} />
           </div>
@@ -758,7 +818,7 @@ export function App() {
             <span className="om-presentbar-label om-mono">θ {fmt.num(sim.angle, 1)}°</span>
             <input
               type="range" className="om-range om-presentbar-range" min={0} max={89} step={0.5}
-              value={sim.angle} aria-label={t.angle}
+              value={sim.angle} aria-label={t.angle} aria-valuetext={`${fmt.num(sim.angle, 1)}°`}
               style={{ "--pf": sim.angle / 89 } as CSSProperties}
               onChange={(e) => update("angle", Number(e.target.value))} />
           </div>
@@ -803,7 +863,7 @@ export function App() {
                     { v: 30, label: "30" },
                     { v: 60, label: "60" },
                     { v: 89, label: "89" },
-                    ...(Number.isFinite(selR.brewster) ? [{ v: Math.round(selR.brewster * 2) / 2, label: "θB", tone: "acc" as const }] : []),
+                    ...(Number.isFinite(selR.brewster) ? [{ v: Math.round(selR.brewster * 2) / 2, label: "θB", tone: "acc" as const, row: 2 as const }] : []),
                   ]} />
                 {Number.isFinite(selR.brewster) && (
                   <div className="om-presets" style={{ marginTop: 8 }}>
@@ -859,7 +919,7 @@ export function App() {
               <div className="om-group">
                 <div className="om-label om-label-row om-label-split">
                   <span>{t.stack}</span>
-                  <span className="om-mono om-faint">{fmt.num(res.totalCm, res.totalCm < 10 ? 2 : 1)} cm · {sim.layers.length}/{MAX_LAYERS}</span>
+                  <span className="om-mono om-faint">{fmt.num(res.totalCm, res.totalCm < 10 ? 2 : 1)} cm · {physicalCount}/{MAX_LAYERS}</span>
                 </div>
                 <div className="om-strip" aria-hidden>
                   <span className="om-strip-air">{t.airShort}</span>
@@ -883,7 +943,7 @@ export function App() {
                           <span className="om-layer-idx">{i + 1}</span>
                           <span className="om-layer-sw" style={{ background: matSwatch(l.mat) }} />
                           <span className="om-layer-txt">
-                            <b>{matName(l.mat)}</b>
+                            <b>{l.matching ? t.arMaterial : matName(l.mat)}{l.embeddedInsert?.enabled ? ` · ${t.insertMaterial}` : ""}</b>
                             <small className="om-mono">
                               {fmt.num(l.thickness, l.thickness < 1 ? 2 : 1)} cm · ε′ {fmt.num(r.epsR, 2)} · A {fmt.pct(r.absorbed)}%
                             </small>
@@ -892,7 +952,7 @@ export function App() {
                         <span className="om-layer-actions">
                           <button type="button" aria-label={t.moveUp} title={t.moveUp} disabled={i === 0} onClick={() => moveLayer(i, -1)}>{Icon.up}</button>
                           <button type="button" aria-label={t.moveDown} title={t.moveDown} disabled={i === sim.layers.length - 1} onClick={() => moveLayer(i, 1)}>{Icon.down}</button>
-                          <button type="button" aria-label={t.duplicate} title={t.duplicate} disabled={full} onClick={() => dupLayer(i)}>{Icon.copy}</button>
+                          <button type="button" aria-label={t.duplicate} title={t.duplicate} disabled={physicalCount + (l.embeddedInsert?.enabled ? 3 : 1) > MAX_LAYERS || isLiveMatching(l)} onClick={() => dupLayer(i)}>{Icon.copy}</button>
                           <button type="button" aria-label={t.remove} title={t.remove} disabled={sim.layers.length <= 1} onClick={() => removeLayer(i)} className="is-danger">{Icon.trash}</button>
                         </span>
                       </li>
@@ -910,6 +970,21 @@ export function App() {
                     </button>
                   ))}
                 </div>
+                <div className="om-coating-tools">
+                  <div className="om-coating-row">
+                    <span className="om-label">{t.arAdaptation}</span>
+                    <select aria-label={t.arPosition} value={Math.min(coatingSlot, sim.layers.length)} onChange={(e) => setCoatingSlot(Number(e.target.value))}>
+                      {Array.from({ length: sim.layers.length + 1 }, (_, slot) => <option key={slot} value={slot}>
+                        {slot === 0 ? (fr ? "Entrée · avant 1" : "Front · before 1") : slot === sim.layers.length ? (fr ? `Sortie · après ${slot}` : `Back · after ${slot}`) : (fr ? `Entre ${slot} et ${slot + 1}` : `Between ${slot} and ${slot + 1}`)}
+                      </option>)}
+                    </select>
+                    <button type="button" className="om-preset" disabled={full} onClick={() => applyMatching((s) => addMatching(s, Math.min(coatingSlot, s.layers.length)))}>{t.arAdd}</button>
+                  </div>
+                  <button type="button" className="om-preset om-match-wall" onClick={() => applyMatching(matchWall)}>{t.arMatchWall}</button>
+                  <details><summary>{t.arDetails}</summary><p>{t.arInsertHint}</p></details>
+                  {sceneSurface?.profile && sceneSurface.profile.id !== "flat" && sim.layers[0].matching && <details><summary>{t.arProfileTitle}</summary><p>{t.arProfile}</p></details>}
+                  <span className="om-coating-status" role="status">{coatingStatus ? t[coatingStatus] : null}</span>
+                </div>
               </div>
 
               <div className="om-group om-editor" key={selL.id} style={{ "--tint": matTint(selL.mat) } as CSSProperties}>
@@ -918,8 +993,24 @@ export function App() {
                     <span className="om-layer-idx is-sm">{sim.sel + 1}</span>
                     {t.editing}
                   </span>
-                  <span className="om-mono om-faint">{matName(selL.mat)}</span>
+                  <span className="om-mono om-faint">{selL.matching ? t.arMaterial : matName(selL.mat)}</span>
                 </div>
+                {liveCoating && matchRef ? <div className="om-coating-tools">
+                  <div className="om-hint">{t.arAuto}</div>
+                   <div className="om-mono"><MathText formula={String.raw`\varepsilon_r = ${fmt.sig(selL.eps, 6)},\quad \sigma = 0\,\mathrm{S/m}`} /></div>
+                   <div className="om-mono"><MathText formula={String.raw`d = ${fmt.sig(selL.thickness, 6)}\,\mathrm{cm}`} /></div>
+                  <details><summary>{t.arDetails}</summary>
+                     <p className="om-mono">{"nₘ = "}<span className="om-legacy-math">{fmt.sig(Math.sqrt(matchRef.n1 * matchRef.n2), 6)} · d = {matchRef.design ? `${fmt.sig(matchRef.design.cm, 6)} cm` : "—"}</span><MathText formula={String.raw`n_m = ${fmt.sig(Math.sqrt(matchRef.n1 * matchRef.n2), 6)},\quad d = ${matchRef.design ? `${fmt.sig(matchRef.design.cm, 6)}\,\mathrm{cm}` : "—"}`} /></p>
+                    <p>{t.arInsertHint}</p>
+                  </details>
+                </div> : <>
+                {selL.matching && matchRef && <div className="om-coating-tools">
+                  <button type="button" className="om-preset" onClick={() => applyMatching((s) => recalculateMatching(s, s.sel))}>{t.arRecalculate}</button>
+                  <details><summary>{t.arDetails}</summary>
+                     <p className="om-mono">{"nₘ = "}<span className="om-legacy-math">{fmt.sig(Math.sqrt(matchRef.n1 * matchRef.n2), 6)} · d = {matchRef.design ? `${fmt.sig(matchRef.design.cm, 6)} cm` : "—"} · {fmt.sig(sim.freq, 4)} GHz</span><MathText formula={String.raw`n_m = ${fmt.sig(Math.sqrt(matchRef.n1 * matchRef.n2), 6)},\quad d = ${matchRef.design ? `${fmt.sig(matchRef.design.cm, 6)}\,\mathrm{cm}` : "—"},\quad f = ${fmt.sig(sim.freq, 4)}\,\mathrm{GHz}`} /></p>
+                    <p>{t.arInsertHint}</p>
+                  </details>
+                </div>}
                 <div className="om-materials" role="radiogroup" aria-label={t.material}>
                   {LAYER_MATS.map((id) => {
                     const eps = id === "air" ? 1 : materialProps(id, sim.freq, selL.eps, selL.sigma).epsR;
@@ -933,9 +1024,9 @@ export function App() {
                         className={`om-mat ${on ? "is-on" : ""} ${id === "custom" ? "is-wide" : ""}`}
                         onClick={() => setMaterial(id)}
                       >
-                        <span className="om-mat-swatch" style={{ background: matSwatch(id) }} />
+                          <span className="om-mat-swatch" style={{ background: matSwatch(id) }} />
                         <span className="om-mat-name">{matName(id)}</span>
-                        <span className="om-mat-eps">ε′ {fmt.num(eps, 2)}</span>
+                     <span className="om-mat-eps"><MathText formula={String.raw`\varepsilon' = ${fmt.num(eps, 2)}`} /></span>
                       </button>
                     );
                   })}
@@ -973,13 +1064,14 @@ export function App() {
                               { v: 0.1, label: fmt.sig(0.1) },
                               { v: 1, label: "1" },
                             ]} />
-                          <div className="om-hint"><span className="om-mono">ε′ {fmt.num(selL.eps, 2)} · σ {fmt.sig(selL.sigma, 3)} S/m</span></div>
+                           <div className="om-hint"><span className="om-mono"><MathText formula={String.raw`\varepsilon' = ${fmt.num(selL.eps, 2)},\quad \sigma = ${fmt.sig(selL.sigma, 3)}\,\mathrm{S/m}`} /></span></div>
                         </>
                       ) : (
                         <>
                           <Slider label={t.epsCustom} value={selL.eps} min={1} max={30} step={0.01} unit="" digits={2}
                             accent="var(--om-acc)" onChange={(v) => patchLayer({ eps: v })} fmtNum={fmt.num} />
-                          <Slider label={t.sigmaCustom} value={selL.sigma} min={0.0001} max={10} step={0.0001} log unit="S/m" digits={4}
+                           {selL.sigma === 0 && <div className="om-hint">{t.arLossless}</div>}
+                           <Slider label={t.sigmaCustom} value={selL.sigma} min={0.0001} max={10} step={0.0001} log unit="S/m" digits={4}
                             accent="var(--om-acc)" onChange={(v) => patchLayer({ sigma: v })} fmtNum={fmt.num}
                             ticks={[
                               { v: 0.001, label: "10⁻³" },
@@ -987,7 +1079,7 @@ export function App() {
                               { v: 0.1, label: fmt.sig(0.1) },
                               { v: 1, label: "1" },
                             ]} />
-                          <div className="om-hint"><span className="om-mono">n {fmt.num(nkOf(selL.eps, selL.sigma, sim.freq).n, 3)} · κ {fmt.sig(nkOf(selL.eps, selL.sigma, sim.freq).k, 3)}</span></div>
+                           <div className="om-hint"><span className="om-mono"><MathText formula={String.raw`n = ${fmt.num(nkOf(selL.eps, selL.sigma, sim.freq).n, 3)},\quad \kappa = ${fmt.sig(nkOf(selL.eps, selL.sigma, sim.freq).k, 3)}`} /></span></div>
                         </>
                       )}
                     </div>
@@ -999,9 +1091,30 @@ export function App() {
                 <div className={`om-note ${selR.inRange ? "" : "is-warn"}`}>
                   <span className="om-note-icon">{selR.inRange ? Icon.info : Icon.warn}</span>
                   <span>
-                    <span className="om-mono om-formula">{formula}</span>
+                     <span className="om-mono om-formula"><MathText formula={formula} /></span>
                     <span className="om-note-text">{rangeNote}</span>
                   </span>
+                </div>
+                </>}
+                <div className="om-insert-tools">
+                  <Check checked={insert.enabled} disabled={!insertAllowed || insertFull} label={t.insertTitle} onChange={(enabled) => patchInsert({ enabled })} />
+                  {!insert.enabled && insertAllowed && <>
+                    <button type="button" className="om-preset" disabled={insertFull || insertQuarter === null}
+                      onClick={() => setSimulation((previous) => insertInternalQuarterWave(previous.sim))}>{t.insertQuarterCreate}</button>
+                    {!insertFull && insertQuarter === null && <div className="om-hint">{t.insertQuarterFit}</div>}
+                  </>}
+                  {!insert.enabled && insertAllowed && selL.embeddedInsert && <div className="om-hint">{t.insertReady}</div>}
+                  {!insertAllowed ? <div className="om-hint">{t.insertHost}</div> : insertFull ? <div className="om-hint">{t.insertCapacity}</div> : null}
+                  {(insert.enabled || (selL.embeddedInsert && insert.thickness >= selL.thickness)) && insertAllowed && <>
+                    <Slider label={t.insertIndex} value={Math.sqrt(insert.eps)} min={1} max={8} step={0.01} digits={3} fmtNum={fmt.num} onChange={(n) => patchInsert({ eps: n * n })} />
+                    <Slider label={t.insertThickness} value={insert.thickness} min={0.001} max={selL.thickness - 0.001} step={0.001} log unit="cm" digits={4} fmtNum={fmt.num} onChange={(thickness) => patchInsert({ thickness })} />
+                    <div className="om-insert-reference">
+                      <button type="button" className="om-preset" disabled={insertQuarter === null} onClick={() => { if (insertQuarter !== null) patchInsert({ thickness: insertQuarter }); }}>{t.insertQuarterAction} · {fmt.sig(sim.freq, 4)} GHz</button>
+                      {insertQuarter === null && <span className="om-hint">{t.insertQuarterFit}</span>}
+                    </div>
+                    <details className="om-insert-details"><summary>{t.arDetails}</summary><p>{t.insertHint}</p><p>{t.insertQuarterHint}</p></details>
+                  </>}
+                  <span className="om-coating-status" role="status">{simulation.reason && (simulation.reason.startsWith("insert") || simulation.reason === "arFull") ? t[simulation.reason] : null}</span>
                 </div>
                 </div>
               </div>
@@ -1011,6 +1124,9 @@ export function App() {
             onClick={() => {
               try {
                 window.localStorage.removeItem(STORAGE_KEY);
+                window.localStorage.removeItem("waves:lab:v1");
+                window.localStorage.removeItem("waves:rt-view");
+                window.history.replaceState(null, "", window.location.pathname + window.location.search);
               } catch {
                 /* ignore */
               }
@@ -1022,7 +1138,8 @@ export function App() {
         </aside>
 
         {/* ───────── Results ───────── */}
-        <section className="om-results" key={`flash-${flash}`}>
+        <section className="om-results" key={`flash-${flash}`} aria-label={sceneView === "lab" ? (fr ? "Résultats du laboratoire de surface" : "Surface lab results") : (fr ? "Résultats de simulation" : "Simulation results")}>
+          {sceneView === "lab" ? <div className="om-lab-results-host" ref={labResultsRef} /> : <>
           <div className="om-card om-hero om-enter" style={{ "--d": "180ms", "--tone": "var(--om-ref)" } as CSSProperties}>
             <Ring value={shown.R} color="var(--om-ref)" />
             <div>
@@ -1069,6 +1186,7 @@ export function App() {
               <div><i style={{ background: "var(--om-abs)" }} />{t.absorbed}<b>{fmt.pct(shown.A)} %</b></div>
               <div><i style={{ background: "var(--om-tra)" }} />{t.transmitted}<b>{fmt.pct(shown.T)} %</b></div>
             </div>
+            {inclusionLabel && <p className={`om-inclusion-note${inclusionWarning ? " is-warn" : ""}`} role="status">{Icon.medium}{inclusionLabel}{inclusionWarning ? ` · ${inclusionWarning}` : ""}</p>}
             {sim.layers.length > 1 && !profiled && (
               <div className="om-budget-layers">
                 {res.layers.map((r, i) => (
@@ -1108,6 +1226,7 @@ export function App() {
             <Stat delay={530} label={t.index} value={fmt.num(selR.nRe, 3)} tone="var(--om-inc)"
               sub={tpl(t.indexSub, { a: fmt.len(selR.lambda), b: fmt.len(res.lambda0) })} />
           </div>
+          </>}
         </section>
 
         {/* ───────── Charts ───────── */}
@@ -1118,7 +1237,7 @@ export function App() {
                 <h2>{t.chartAngle}</h2>
                 <p>{t.chartAngleHint}{profiled ? (lang === "fr" ? " · mur plan" : " · flat wall") : ""}</p>
               </div>
-              <div className="om-chart-legend">
+              <div className="om-chart-tools">
                 <span className="om-leg"><i style={{ background: "var(--om-ref)" }} />R</span>
                 <span className="om-leg"><i style={{ background: "var(--om-tra)" }} />T</span>
                 <span className="om-leg om-leg-dash"><i />{sim.pol === "AVG" ? "TE / TM" : sim.pol === "TE" ? "TM" : "TE"}</span>
@@ -1146,7 +1265,7 @@ export function App() {
                 <h2>{t.chartField}</h2>
                 <p>{t.chartFieldHint} · {polLabel}{profiled ? (lang === "fr" ? " · mur plan" : " · flat wall") : ""}</p>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div className="om-chart-tools">
                 <Segmented<"lin" | "db">
                   size="sm"
                   ariaLabel="Scale"
@@ -1178,7 +1297,7 @@ export function App() {
             </div>
           </div>
         </section>
-        <SurfaceLab freq={sim.freq} angle={sim.angle} pol={sim.pol} lang={lang} pal={pal} playing={playing} fmtNum={fmt.num} onFreq={(f) => update("freq", f)} onAngle={(a) => update("angle", a)} onSceneSurface={setSceneSurface} />
+        <SurfaceLab detailTarget={sceneView === "lab" ? detailHost : null} resultsTarget={sceneView === "lab" ? labResultsHost : null} freq={sim.freq} angle={sim.angle} pol={sim.pol} lang={lang} pal={pal} playing={playing} fmtNum={fmt.num} onFreq={(f) => update("freq", f)} onAngle={(a) => update("angle", a)} onSceneSurface={setSceneSurface} onMainInclusions={setMainInclusions} />
       </main>
 
       <footer className="om-foot">
@@ -1190,6 +1309,8 @@ export function App() {
         <div className="om-help-backdrop" onClick={() => setShowHelp(false)}>
           <div
             className="om-help"
+            ref={helpDialog}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-label={t.helpTitle}
@@ -1197,7 +1318,7 @@ export function App() {
           >
             <div className="om-help-head">
               <h2>{t.helpTitle}</h2>
-              <button type="button" className="om-scene-toggle" onClick={() => setShowHelp(false)} autoFocus>
+              <button type="button" className="om-scene-toggle" onClick={() => setShowHelp(false)} data-modal-close>
                 {t.helpClose}
               </button>
             </div>
@@ -1232,17 +1353,17 @@ export function App() {
         <div className="om-help-backdrop om-about-backdrop" onClick={() => setShowAbout(false)}>
           <div
             className="om-about"
+            ref={aboutDialog}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
-            aria-label={t.aboutTitle}
+            aria-labelledby="om-about-title"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="om-about-head">
-              <span className="om-about-mark">
-                <Logo />
-              </span>
+              <Logo />
               <div className="om-about-id">
-                <h2>WaveS</h2>
+                <h2 id="om-about-title">{t.aboutTitle}</h2>
                 <p>{t.tagline}</p>
               </div>
               <button
@@ -1251,28 +1372,13 @@ export function App() {
                 aria-label={t.helpClose}
                 title={t.helpClose}
                 onClick={() => setShowAbout(false)}
-                autoFocus
+                data-modal-close
               >
                 ×
               </button>
             </div>
 
-            <section className="om-about-sec" aria-label={t.modelLabel}>
-              <div className="om-about-sec-head">
-                <span className="om-about-label">{t.modelLabel}</span>
-                <span className="om-model-ref">ITU-R P.2040 § 3</span>
-              </div>
-              <div className="om-eqs">
-                  <Eq tex={String.raw`\eta = \varepsilon' - j\,\frac{17.98\,\sigma}{f}`} />
-                  <Eq tex={String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`} />
-                  <Eq tex={String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`} />
-              </div>
-              <details className="om-model-more">
-                <summary>{lang === "fr" ? "Hypothèses du modèle" : "Model assumptions"}</summary>
-                <p>{t.modelNote}</p>
-              </details>
-            </section>
-
+            <div className="om-about-body">
             <section className="om-about-sec" aria-label={t.authorLabel}>
               <div className="om-about-credit">
                 <div>
@@ -1298,9 +1404,27 @@ export function App() {
               </div>
             </section>
 
+            <section className="om-about-sec" aria-labelledby="om-about-model">
+              <div className="om-about-sec-head">
+                <h3 className="om-about-label" id="om-about-model">{t.modelLimitations}</h3>
+                <span className="om-model-ref">ITU-R P.2040 § 3</span>
+              </div>
+              <p className="om-about-note">{t.modelNote}</p>
+              <details className="om-model-more">
+                <summary>{t.physicsEquations}</summary>
+                <div className="om-eqs">
+                  <Eq label={t.eqPermittivity} tex={String.raw`\varepsilon_r = \varepsilon' - j\,\frac{17.98\,\sigma}{f}`} />
+                  <Eq label={t.eqImpedance} tex={String.raw`\eta = \frac{\eta_0}{\sqrt{\varepsilon_r}}`} />
+                  <Eq label={t.eqSnell} tex={String.raw`n_1 \sin\theta_1 = n_2 \sin\theta_2`} />
+                  <Eq label={t.eqFresnel} tex={String.raw`r = \frac{\eta_2 \cos\theta_1 - \eta_1 \cos\theta_2}{\eta_2 \cos\theta_1 + \eta_1 \cos\theta_2}`} />
+                </div>
+              </details>
+            </section>
+
             <button type="button" className="om-about-build" onClick={onBuildTap} title={buildInfo}>
               {buildInfo}
             </button>
+            </div>
           </div>
         </div>
       )}

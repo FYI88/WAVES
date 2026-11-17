@@ -1,4 +1,4 @@
-import { TEMPLATES, mkLayer } from "./layers";
+import { TEMPLATES, mkLayer, quarterWaveMatch } from "./layers";
 import { computeResults, type SimState } from "./results";
 
 export const DEFAULT_STATE: SimState = {
@@ -12,6 +12,11 @@ export const DEFAULT_STATE: SimState = {
 /** Scenario presets (keys match the `presetNames` i18n entries). */
 export function presetState(key: string, sim: SimState): SimState {
   switch (key) {
+    case "antireflection": {
+      const match = quarterWaveMatch(1, 3, 10)!;
+      const coat = () => ({ ...mkLayer("custom", match.cm, match.eps, 0), matching: true });
+      return { ...sim, layers: [coat(), mkLayer("custom", 0.75, 9, 0), coat()], sel: 0, freq: 10, angle: 0, pol: "AVG" };
+    }
     case "wifi24":
       return { ...sim, layers: TEMPLATES.cavity(), sel: 0, freq: 2.4, angle: 0, pol: "AVG" };
     case "wifi5":

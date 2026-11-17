@@ -1,14 +1,15 @@
 import type { ProfileParams } from "./profiles";
 
-/* What the Surface lab hands to the main cross-section: its profile and the
-   propagating orders. Directions come from the grating equation (Λ, f, θ),
-   so they hold for the main stack too; efficiencies describe the lab wall
-   and are only passed when the user asks for them. */
+/* What the Surface lab hands to the main cross-section: its profile, drawn on
+   the wall face, and its calculation settings, reused for the profiled main
+   wall. The main view keeps one reflected and one transmitted beam: the
+   resultant R and T, summed over all diffraction orders. */
 
+/** One diffraction order, drawn only when the user asks for the orders. */
 export interface SceneSurfaceOrder {
   m: number;
   angleDeg: number;
-  /** NaN unless `efficiencies` is true */
+  /** NaN when only the direction is known (grating equation) */
   R: number;
   T: number;
 }
@@ -31,9 +32,8 @@ export interface SceneRt {
 
 export interface SceneSurface {
   profile: ProfileParams;
-  orders: SceneSurfaceOrder[];
-  /** beam widths and labels from a rigorous result (lab wall, or main wall when rt.source is rcwa) */
-  efficiencies: boolean;
+  /** extra beams for the diffracted orders (m ≠ 0); absent by default: only the summed R and T are drawn */
+  orders?: SceneSurfaceOrder[];
   calc?: SurfaceCalc;
   /** set by the app: source of the R / T shown on the main view */
   rt?: SceneRt;

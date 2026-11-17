@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { MATERIALS, type PolMode } from "../physics";
 import { DEFAULT_PROFILE, PROFILE_IDS, profileRms, profileSlices, sampleProfile, type ProfileId, type ProfileParams } from "./profiles";
 import { METAL, SURFACE_MATERIAL_IDS, surfaceEta, surfaceTint, type SurfaceMaterialId } from "./materials";
@@ -24,11 +25,13 @@ import { LAB_MAX_BELOW, labFromHash, loadLab, saveLab, setLabSnapshot, type LabL
 import { downloadText } from "../dom";
 import type { SceneSurface } from "./sceneOverlay";
 import { LAB_SCENARIOS, type LabScenario } from "./scenarios";
-import { NO_INCLUSIONS, inclusionValidity, type InclusionKind, type Inclusions } from "../media/mixing";
+import { NO_INCLUSIONS, type InclusionKind, type Inclusions } from "../media/mixing";
 import { FOG_PRESETS, NO_FOG, fogDbPerKm, withFog, type Fog, type FogPreset } from "../media/fog";
 import { waterPermittivity } from "../media/water";
 import { LAB_TEXT, MATERIAL_NAMES, PROFILE_NAMES, fillTpl } from "./labText";
 import "./surfaceLab.css";
+import { LabResults } from "./LabResults";
+import { MathText } from "../ui/MathText";
 
 /* ════════════════════════════════════════════════════════════════════════
    Surface lab: profiled wall face + flat layers, bubbles, fog.
@@ -41,6 +44,10 @@ type Mode = LabMode;
 type BelowLayer = LabLayer;
 
 export interface SurfaceLabProps {
+  /** Optional second detail view; lab controls and solver stay mounted here. */
+  detailTarget?: HTMLElement | null;
+  /** Compact results portal; the bottom lab remains the only solver owner. */
+  resultsTarget?: HTMLElement | null;
   freq: number;
   angle: number;
   pol: PolMode;
@@ -52,6 +59,8 @@ export interface SurfaceLabProps {
   onAngle: (a: number) => void;
   /** profile and order directions for the main cross-section (null: nothing to draw) */
   onSceneSurface?: (surface: SceneSurface | null) => void;
+  /** Shared mixing settings only; App owns the main wall calculation. */
+  onMainInclusions?: (inclusions: Inclusions | null) => void;
 }
 
 const TABS: Tab[] = ["surface", "layers", "medium", "wave", "calc"];
@@ -117,11 +126,14 @@ function Range({ label, value, min, max, step = 0.01, unit = "", digits = 2, log
       </span>
       <input
         type="range"
+        className="om-range"
+        style={{ "--acc": "var(--sl-accent, var(--sl-acc))", "--pf": log ? pos / 1000 : (v - min) / (max - min) } as CSSProperties}
         min={log ? 0 : min}
         max={log ? 1000 : max}
         step={log ? 1 : step}
         value={pos}
         aria-label={label}
+        aria-valuetext={`${fmtNum(value, digits)}${unit ? ` ${unit}` : ""}`}
         onChange={(e) => {
           const p = Number(e.target.value);
           const raw = log ? min * Math.pow(max / min, p / 1000) : p;
@@ -169,8 +181,9 @@ function ProfileThumb({ profile, id }: { profile: ProfileParams; id: ProfileId }
 
 /* ───────── panel ───────── */
 
-export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFreq, onAngle, onSceneSurface }: SurfaceLabProps) {
+export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFreq, onAngle, onSceneSurface, onMainInclusions, detailTarget, resultsTarget }: SurfaceLabProps) {
   const t = LAB_TEXT[lang];
+  const tabId = useId();
   const matName = (id: SurfaceMaterialId) => MATERIAL_NAMES[id][lang];
   const pct = (v: number) => fmtNum(v * 100, v * 100 < 10 ? 2 : 1);
 
@@ -190,14 +203,16 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   const [slices, setSlices] = useState(init.slices);
   const [axis, setAxis] = useState<SweepAxis>(init.axis);
   const [showInMain, setShowInMain] = useState(init.showInMain);
-  const [mainEfficiencies, setMainEfficiencies] = useState(init.mainEfficiencies);
+  const [showOrders, setShowOrders] = useState(init.showOrders);
   const [scenario, setScenario] = useState<string | null>(null);
 
   const [point, setPoint] = useState<{ key: string; result: RcwaResult; ms: number } | null>(null);
   const [sweep, setSweep] = useState<{ key: string; axis: SweepAxis; sweep: RcwaSweep } | null>(null);
   const [pointBusy, setPointBusy] = useState(false);
   const [sweepBusy, setSweepBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ key: string; message: string } | null>(null);
+  const [sweepError, setSweepError] = useState<{ key: string; message: string } | null>(null);
+  const [applyInclusionsToMain, setApplyInclusionsToMain] = useState(init.applyInclusionsToMain);
 
   const patchProfile = (patch: Partial<ProfileParams>) => {
     setProfile((p) => ({ ...p, ...patch }));
@@ -213,7 +228,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   };
   const removeBelow = (i: number) => {
     setBelow((ls) => ls.filter((_, k) => k !== i));
-    setIncTarget((tg) => (tg === i ? -1 : tg > i ? tg - 1 : tg));
+    setIncTarget((tg) => (tg === "all" ? tg : tg === i ? -1 : tg > i ? tg - 1 : tg));
     setScenario(null);
   };
 
@@ -237,29 +252,36 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
     setBelow(s.below);
     setInclusions(s.inclusions);
     setIncTarget(s.incTarget);
+    setApplyInclusionsToMain(s.applyInclusionsToMain);
     setFog(s.fog);
     setMode(s.mode);
     setHarmonics(s.harmonics);
     setSlices(s.slices);
     setAxis(s.axis);
     setShowInMain(s.showInMain);
-    setMainEfficiencies(s.mainEfficiencies);
+    setShowOrders(s.showOrders);
     setScenario(null);
   };
 
   // saved locally and exposed to the share link (share codec v2)
   useEffect(() => {
-    const s: LabState = { profile, material, customEps, customSigma, below, inclusions, incTarget, fog, mode, harmonics, slices, axis, showInMain, mainEfficiencies };
+    const s: LabState = { profile, material, customEps, customSigma, below, inclusions, incTarget, applyInclusionsToMain, fog, mode, harmonics, slices, axis, showInMain, showOrders };
     setLabSnapshot(s);
     const timer = window.setTimeout(() => saveLab(s), 250);
     return () => window.clearTimeout(timer);
-  }, [profile, material, customEps, customSigma, below, inclusions, incTarget, fog, mode, harmonics, slices, axis, showInMain, mainEfficiencies]);
+  }, [profile, material, customEps, customSigma, below, inclusions, incTarget, applyInclusionsToMain, fog, mode, harmonics, slices, axis, showInMain, showOrders]);
+
+  useEffect(() => {
+    onMainInclusions?.(applyInclusionsToMain ? inclusions : null);
+  }, [onMainInclusions, applyInclusionsToMain, inclusions]);
+  useEffect(() => () => onMainInclusions?.(null), [onMainInclusions]);
 
   // a pasted share link replaces the lab setup, as it does for the main simulator
   useEffect(() => {
     const onHash = () => {
       const s = labFromHash(window.location.hash);
       if (s) applyLab(s);
+      else if (s === undefined) setApplyInclusionsToMain(false);
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -269,7 +291,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
 
   /* ───────── physics ───────── */
 
-  const target = incTarget < below.length ? incTarget : -1;
+  const target = incTarget === "all" ? "all" : incTarget < below.length ? incTarget : -1;
   const hasBubbles = inclusions.fraction > 0;
 
   const spec: WallSpec = useMemo(
@@ -316,7 +338,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   }, [axis, sweepHeld, spec, profile, pol, slices]);
 
   const pointKey = JSON.stringify([spec, freq, angle, pol, harmonics, slices]);
-  const sweepKey = JSON.stringify([axis, spec, sweepHeld, pol, slices]);
+  const sweepKey = JSON.stringify([axis, spec, sweepHeld, pol, slices, Math.min(harmonics, SWEEP_HARMONICS)]);
 
   useEffect(() => {
     if (mode !== "rigorous") {
@@ -325,6 +347,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
     }
     let alive = true;
     setPointBusy(true);
+    setError(null);
     const timer = window.setTimeout(() => {
       const t0 = performance.now();
       rcwaPoint({ kind: "point", wall: spec, pol, harmonics, slices, fGHz: freq, thetaDeg: angle })
@@ -334,7 +357,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
           setError(null);
         })
         .catch((e: unknown) => {
-          if (alive) setError(e instanceof Error ? e.message : String(e));
+          if (alive) setError({ key: pointKey, message: e instanceof Error ? e.message : String(e) });
         })
         .finally(() => {
           if (alive) setPointBusy(false);
@@ -355,6 +378,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
     }
     let alive = true;
     setSweepBusy(true);
+    setSweepError(null);
     const timer = window.setTimeout(() => {
       const sweepHarmonics = Math.min(harmonics, SWEEP_HARMONICS);
       const request =
@@ -363,10 +387,13 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
           : rcwaSweep({ kind: "freq", wall: spec, pol, harmonics: sweepHarmonics, slices, thetaDeg: sweepHeld, freqs: SWEEP_FREQS });
       request
         .then((result) => {
-          if (alive) setSweep({ key: sweepKey, axis, sweep: result });
+          if (alive) {
+            setSweep({ key: sweepKey, axis, sweep: result });
+            setSweepError(null);
+          }
         })
         .catch((e: unknown) => {
-          if (alive) setError(e instanceof Error ? e.message : String(e));
+          if (alive) setSweepError({ key: sweepKey, message: e instanceof Error ? e.message : String(e) });
         })
         .finally(() => {
           if (alive) setSweepBusy(false);
@@ -381,6 +408,10 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
 
   const rigorous = mode === "rigorous" ? point?.result ?? null : null;
   const stale = mode === "rigorous" && (!point || point.key !== pointKey);
+  const pointFailure = mode === "rigorous" && error?.key === pointKey ? error.message : null;
+  const sweepFailure = mode === "rigorous" && sweepError?.key === sweepKey ? sweepError.message : null;
+  const updating = mode === "rigorous" && !pointFailure && (stale || pointBusy);
+  const resultSource = mode === "fast" ? "emt" : !rigorous ? "preview" : stale ? "previous" : "rcwa";
   const R = rigorous ? rigorous.R : emt.R;
   const T = rigorous ? rigorous.T : emt.T;
   const A = rigorous ? rigorous.A : emt.A;
@@ -388,32 +419,26 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   // never show an angle sweep on the frequency axis (or the reverse) while the new one runs
   const shownSweep = mode === "rigorous" ? (sweep && sweep.axis === axis ? sweep.sweep : null) : fastSweep;
 
-  // main cross-section overlay: directions by default, lab-wall efficiencies on request
+  // main cross-section overlay: the lab profile on the wall face, and the lab
+  // calculation settings for the profiled main R / T (one resultant beam each)
   useEffect(() => {
     if (!onSceneSurface) return;
     if (!showInMain || profile.id === "flat") {
       onSceneSurface(null);
       return;
     }
-    const eff = mainEfficiencies && rigorous !== null && !stale;
-    onSceneSurface({
-      profile,
-      orders:
-        eff && rigorous
-          ? rigorous.orders.map((o) => ({ m: o.m, angleDeg: o.angleDeg, R: o.R, T: o.T }))
-          : geomOrders.map((o) => ({ m: o.m, angleDeg: o.angleDeg, R: NaN, T: NaN })),
-      efficiencies: eff,
-      calc: { mode, harmonics, slices },
-    });
-  }, [onSceneSurface, showInMain, mainEfficiencies, profile, rigorous, stale, geomOrders, mode, harmonics, slices]);
+    // orders are opt-in; directions only here, the app adds the main wall's efficiencies when it has them
+    const orders = showOrders ? geomOrders.map((o) => ({ m: o.m, angleDeg: o.angleDeg, R: NaN, T: NaN })) : undefined;
+    onSceneSurface({ profile, orders, calc: { mode, harmonics, slices } });
+  }, [onSceneSurface, showInMain, showOrders, geomOrders, profile, mode, harmonics, slices]);
   useEffect(() => () => onSceneSurface?.(null), [onSceneSurface]);
 
   const hostEta =
-    target < 0
+    target === "all" || target < 0
       ? surfaceEta(material, freq, customEps, customSigma)
       : surfaceEta(below[target].material, freq, below[target].customEps, below[target].customSigma);
-  const mixedEta = target < 0 ? wall.eta : wall.below[target]?.eta ?? hostEta;
-  const mixValidity = inclusionValidity(hostEta, inclusions, freq);
+  const mixedEta = target === "all" || target < 0 ? wall.eta : wall.below[target]?.eta ?? hostEta;
+  const mixValidity = wall.mixValidity;
   const water = waterPermittivity(freq, inclusions.tempC);
   const littrow = littrowDeg(freq, profile.period, -1);
   const range = materialRange(material);
@@ -421,9 +446,9 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
 
   /* ───────── drawing ───────── */
 
-  const detailOrders: DetailOrder[] = useMemo(
-    () => (rigorous && !stale ? rigorous.orders : geomOrders.map((o) => ({ m: o.m, angleDeg: o.angleDeg, R: NaN, T: NaN }))),
-    [rigorous, stale, geomOrders],
+  const detailOrders: DetailOrder[] | null = useMemo(
+    () => (showOrders ? (rigorous && !stale ? rigorous.orders : geomOrders.map((o) => ({ m: o.m, angleDeg: o.angleDeg, R: NaN, T: NaN }))) : null),
+    [showOrders, rigorous, stale, geomOrders],
   );
 
   const paths = useMemo(() => detailPaths(profile, wall.eta, wall.below, freq, angle, pol, slices), [profile, wall, freq, angle, pol, slices]);
@@ -438,32 +463,37 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
       thetaDeg: angle,
       frequency: freq,
       pol,
+      R,
+      T,
       orders: detailOrders,
-      rigorous: Boolean(rigorous) && !stale,
       slices: tab === "calc" && profile.id !== "flat" ? profileSlices(profile, slices) : null,
       bubbles: hasBubbles ? { fraction: inclusions.fraction, water: inclusions.kind === "water", diameterMm: inclusions.diameterMm, target } : null,
       fog: fog.lwc,
       lang,
       normals: tab === "surface",
     }),
-    [paths, profile, material, below, angle, freq, pol, detailOrders, rigorous, stale, tab, slices, hasBubbles, inclusions, target, fog.lwc, lang],
+    [paths, profile, material, below, angle, freq, pol, R, T, detailOrders, tab, slices, hasBubbles, inclusions, target, fog.lwc, lang],
   );
 
   const detailRef = useRef<HTMLCanvasElement>(null);
+  const topDetailRef = useRef<HTMLCanvasElement>(null);
   const sweepRef = useRef<HTMLCanvasElement>(null);
   // own clock: advances only while the detail canvas animates, so pausing freezes the waves
   // and a change of parameters does not make the phase jump
   const detailClock = useRef({ t: 0, last: null as number | null });
 
   useEffect(() => {
-    const canvas = detailRef.current;
-    if (!canvas) return;
+    const canvases = [detailRef.current, topDetailRef.current].filter((canvas): canvas is HTMLCanvasElement => canvas !== null);
     const clock = detailClock.current;
     const motion = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
     let raf = 0;
     const draw = () => {
-      const { ctx, w, h } = fitCanvas(canvas);
-      if (ctx) drawSurfaceDetail(ctx, w, h, clock.t, detail, pal, fmtNum);
+      for (const canvas of canvases) {
+        // The original lab is display:none in presentation mode; don't resize or draw it.
+        if (canvas.clientWidth === 0 || canvas.clientHeight === 0) continue;
+        const { ctx, w, h } = fitCanvas(canvas);
+        if (ctx) drawSurfaceDetail(ctx, w, h, clock.t, detail, pal, fmtNum);
+      }
     };
     const running = () => playing && !(motion && motion.matches) && !document.hidden;
     const loop = () => {
@@ -487,7 +517,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
     };
     restart();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => draw()) : null;
-    ro?.observe(canvas);
+    canvases.forEach((canvas) => ro?.observe(canvas));
     document.addEventListener("visibilitychange", restart);
     motion?.addEventListener?.("change", restart);
     return () => {
@@ -497,7 +527,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
       document.removeEventListener("visibilitychange", restart);
       motion?.removeEventListener?.("change", restart);
     };
-  }, [detail, pal, playing, fmtNum]);
+  }, [detail, pal, playing, fmtNum, detailTarget]);
 
   useEffect(() => {
     const canvas = sweepRef.current;
@@ -546,10 +576,10 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   const surfaceTab = (
     <div className="sl-panel">
       <div className="sl-group">
-        <div className="sl-label">{t.scenarios}</div>
+        <h3 className="sl-label">{t.scenarios}</h3>
         <div className="sl-chips">
           {LAB_SCENARIOS.map((s) => (
-            <button key={s.id} type="button" className={`sl-btn sl-scenario ${scenario === s.id ? "is-on" : ""}`} onClick={() => applyScenario(s)}>
+            <button key={s.id} type="button" aria-pressed={scenario === s.id} className={`sl-btn sl-scenario ${scenario === s.id ? "is-on" : ""}`} onClick={() => applyScenario(s)}>
               {s.name[lang]}
               <small>{s.note[lang]}</small>
             </button>
@@ -557,7 +587,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
         </div>
       </div>
       <div className="sl-group">
-        <div className="sl-label">{t.profile}</div>
+        <h3 className="sl-label">{t.profile}</h3>
         <div className="sl-profiles" role="radiogroup" aria-label={t.profile}>
           {PROFILE_IDS.map((id) => (
             <button
@@ -575,6 +605,8 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
         </div>
       </div>
       <div className="sl-group">
+        <h3 className="sl-label">{t.geometry}</h3>
+        <div className="sl-control-grid">
         {profile.id !== "flat" && (
           <Range label={t.period} value={profile.period} min={0.2} max={30} step={0.01} log unit="cm" accent="var(--sl-inc)" fmtNum={fmtNum}
             onChange={(v) => patchProfile({ period: v })} />
@@ -599,38 +631,49 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
             <Range label={t.seed} value={profile.seed} min={1} max={99} step={1} digits={0} fmtNum={fmtNum} onChange={(v) => patchProfile({ seed: v })} />
           </>
         )}
+        </div>
         {profile.id !== "flat" && (
-          <p className="sl-note sl-mono">
-            {t.rms} {fmtNum(profileRms(profile), 2)} cm · λ₀/Λ {fmtNum(lambdaCm(freq) / profile.period, 2)}
-          </p>
+           <p className="sl-note sl-mono">
+             {t.rms} {fmtNum(profileRms(profile), 2)} cm · <MathText tex={String.raw`\lambda_0 / \Lambda = ${fmtNum(lambdaCm(freq) / profile.period, 2)}`} />
+           </p>
         )}
       </div>
       <div className="sl-group">
+        <h3 className="sl-label">{t.display}</h3>
         <label className="sl-check">
           <input type="checkbox" checked={showInMain} onChange={(e) => setShowInMain(e.target.checked)} />
           <span>{t.showInMain}</span>
         </label>
         <label className="sl-check">
-          <input type="checkbox" checked={mainEfficiencies} disabled={!showInMain} onChange={(e) => setMainEfficiencies(e.target.checked)} />
-          <span>{t.mainEfficiencies}</span>
+          <input type="checkbox" checked={showOrders} onChange={(e) => setShowOrders(e.target.checked)} />
+          <span>{t.showOrders}</span>
         </label>
-        <p className="sl-note">{showInMain && mainEfficiencies ? t.mainEffNote : t.showInMainNote}</p>
+        {showOrders && (
+          <div role="status">
+            {!geomOrders.some(o => o.m !== 0) && <p className="sl-note">{t.noOrders}</p>}
+            {!showInMain && <p className="sl-note">{t.ordersLabOnly}</p>}
+          </div>
+        )}
+        <details className="sl-help">
+          <summary>{t.displayNotes}</summary>
+          <p className="sl-note">{showOrders ? t.showOrdersNote : t.showInMainNote}</p>
+        </details>
       </div>
       <div className="sl-group">
-        <div className="sl-label">
+        <h3 className="sl-label">
           {t.material}
           <span className="sl-swatch" style={{ "--tint": surfaceTint(material) } as CSSProperties} />
-        </div>
+        </h3>
         <MaterialSelect value={material} lang={lang} label={t.material} onChange={(id) => { setMaterial(id); setScenario(null); }} />
         {material === "custom" && (
-          <>
+          <div className="sl-control-grid">
             <Range label={t.epsCustom} value={customEps} min={1} max={30} step={0.01} fmtNum={fmtNum} onChange={setCustomEps} />
             <Range label={t.sigmaCustom} value={customSigma} min={0.0001} max={10} step={0.0001} log digits={4} unit="S/m" fmtNum={fmtNum} onChange={setCustomSigma} />
-          </>
+          </div>
         )}
-        <p className="sl-note sl-mono">
-          η = {fmtNum(wall.eta.re, 2)} − j{fmtNum(-wall.eta.im, wall.eta.im < -100 ? 0 : 3)}
-        </p>
+         <p className="sl-note sl-mono">
+           <MathText tex={String.raw`\eta = ${fmtNum(wall.eta.re, 2)} - j${fmtNum(-wall.eta.im, wall.eta.im < -100 ? 0 : 3)}`} />
+         </p>
         {outOfRange && range && (
           <p className="sl-note is-warn">{fillTpl(t.outOfRange, { a: fmtNum(range.fMin, 1), b: fmtNum(range.fMax, 0) })}</p>
         )}
@@ -641,10 +684,10 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   const layersTab = (
     <div className="sl-panel">
       <div className="sl-group">
-        <div className="sl-label">
+        <h3 className="sl-label">
           {t.layersTitle}
           <span className="sl-mono">{below.length}/{MAX_BELOW}</span>
-        </div>
+        </h3>
         {below.length === 0 && <p className="sl-note">{t.noLayers}</p>}
         <ol className="sl-layers">
           {below.map((l, i) => {
@@ -659,6 +702,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
                     {t.removeLayer}
                   </button>
                 </div>
+                <div className="sl-control-grid">
                 <Range label={t.thickness} value={l.cm} min={0.1} max={60} step={0.01} log unit="cm" accent="var(--sl-abs)" fmtNum={fmtNum}
                   onChange={(v) => patchBelow(i, { cm: v })} />
                 {l.material === "custom" && (
@@ -668,12 +712,13 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
                       onChange={(v) => patchBelow(i, { customSigma: v })} />
                   </>
                 )}
+                </div>
                 {out && r && <p className="sl-note is-warn">{fillTpl(t.outOfRange, { a: fmtNum(r.fMin, 1), b: fmtNum(r.fMax, 0) })}</p>}
               </li>
             );
           })}
         </ol>
-        <button type="button" className="sl-btn" onClick={addBelow} disabled={below.length >= MAX_BELOW}>
+        <button type="button" className="sl-btn sl-btn-primary" onClick={addBelow} disabled={below.length >= MAX_BELOW}>
           {below.length >= MAX_BELOW ? t.maxLayers : `+ ${t.addLayer}`}
         </button>
       </div>
@@ -683,10 +728,13 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   const mediumTab = (
     <div className="sl-panel">
       <div className="sl-group">
-        <div className="sl-label">
+        <h3 className="sl-label">
           {t.bubbles}
           {hasBubbles && <span className={`sl-badge is-${mixValidity}`}>{t.mixValidity} · {t.valid[mixValidity]}</span>}
-        </div>
+        </h3>
+        <div className="sl-control-grid">
+        <div className="sl-field">
+        <span className="sl-field-label">{t.bubbleKind}</span>
         <Seg<InclusionKind>
           label={t.bubbleKind}
           value={inclusions.kind}
@@ -696,7 +744,11 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
             { value: "water", label: t.water },
           ]}
         />
-        <select className="sl-select" aria-label={t.target} value={target} onChange={(e) => setIncTarget(Number(e.target.value))}>
+        </div>
+        <label className="sl-field">
+        <span className="sl-field-label">{t.target}</span>
+        <select className="sl-select" aria-label={t.target} value={target} onChange={(e) => setIncTarget(e.target.value === "all" ? "all" : Number(e.target.value))}>
+          <option value="all">{t.targetWholeWall}</option>
           <option value={-1}>
             {t.target} · {t.targetProfile} ({matName(material)})
           </option>
@@ -706,6 +758,13 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
             </option>
           ))}
         </select>
+        </label>
+        </div>
+        <label className="sl-check">
+          <input type="checkbox" checked={applyInclusionsToMain} onChange={(e) => setApplyInclusionsToMain(e.target.checked)} />
+          <span>{t.applyInclusionsToMain}</span>
+        </label>
+        <div className="sl-control-grid">
         <Range label={t.fraction} value={inclusions.fraction} min={0} max={0.6} step={0.01} fmtNum={fmtNum}
           onChange={(v) => setInclusions((x) => ({ ...x, fraction: v }))} />
         <Range label={t.diameter} value={inclusions.diameterMm} min={0.1} max={30} step={0.1} log digits={1} unit="mm" fmtNum={fmtNum}
@@ -714,31 +773,34 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
           <Range label={t.waterTemp} value={inclusions.tempC} min={0} max={40} step={0.5} digits={1} unit="°C" fmtNum={fmtNum}
             onChange={(v) => setInclusions((x) => ({ ...x, tempC: v }))} />
         )}
+        </div>
         <dl className="sl-kv sl-mono">
           {inclusions.kind === "water" && (
             <>
               <dt>{t.waterEps}</dt>
-              <dd>{fmtNum(water.re, 1)} − j{fmtNum(-water.im, 1)}</dd>
+             <dd><MathText tex={String.raw`\varepsilon = ${fmtNum(water.re, 1)} - j${fmtNum(-water.im, 1)}`} /></dd>
             </>
           )}
-          <dt>{t.effEps}</dt>
-          <dd>{fmtNum(mixedEta.re, 2)} − j{fmtNum(-mixedEta.im, mixedEta.im < -100 ? 0 : 3)}</dd>
+          <dt>{t.effEps}{target === "all" ? ` · ${t.targetProfile}` : ""}</dt>
+           <dd><MathText tex={String.raw`\varepsilon_{\mathrm{eff}} = ${fmtNum(mixedEta.re, 2)} - j${fmtNum(-mixedEta.im, mixedEta.im < -100 ? 0 : 3)}`} /></dd>
         </dl>
         <p className="sl-note">{t.mixNote}</p>
       </div>
       <div className="sl-group">
-        <div className="sl-label">{t.fog}</div>
+        <h3 className="sl-label">{t.fog}</h3>
         <div className="sl-chips">
           {(Object.keys(FOG_PRESETS) as FogPreset[]).map((k) => (
-            <button key={k} type="button" className={`sl-btn ${fog.lwc === FOG_PRESETS[k] ? "is-on" : ""}`} onClick={() => setFog((f) => ({ ...f, lwc: FOG_PRESETS[k] }))}>
+            <button key={k} type="button" aria-pressed={fog.lwc === FOG_PRESETS[k]} className={`sl-btn ${fog.lwc === FOG_PRESETS[k] ? "is-on" : ""}`} onClick={() => setFog((f) => ({ ...f, lwc: FOG_PRESETS[k] }))}>
               {t.fogPresets[k]}
             </button>
           ))}
         </div>
+        <div className="sl-control-grid">
         <Range label={t.lwc} value={fog.lwc} min={0} max={1} step={0.005} digits={3} unit="g/m³" fmtNum={fmtNum} onChange={(v) => setFog((f) => ({ ...f, lwc: v }))} />
         <Range label={t.fogTemp} value={fog.tempC} min={-8} max={30} step={0.5} digits={1} unit="°C" fmtNum={fmtNum} onChange={(v) => setFog((f) => ({ ...f, tempC: v }))} />
         <Range label={t.toWall} value={fog.toWallM} min={1} max={2000} step={1} log digits={0} unit="m" fmtNum={fmtNum} onChange={(v) => setFog((f) => ({ ...f, toWallM: v }))} />
         <Range label={t.fromWall} value={fog.fromWallM} min={1} max={2000} step={1} log digits={0} unit="m" fmtNum={fmtNum} onChange={(v) => setFog((f) => ({ ...f, fromWallM: v }))} />
+        </div>
         <dl className="sl-kv sl-mono">
           <dt>{t.fogRate}</dt>
           <dd>{fmtNum(fogDbPerKm(freq, fog.lwc, fog.tempC), 3)} dB/km</dd>
@@ -753,9 +815,12 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   const waveTab = (
     <div className="sl-panel">
       <div className="sl-group">
+        <h3 className="sl-label">{t.tabs.wave}</h3>
+        <div className="sl-control-grid">
         <Range label={t.frequency} value={freq} min={0.5} max={40} step={0.01} log unit="GHz" accent="var(--sl-inc)" fmtNum={fmtNum} onChange={onFreq}
-          hint={<span className="sl-mono">{t.wavelength} λ₀ = {fmtNum(lambdaCm(freq), 2)} cm</span>} />
+           hint={<span className="sl-mono">{t.wavelength} <MathText tex={String.raw`\lambda_0 = ${fmtNum(lambdaCm(freq), 2)}\,\mathrm{cm}`} /></span>} />
         <Range label={t.angle} value={angle} min={0} max={89} step={0.5} digits={1} unit="°" accent="var(--sl-ref)" fmtNum={fmtNum} onChange={onAngle} />
+        </div>
         <div className="sl-chips">
           <button type="button" className="sl-btn" disabled={!Number.isFinite(littrow) || profile.id === "flat"} onClick={() => onAngle(Math.round(littrow * 10) / 10)}>
             {Number.isFinite(littrow) ? `${t.littrow} · ${fmtNum(littrow, 1)}°` : t.noLittrow}
@@ -763,17 +828,17 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
         </div>
       </div>
       <div className="sl-group">
-        <div className="sl-label">
+        <h3 className="sl-label">
           {t.polarization}
           <span className="sl-badge">{pol === "AVG" ? t.avg : pol}</span>
-        </div>
+        </h3>
         <p className="sl-note">{t.polNote}</p>
       </div>
       <div className="sl-group">
-        <div className="sl-label">
+        <h3 className="sl-label">
           {t.orders}
           <span className="sl-mono">{geomOrders.length}</span>
-        </div>
+        </h3>
         {geomOrders.length <= 1 ? (
           <p className="sl-note">{t.onlySpecular}</p>
         ) : (
@@ -796,7 +861,7 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   const calcTab = (
     <div className="sl-panel">
       <div className="sl-group">
-        <div className="sl-label">{t.mode}</div>
+        <h3 className="sl-label">{t.mode}</h3>
         <Seg<Mode>
           label={t.mode}
           value={mode}
@@ -806,30 +871,38 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
             { value: "rigorous", label: t.rigorous },
           ]}
         />
-        <p className="sl-note">{mode === "fast" ? t.fastHint : t.rigorousHint}</p>
+        <details className="sl-help">
+          <summary>{t.methodNotes}</summary>
+          <p className="sl-note">{mode === "fast" ? t.fastHint : t.rigorousHint}</p>
+        </details>
         <div className="sl-chips">
           <span className={`sl-badge is-${validity}`}>{t.validity} · {t.valid[validity]}</span>
           {mode === "rigorous" && (pointBusy || sweepBusy) && <span className="sl-badge is-busy">{t.computing}</span>}
           {mode === "rigorous" && point && !pointBusy && <span className="sl-badge sl-mono">{fillTpl(t.elapsed, { ms: fmtNum(point.ms, 0) })}</span>}
         </div>
-        {mode === "rigorous" && error && <p className="sl-note is-error">{t.error} : {error}</p>}
+        {pointFailure && <p className="sl-note is-error" role="alert">{t.error} : {pointFailure}</p>}
+        {sweepFailure && <p className="sl-note is-error" role="alert">{t.error} · {t.sweepAxis} : {sweepFailure}</p>}
       </div>
       <div className="sl-group">
+        <h3 className="sl-label">{t.numericalDetails}</h3>
+        <div className="sl-control-grid">
         {mode === "rigorous" && (
           <Range label={t.harmonics} value={harmonics} min={2} max={20} step={1} digits={0} fmtNum={fmtNum} onChange={setHarmonics} />
         )}
         <Range label={t.slices} value={slices} min={4} max={40} step={1} digits={0} fmtNum={fmtNum} onChange={setSlices} />
+        </div>
       </div>
       <div className="sl-group">
+        <h3 className="sl-label">{t.efficiency}</h3>
         {rigorous && (
           <div className="sl-readout">
             <div style={{ "--tone": "var(--sl-ref)" } as CSSProperties}>
-              <span>{t.specularR}</span>
-              <b className="sl-mono">{pct(rigorous.R0)} %</b>
+              <span>{t.totalR}</span>
+              <b className="sl-mono">{pct(rigorous.R)} %</b>
             </div>
             <div style={{ "--tone": "var(--sl-tra)" } as CSSProperties}>
-              <span>{t.specularT}</span>
-              <b className="sl-mono">{pct(rigorous.T0)} %</b>
+              <span>{t.totalT}</span>
+              <b className="sl-mono">{pct(rigorous.T)} %</b>
             </div>
             <div style={{ "--tone": "var(--sl-inc)" } as CSSProperties}>
               <span>±M</span>
@@ -900,6 +973,19 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
   const panels: Record<Tab, ReactNode> = { surface: surfaceTab, layers: layersTab, medium: mediumTab, wave: waveTab, calc: calcTab };
 
   return (
+    <>
+    {resultsTarget && createPortal(
+      <LabResults lang={lang} fmtNum={fmtNum} R={R} T={T} A={A} freq={freq} angle={angle} pol={pol}
+        profile={profile} material={material} below={below} mode={mode} source={resultSource} harmonics={harmonics} slices={slices}
+        validity={validity} mixValidity={hasBubbles ? mixValidity : null} outOfRange={outOfRange}
+        busy={updating} sweepBusy={mode === "rigorous" && sweepBusy} error={pointFailure} sweepError={sweepFailure}
+        fog={fog.lwc > 0 ? link : null} />,
+      resultsTarget,
+    )}
+    {detailTarget && createPortal(
+      <canvas ref={topDetailRef} className="om-lab-canvas" role="img" aria-label={t.detailTitle} />,
+      detailTarget,
+    )}
     <section className="om-card sl-lab" aria-label={t.title}>
       <header className="sl-head">
         <div>
@@ -916,7 +1002,8 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
           <span className="sl-kpi" style={{ "--tone": "var(--sl-abs)" } as CSSProperties}>
             <i />A <b className="sl-mono">{pct(Math.max(0, A))}</b><small>%</small>
           </span>
-          <span className={`sl-badge ${stale || pointBusy ? "is-busy" : ""}`}>{mode === "fast" ? t.fast : t.rigorous}</span>
+          <span className={`sl-badge ${updating ? "is-busy" : ""}`}>{mode === "fast" ? t.fast : t.rigorous}</span>
+          {mode === "rigorous" && <span className="sl-note" role="status">{resultSource === "previous" ? t.previousResult : resultSource === "preview" ? t.emtPreview : "RCWA"}{updating ? ` · ${t.computing}` : ""}{pointFailure ? ` · ${t.error}: ${pointFailure}` : ""}</span>}
         </div>
       </header>
 
@@ -946,11 +1033,9 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
                 </button>
               </div>
               <div className="sl-legend">
-                {/* swatches use the canvas palette so they match the curves */}
-                <span><i style={{ "--tone": pal.ref } as CSSProperties} />R₀</span>
-                <span><i style={{ "--tone": pal.tra } as CSSProperties} />T₀</span>
-                <span><i className="is-dash" style={{ "--tone": pal.abs } as CSSProperties} />A</span>
-                {mode === "rigorous" && <span><i className="is-dash" style={{ "--tone": pal.inc } as CSSProperties} />m ≠ 0</span>}
+                <span><i style={{ "--tone": "var(--sl-ref)" } as CSSProperties} />R</span>
+                <span><i style={{ "--tone": "var(--sl-tra)" } as CSSProperties} />T</span>
+                <span><i className="is-dash" style={{ "--tone": "var(--sl-abs)" } as CSSProperties} />A</span>
               </div>
             </div>
             <canvas
@@ -969,15 +1054,26 @@ export function SurfaceLab({ freq, angle, pol, lang, pal, playing, fmtNum, onFre
         <div className="sl-side">
           <div className="sl-tabs" role="tablist" aria-label={t.title}>
             {TABS.map((k) => (
-              <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "is-on" : ""} onClick={() => setTab(k)}>
+              <button key={k} type="button" role="tab" id={`${tabId}-tab-${k}`} aria-controls={`${tabId}-panel`}
+                aria-selected={tab === k} tabIndex={tab === k ? 0 : -1} className={tab === k ? "is-on" : ""} onClick={() => setTab(k)}
+                onKeyDown={(e) => {
+                  const i = TABS.indexOf(k);
+                  const next = e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1
+                    : e.key === "ArrowRight" ? (i + 1) % TABS.length : e.key === "ArrowLeft" ? (i - 1 + TABS.length) % TABS.length : -1;
+                  if (next < 0) return;
+                  e.preventDefault();
+                  setTab(TABS[next]);
+                  e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+                }}>
                 {t.tabs[k]}
               </button>
             ))}
           </div>
-          <div role="tabpanel">{panels[tab]}</div>
+          <div role="tabpanel" id={`${tabId}-panel`} aria-labelledby={`${tabId}-tab-${tab}`} tabIndex={0}>{panels[tab]}</div>
         </div>
       </div>
     </section>
+    </>
   );
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PolMode } from "../physics";
+import type { Inclusions } from "../media/mixing";
 import type { Layer } from "../state/layers";
 import type { Validity } from "./emt";
 import { mainEmt, mainEmtValidity, mainWallSpec } from "./profiledMain";
@@ -10,18 +11,16 @@ import type { RtSource, SceneSurface } from "./sceneOverlay";
 export type RtView = "flat" | "profiled";
 
 export interface ProfiledRt {
-  /** totals over all propagating orders (EMT: order 0 only) */
+  /** resultant R / T / A, summed over all propagating orders (EMT: order 0 only);
+      drawn as the single reflected and transmitted beams */
   R: number;
   T: number;
   A: number;
-  /** specular order, drawn as the main reflected / transmitted beams */
-  R0: number;
-  T0: number;
   source: Exclude<RtSource, "flat">;
   /** rigorous mode selected but the RCWA result for this state is not ready */
   busy: boolean;
   validity: Validity;
-  /** main-wall order efficiencies (RCWA only) */
+  /** main-wall order efficiencies (RCWA only), used when the orders are shown */
   orders: RcwaOrder[] | null;
 }
 
@@ -55,11 +54,12 @@ export function useProfiledMain(
   angle: number,
   pol: PolMode,
   view: RtView,
+  inclusions?: Inclusions | null,
 ): ProfiledRt | null {
   const calc = surface?.calc;
   const profile = surface?.profile;
   const active = view === "profiled" && !!profile && profile.id !== "flat" && !!calc;
-  const spec = useMemo(() => (active && profile ? mainWallSpec(profile, layers) : null), [active, profile, layers]);
+  const spec = useMemo(() => (active && profile ? mainWallSpec(profile, layers, inclusions) : null), [active, profile, layers, inclusions]);
   const slices = calc?.slices ?? 24;
   const harmonics = calc?.harmonics ?? 10;
   const rigorous = calc?.mode === "rigorous";
@@ -93,7 +93,7 @@ export function useProfiledMain(
   if (!spec || !emt) return null;
   const fresh = key !== null && rc !== null && rc.key === key ? rc.result : null;
   if (fresh) {
-    return { R: fresh.R, T: fresh.T, A: fresh.A, R0: fresh.R0, T0: fresh.T0, source: "rcwa", busy: false, validity, orders: fresh.orders };
+    return { R: fresh.R, T: fresh.T, A: fresh.A, source: "rcwa", busy: false, validity, orders: fresh.orders };
   }
-  return { R: emt.R, T: emt.T, A: emt.A, R0: emt.R, T0: emt.T, source: "emt", busy: rigorous, validity, orders: null };
+  return { R: emt.R, T: emt.T, A: emt.A, source: "emt", busy: rigorous, validity, orders: null };
 }

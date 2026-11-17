@@ -46,9 +46,54 @@ npm run dev      # → http://localhost:5173
 
 ## Android / APK
 
+### Installations et mises à jour (APK signé)
+
+Les nouvelles distributions utilisent un APK **release signé avec une clé permanente**.
+Installer le nouvel APK par-dessus la version précédente conserve les réglages,
+à condition de garder la même clé, le même identifiant `io.github.fyi88.waves`
+et un `androidVersionCode` supérieur. Le code actuel est **4** (version **1.1.1**), dans `package.json` ;
+**l'incrémenter avant chaque nouvelle distribution Android**. `version` définit
+le numéro de version visible ; il ne remplace pas `androidVersionCode`.
+
+Les anciens APK `debug.*` publiés sur GitHub avaient des clés temporaires différentes.
+Ils ne peuvent pas être mis à jour avec cette nouvelle clé : une désinstallation
+initiale peut être nécessaire. Les prochaines versions release doivent réutiliser
+la clé permanente. Ne pas distribuer les APK debug comme mises à jour release.
+
+La configuration locale se trouve dans `~/.waves/android-signing.properties`,
+**hors du dépôt et de l'archive de remise**, avec les propriétés `STORE_FILE`,
+`STORE_PASSWORD`, `KEY_ALIAS` et `KEY_PASSWORD`. Garder une sauvegarde privée et
+sécurisée du fichier de configuration et du keystore : leur perte empêche les
+mises à jour normales. Ne jamais les publier, les committer ou les joindre au ZIP.
+
+Compilation locale (Node 22, JDK 21 et Android SDK 36) :
+
+```bash
+npm ci
+npm test
+npm run build
+npx cap sync android
+cd android
+./gradlew assembleRelease
+# Windows : .\gradlew.bat assembleRelease
+# Résultat : app/build/outputs/apk/release/app-release.apk
+```
+
+Le build release refuse de démarrer sans configuration de signature. Pour une CI,
+les variables `WAVES_STORE_FILE`, `WAVES_STORE_PASSWORD`, `WAVES_KEY_ALIAS` et
+`WAVES_KEY_PASSWORD` remplacent les propriétés locales ; utiliser des secrets CI
+et le **même keystore**. Le workflow signé nécessite les secrets GitHub
+`WAVES_KEYSTORE_BASE64`, `WAVES_STORE_PASSWORD`, `WAVES_KEY_ALIAS` et
+`WAVES_KEY_PASSWORD` ; il est bloqué tant qu'ils ne sont pas configurés.
+Dans ce dépôt imbriqué, le workflow est conservé dans `WAVES/.github/workflows/` ;
+GitHub ne l'exécutera que s'il est placé dans `.github/workflows/` à la racine
+du dépôt. Ses chemins de travail sont prévus pour l'application dans `WAVES/`.
+
+### Builds de développement et CI
+
 WaveS ships as an offline Android APK through Capacitor 8 (`io.github.fyi88.waves`, minSdk 24, targetSdk 36).
 
-- **CI build** — every push to `main` runs `.github/workflows/android-debug.yml` (Node 22, JDK 21, Android SDK 36, Gradle cache) and publishes the `waves-debug-apk` artifact on the Actions run page. The workflow also verifies the APK signature and enforces the 10 MB budget.
+- **CI build** — `.github/workflows/android-debug.yml` now builds a signed release (Node 22, JDK 21, Android SDK 36) and publishes `waves-release-apk`. Permanent signing secrets are required. The workflow verifies the APK signature and enforces the 10 MB budget. Push builds run on `main`; other branches can use manual dispatch.
 - **Local build** — needs Node 22, JDK 21 and Android SDK 36:
 
 ```bash
@@ -60,9 +105,9 @@ cd android && ./gradlew assembleDebug
 # → android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-- **Install** — sideload the APK. Each CI run generates a fresh debug keystore, so uninstall a previous debug build before installing a newer one.
+- **Install** — distribute the signed release APK for normal updates. Local `assembleDebug` builds use a separate development key and cannot update an installed release APK.
 - **Fonts** — Inter Tight and JetBrains Mono are bundled with Fontsource (Latin + Greek subsets); the app makes no network request at runtime.
-- **Version** — `package.json` is the single source of truth: `versionName` in `android/app/build.gradle` is read from it. Bump `versionCode` manually in that file for each release.
+- **Version** — `package.json` is the single source of truth: `versionName` uses `version`, and `versionCode` uses `androidVersionCode`. Increase `androidVersionCode` for every distributed Android update.
 
 ## Features
 
@@ -78,9 +123,18 @@ cd android && ./gradlew assembleDebug
 
 ## Physics Engine
 
+### Quarter-wave anti-reflection
+
+- Choose **Anti-reflection λ/4 · ideal 100% demo** in Scenarios for a lossless slab between two matching layers: at 10 GHz and normal incidence the existing solver gives R ≈ 0, T ≈ 100%, A ≈ 0. Delete both coatings to compare with the bare slab, or vary frequency/thickness to detune the matching.
+- For real walls, select a layer, choose **Before selection / After selection** in the compact **Adaptation** row, then **Add**. The new coating uses its immediate physical neighbours (air outside): nᵢ = Re √εᵣ,ᵢ, nₘ = √(n₁n₂), εᵣ,ₘ = n₁n₂ and σ = 0. The real impedance reference is Zᵢ,ref = 376.730313668/nᵢ Ω, so ηₘ,ref = √(Z₁,ref Z₂,ref), **not a sum**. εᵣ is relative permittivity; η denotes wave impedance. Thickness is the smallest supported odd quarter-wave multiple, without numerical rounding.
+- New coatings follow frequency and neighbour material changes synchronously, not incidence angle or polarization; their derived values are read-only. Move or remove them normally, but duplication and coating-to-coating dependencies are rejected. Supported ranges remain εᵣ 1–30 and thickness 0.1–100 cm; invalid edits leave the previous setup unchanged. Existing fixed coatings and the ideal demo stay fixed, including frequency detuning.
+- This normal-incidence lossless reference is only an approximation for lossy neighbours, not exact complex-impedance matching. No guarantee of zero reflection or improved transmission for arbitrary finite stacks. Other materials keep their losses. Insertion selects **Flat R/T**. In Profiled R/T, the profile still uses the first physical layer—even when it is a coating—not a conformal coating model.
+- Share links and storage retain resolved numerical snapshots plus optional `matchingDesign: "quarter-wave-live"`; absent/unknown metadata stays fixed. Invalid imported live designs revert deterministically to fixed snapshots. Storage keys and link versions are unchanged.
+- Exact zero conductivity survives storage and share links. The n · κ editor supports κ = 0; the logarithmic σ slider still starts at 0.0001 S/m.
+
 `src/physics.ts` — pure, DOM-free, reusable as-is (PWA, Tauri, Capacitor):
 
-- Complex arithmetic in `exp(jωt)` convention; η = ε′ − j·17.98·σ/f (ITU-R P.2040 eq. 9b); Table 3 materials as ε′ = a·fᵇ, σ = c·fᵈ.
+- Complex arithmetic in `exp(jωt)` convention; εᵣ = ε′ − j·17.98·σ/f (ITU-R P.2040 eq. 9b; internally named `eta` by the existing solver); Table 3 materials as ε′ = a·fᵇ, σ = c·fᵈ.
 - Complex Fresnel (§2.2.1), single lossy slab (§3.4), stable N-layer transfer recursion (air | L1…LN | air), exact tangential |E(z)| field solver, pseudo-Brewster search, 0–90° angular sweep.
 - Honest warnings: out-of-ITU-range extrapolation + tan δ > 0.5 flagged in the UI.
 

@@ -6,50 +6,94 @@
     <link rel="icon" type="image/png" href="./logo.png" />
     <title>WaveS</title>
     <style>
-      /* ── Splash: text-only boot screen, removed once React mounts ── */
-      #splash {
-        position: fixed; inset: 0; z-index: 9999;
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 10px; background: #080e17; color: #edf4fc;
-        font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
-        transition: opacity .35s ease;
+      /* One full-viewport brand screen on every device: logo, name, loader, credit. */
+      html, body { margin: 0; background: #f4f5f7; }
+      #startup-shell { --boot-bg: #f4f5f7; --boot-ink: #11141a; --boot-muted: #4a5060; --boot-line: #dfe1e6; --boot-accent: #0b7fa6; position: fixed; inset: 0; z-index: 9999; display: grid; place-content: center; justify-items: center; padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); background: var(--boot-bg); color: var(--boot-ink); font: 14px/1.5 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; text-align: center; overflow: hidden; }
+      #startup-shell, #startup-shell * { box-sizing: border-box; }
+      #startup-shell :not(.startup-dot) { animation: none; transition: none; }
+      .startup-brand { display: grid; justify-items: center; gap: 10px; }
+      .startup-brand img { width: clamp(72px, 22vw, 96px); height: clamp(72px, 22vw, 96px); object-fit: contain; }
+      .startup-brand h1 { margin: 6px 0 0; font-size: clamp(34px, 10vw, 40px); line-height: 1.1; font-weight: 750; letter-spacing: -.05em; }
+      .startup-brand h1 span { color: var(--boot-accent); }
+      .startup-brand p { margin: 0 0 22px; color: var(--boot-muted); font-size: 14px; letter-spacing: .01em; }
+      /* Jelly stream loader: five dots flow left to right and merge through an SVG goo filter. */
+      .startup-loader { --uib-size: 76px; --uib-color: var(--boot-accent); --uib-speed: 2.6s; --uib-dot-size: calc(var(--uib-size) * 0.23); position: relative; display: flex; align-items: center; justify-content: space-between; width: var(--uib-size); height: var(--uib-dot-size); margin: 4px auto 0; filter: url("#uib-jelly-ooze"); }
+      .startup-dot { position: absolute; top: calc(50% - var(--uib-dot-size) / 2); left: calc(0px - var(--uib-dot-size) / 2); display: block; width: var(--uib-dot-size); height: var(--uib-dot-size); border-radius: 50%; background-color: var(--uib-color); animation: startup-stream var(--uib-speed) linear infinite both; }
+      .startup-dot:nth-child(2) { animation-delay: calc(var(--uib-speed) * -0.2); }
+      .startup-dot:nth-child(3) { animation-delay: calc(var(--uib-speed) * -0.4); }
+      .startup-dot:nth-child(4) { animation-delay: calc(var(--uib-speed) * -0.6); }
+      .startup-dot:nth-child(5) { animation-delay: calc(var(--uib-speed) * -0.8); }
+      @keyframes startup-stream {
+        0%, 100% { transform: translateX(0) scale(0); }
+        50% { transform: translateX(calc(var(--uib-size) * 0.5)) scale(1); }
+        99.999% { transform: translateX(var(--uib-size)) scale(0); }
       }
-      #splash.done { opacity: 0; pointer-events: none; }
-      #splash .sp-kicker { font-size: 11px; letter-spacing: .35em; color: #94a6bc; }
-      #splash .sp-name { font-size: 44px; font-weight: 800; letter-spacing: .04em; }
-      #splash .sp-name span { color: #55dbf5; }
-      #splash .sp-sub { font-size: 13px; color: #b4c3d5; }
-      #splash .sp-bar { width: 168px; height: 2px; margin-top: 14px; background: #253447; overflow: hidden; border-radius: 2px; }
-      #splash .sp-bar i { display: block; height: 100%; width: 40%; background: #55dbf5; border-radius: 2px; animation: sp-slide 1.1s ease-in-out infinite; }
-      @keyframes sp-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(420%); } }
-      #splash .sp-credit { position: absolute; bottom: 22px; font-size: 11px; letter-spacing: .12em; color: #94a6bc; }
+      /* Reduced motion keeps a static, evenly spaced loader. */
+      @media (prefers-reduced-motion: reduce) {
+        .startup-dot { animation: none; transform: scale(1); }
+        .startup-dot:nth-child(2) { transform: translateX(calc(var(--uib-size) * .25)); }
+        .startup-dot:nth-child(3) { transform: translateX(calc(var(--uib-size) * .5)); }
+        .startup-dot:nth-child(4) { transform: translateX(calc(var(--uib-size) * .75)); }
+        .startup-dot:nth-child(5) { transform: translateX(var(--uib-size)); }
+      }
+      .startup-notice { margin-top: 18px; color: var(--boot-muted); }
+      #startup-status { margin: 0; }
+      #startup-retry { margin-top: 8px; min-height: 44px; padding: 8px 18px; border: 1px solid var(--boot-muted); border-radius: 6px; color: var(--boot-ink); background: var(--boot-bg); font: inherit; cursor: pointer; }
+      #startup-retry:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+      /* Author credit (project requirement): pinned to the bottom, above the gesture bar. */
+      .startup-credit { position: absolute; left: 0; right: 0; bottom: max(22px, calc(env(safe-area-inset-bottom) + 14px)); margin: 0; padding: 0 24px; color: var(--boot-muted); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+      .startup-credit strong { color: var(--boot-ink); font-weight: 650; }
+      @media (max-height: 420px) { .startup-brand p { margin-bottom: 10px; } .startup-credit { bottom: max(10px, env(safe-area-inset-bottom)); } }
+      #startup-shell[data-state="error"] .startup-loader, #startup-shell[data-state="error"] .startup-brand { display: none; }
+      #startup-shell[data-state="error"] .startup-notice { width: min(440px, calc(100vw - 48px)); margin: 0; padding: 28px; border: 1px solid var(--boot-line); border-radius: 12px; }
+      #startup-shell[data-state="error"] #startup-retry { min-width: 180px; margin-top: 20px; font-weight: 600; }
+      @media (prefers-color-scheme: dark) {
+        html, body { background: #0b0d12; }
+        #startup-shell { --boot-bg: #0b0d12; --boot-ink: #eceef3; --boot-muted: #a6abb8; --boot-line: #272a31; --boot-accent: #55dbf5; }
+      }
     </style>
   </head>
   <body>
-    <div id="root"></div>
-    <div id="splash" aria-hidden="true">
-      <div class="sp-kicker">ENSA · GSR1</div>
-      <div class="sp-name">Wave<span>S</span></div>
-      <div class="sp-sub">Wave &amp; Wall Simulator</div>
-      <div class="sp-bar"><i></i></div>
-      <div class="sp-credit">RÉALISÉ PAR CHETAINE YOUNES</div>
+    <div id="root" aria-busy="true"></div>
+    <div id="startup-shell" data-state="loading">
+      <div class="startup-brand" aria-hidden="true">
+        <img src="./logo.png" alt="" width="64" height="64" />
+        <h1>Wave<span>S</span></h1>
+        <p>Electromagnetic wave simulation</p>
+        <div class="startup-loader"><div class="startup-dot"></div><div class="startup-dot"></div><div class="startup-dot"></div><div class="startup-dot"></div><div class="startup-dot"></div></div>
+        <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+          <defs>
+            <filter id="uib-jelly-ooze">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
+              <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="ooze" />
+              <feBlend in="SourceGraphic" in2="ooze" />
+            </filter>
+          </defs>
+        </svg>
+      </div>
+      <div class="startup-notice">
+        <p id="startup-status" role="status" aria-live="polite">Loading simulation… / Chargement de la simulation…</p>
+        <button id="startup-retry" type="button" hidden>Reload app / Recharger l’application</button>
+      </div>
+      <p class="startup-credit"><span id="startup-credit-label">Made by</span> <strong>CHETAINE YOUNES</strong></p>
     </div>
-    <script>
-      // Remove the splash once React has mounted; hard fallback after 8s.
+    <noscript><style>#startup-shell { display: none; }</style><p>Enable JavaScript to use WaveS. / Activez JavaScript pour utiliser WaveS.</p></noscript>
+    <!-- Classic, local bootstrap also handles an entry-module network failure. -->
+    <script src="./startup.js"></script>
+    <!-- Independent of both external scripts: a missing bootstrap must be recoverable. -->
+    <script id="startup-fallback">
       (function () {
-        var t0 = Date.now();
-        function hide() {
-          var el = document.getElementById("splash");
-          if (!el || el.classList.contains("done")) return;
-          el.classList.add("done");
-          setTimeout(function () { el.remove(); }, 400);
+        if (!window.wavesStartup) {
+          var shell = document.getElementById("startup-shell");
+          if (shell) shell.setAttribute("data-state", "error");
+          var status = document.getElementById("startup-status");
+          var retry = document.getElementById("startup-retry");
+          if (status) status.textContent = "WaveS could not start. Retry loading the app. / Impossible de démarrer WaveS. Réessayez de charger l’application.";
+          if (retry) {
+            retry.hidden = false;
+            retry.onclick = function () { window.location.reload(); };
+          }
         }
-        (function wait() {
-          var mounted = document.getElementById("root") && document.getElementById("root").children.length > 0;
-          if (mounted && Date.now() - t0 > 700) { hide(); return; }
-          if (Date.now() - t0 > 8000) { hide(); return; }
-          setTimeout(wait, 60);
-        })();
       })();
     </script>
     <script type="module" src="/src/main.tsx"></script>

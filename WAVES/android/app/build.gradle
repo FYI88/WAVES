@@ -3,6 +3,18 @@ apply plugin: 'com.android.application'
 // Single source of truth for the app version: package.json.
 def packageJson = new groovy.json.JsonSlurper().parseText(file("../../package.json").getText("UTF-8"))
 
+// Keep signing credentials outside the repository. CI supplies the same values via env.
+def signingProperties = new Properties()
+def signingFile = new File(System.getProperty('user.home'), '.waves/android-signing.properties')
+if (signingFile.exists()) {
+    signingFile.withInputStream { signingProperties.load(it) }
+}
+def signingValue = { name -> System.getenv("WAVES_${name}") ?: signingProperties.getProperty(name) }
+def signingReady = ['STORE_FILE', 'STORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD'].every { signingValue(it) }
+if (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') } && !signingReady) {
+    throw new GradleException('Release signing is required. Configure ~/.waves/android-signing.properties or WAVES_* signing environment variables. See README.md.')
+}
+
 android {
     namespace = "io.github.fyi88.waves"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -10,7 +22,7 @@ android {
         applicationId "io.github.fyi88.waves"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        versionCode packageJson.androidVersionCode as int
         versionName packageJson.version
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -19,8 +31,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (signingReady) {
+            release {
+                storeFile file(signingValue('STORE_FILE'))
+                storePassword signingValue('STORE_PASSWORD')
+                keyAlias signingValue('KEY_ALIAS')
+                keyPassword signingValue('KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (signingReady) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

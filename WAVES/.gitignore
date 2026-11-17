@@ -20,3 +20,5 @@ android/capacitor-cordova-android-plugins/build/
 *.jks
 *.keystore
 android/keystore.properties
+**/*signing*.properties
+*.p12

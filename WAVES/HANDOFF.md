@@ -1,5 +1,68 @@
 # WaveS - Android packaging handoff
 
+## Diffraction display correction — 2026-11-17 (primary app, uncommitted)
+
+- `src/spatialScene.ts` previously ignored `surface.orders`; now draws opt-in reflected/transmitted orders with direction arrows, angle labels and RCWA efficiencies, or explicitly schematic unknown-power waves. Compact camera fitting includes order endpoints; flat profiles, m=0 and negligible known efficiencies add no beams.
+- `src/waveRays.ts`: compact hidden labels for |m|>1 no longer skip canvas restore. `src/surface/{SurfaceLab.tsx,labText.ts}` expose FR/EN no-propagating-order guidance and lab-only visibility feedback when orders are enabled.
+- Regression: `src/scene/diffraction.test.ts` exercises actual renderers (schematic/measured, desktop/phone/landscape, dark/light, opt-in/zero efficiency and canvas save/restore); SurfaceLab tests exercise the checkbox and conditional FR/EN feedback. Missing Spatial rendering and feedback reproduced as failing tests before fixes.
+- Primary app `npm test -- --exclude "waves-gitlab/**" --maxWorkers=1`: **321 tests / 35 files passed**. `npm run build` passed; existing classic startup.js and >500 kB bundle warnings remain. Canvas-recording/component tests only; no browser pixel review, Android/APK build, nested-copy edits, commit or push.
+
+## Latest loading/About correction — 2026-11-05 (both copies, uncommitted)
+
+- Desktop ≥1040px restores branded fixed full-viewport loading (real `logo.png`, WaveS, small sinewave); phones retain static skeletons. Inverse zoom is scoped to `#startup-shell`; existing body zoom/phone layout stay unchanged. No minimum delay, fade or polling; App commit removes the shell immediately.
+- Eight seconds only updates calm FR/EN waiting text: no error/retry/unmount/automatic reload. Real module/stylesheet failures show a centered card and ≥44px Reload app / Recharger l’application action, preserving saved state. Independent inline missing-bootstrap recovery and nonessential-image-error filtering retained.
+- About restores existing `Logo` (44px) plus a restrained decorative inline sinewave below title/tagline, using scoped header styles and semantic colors. No extra credit/model icons clutter. Existing 44px close, focus containment, Escape/native Back, equations/model text and five-tap diagnostics preserved, as are local native/DPR differences.
+- Files in each copy: `index.html`, `public/startup.js`, `src/{App.tsx,App.test.tsx,startup.test.ts,styles.css}`, `STARTUP.md`, `HANDOFF.md`. Primary full suite **319 / 35 files**; original focused app suite **63 / 7** (nested `waves-gitlab` excluded); both production builds pass. Expected classic startup.js Vite copy warning only.
+- Existing isolated production Chrome harness amended: `C:/Users/HP/AppData/Local/Temp/opencode/check-waves-startup.cjs`. Both copies: shell exactly (0,0,1440,900), identical brand coordinates and 64px logo before/after lazy CSS body zoom; actual >8s wait and late commit; phone skeleton/506px canvas/no overflow or animations; About loaded 44px logo + 44px close; centered 44px real failure reload; entry/missing-bootstrap recovery; local math/worker success, zero external requests/uncaught errors. Evidence: `waves-shots/startup/{startup-metrics.json,startup-browser.log,*-desktop-before-css.png,*-desktop-slow.png,*-about.png,*-chunk-failed.png}` beside harness. Screenshots captured, not pixel-reviewed; physical Android checks remain. No user tabs touched.
+- Published signed **1.1.1 / code 4 / 4c08975** unchanged. No commit/push, APK build, Capacitor sync, version bump or subagents; pre-existing generated Gradle dirt preserved.
+
+## Phone responsiveness — 2026-11-05 (uncommitted, both app copies)
+
+- Follow-up blocker fix: short-landscape toolbar moved ABOVE canvas (grid row1); simulation/Lab portal/HUD/paused chrome follow row2. Native touch orbit unchanged; reachable deck permits native vertical scrolling. Named scene container width<640px hides duplicate HUDs on compact desktop too. Only responsive CSS synced, native App/adaptive DPR preserved. Focused39/3, primary303/34, local app-only296/32 and primary build pass. Dev+production Chromium CDP touch:640×360/844×390 toolbar y57–168, canvas320/327.59px; canvas orbit pointer path scrollTop0, deck swipe scrollTop75; Lab row2 and1040px compact HUD none/none verified,1440 wide HUD retained. Existing temp responsive harness/logs/screenshots updated. Images captured, not pixel-reviewed (tool cannot inspect pixels); no device/APK validation or release operations.
+
+- Phone/short-landscape order: scene → results → controls → charts → lab. Compact header retains actions in native Actions details, labelled 44px fullscreen/pause always exposed. Simulation/Lab and Section/Spatial remain visible; secondary controls in native Display details. Desktop controls expanded; 0.8 zoom/three columns preserved. Opening Display adds height without shrinking/covering the canvas; explicit max-content parent track fixes results overlapping the scene.
+- Measured-canvas compact section geometry wraps 1–6 layer tiles, uses 11.5px labels and a separate Tx/R/T readout rail, gives the stack 40% width/12px minimum visible layers without changing physical solver inputs. Compact Spatial camera fits projected wall/instrument bounds and separates labels. Lab compact detail text enlarged/shortened; unfit thickness labels omitted. Physical drag/selection guards and portal lifecycle unchanged.
+- Canvas CSS row: minimum400px/60svh portrait, minimum320px/84svh short landscape. Short landscape deliberately scrolls to toolbar/results rather than crushing the drawing. No forced orientation or aggressive zoom.
+- Files: `src/App.tsx`, `src/styles.css`, `src/scene/{RayScene.tsx,RayScene.test.tsx,sectionGeometry.ts,responsiveGeometry.test.ts}`, `src/ui/ResponsiveDisclosure.tsx`, `src/waveRays.ts`, `src/spatialScene.ts`, `src/surface/surfaceDetail.ts`, `HANDOFF.md`. Synced only responsive patches after primary verification; local native/web App differences, RayScene DPR difference, brand sizes and all quarter-wave/generated Android dirt preserved.
+- Primary303 tests/34 files and build118 modules pass; local app-only296/32 pass. Initial accidental full local test also572/60 passed; no nested edits or local build. Installed Chrome isolated headless tests plus screenshots on dev AND primary production dist preview pass 320/360/390/430 portrait,640/844 short landscape,1040/1440 desktop: no horizontal overflow/scene overlap, correct canvas heights, Display expansion, native keyboard summary, pointer Spatial switch, Lab return lifecycle, desktop zoom. Dev also captures six-piece FR/light0°/89° and presentation/Escape. Pure geometry tests cover thin pieces and orbit extremes.
+- Evidence: `C:/Users/HP/AppData/Local/Temp/opencode/check-waves-responsive.cjs` and `C:/Users/HP/AppData/Local/Temp/opencode/waves-shots/{responsive-*.png,built/responsive-*.png,responsive-metrics.json,responsive-browser.log,responsive-built-browser.log,responsive-build.log}`. Screenshots captured; human pixel/device review remains. No device/APK test, version change, commit/push, APK build, Capacitor sync, Android-shell or splash edits. Parent owns independent review/release.
+
+## About sheet refinement — 2026-11-05 (uncommitted, both app copies)
+
+- Academic info sheet in the simulation sans/token system: fixed translated heading/tagline + 44px close, credits/contact first, complete existing model note + ITU reference visible, one collapsed Physics equations disclosure (all math retained, joined permittivity/impedance split and labelled), build diagnostics inside scroll body. Five-tap perf toggle retained. Desktop 560px/760px bounded flex shell; safe-area phone bottom sheet, 18/24px spacing, 44px wrapping links, credits stack below 420px; fake drag handle and competing old About/coarse/large-screen rules removed. Equations remain 15px, start-aligned and locally keyboard-scrollable.
+- `src/ui/modalFocus.ts` contains focus for About + Help, restores opener, makes surrounding branches inert and locks body/root scrolling with reversible cleanup. Existing div dialogs retain fullscreen/Android Back compatibility. Global keyboard handler returns after Escape while either modal is open, before stack commands, so links/disclosure/arrows/Space retain native behavior. No new state slots/dependencies/physics changes; native/web App differences and all prior Android edits preserved.
+- Files per copy: `src/App.tsx`, `src/styles.css`, `src/i18n/index.ts`, `src/App.test.tsx`, `src/embeddedEditor.test.tsx`, `src/ui/modalFocus{,.test}.ts`, `HANDOFF.md`. Added 8 tests/copy: FR/EN content/disclosure, actual equation and five-tap callbacks, modal shortcut guard/Escape, deterministic focus/inert/scroll cleanup and dynamic Tab boundaries.
+- Verification: primary `npm test -- --maxWorkers=1` **286 / 32 files**, build pass (**116 modules**); secondary app-only `npm test -- --exclude "waves-gitlab/**" --maxWorkers=1` **282 / 31**, full including untouched nested repo **558 / 59**, build pass (**104 modules**). Both diff checks pass (line-ending warnings only). Initial concurrent default-worker runs hit Windows VirtualAlloc/OOM; sequential single-worker suites passed without code/config workarounds.
+- No commit/push, subagents, browser or Android build. Rendered/hook/fake-DOM checks are not real-browser proof: mobile visual reflow, zoom/contrast, touch scrolling, fullscreen and native Back still need device/browser smoke testing.
+
+## Surface Lab Phase 3 + Brewster tick — 2026-11-05 (uncommitted, both app copies)
+
+- Lab-only layout: equal-width compact tabs, real section headings, consistent 12/16px grouping, width-aware two-column control grids (one column below 460px of controls width), aligned labels/units and host/content pickers. Profile cards and long FR labels wrap; Lab controls/actions have 40px minimum targets. Canvas sizes, body proportions and sidebar width unchanged.
+- Display explanations and method assumptions use native collapsed details; scientific hints, validity warnings and solver errors remain visible. Explicit tab/panel relationships, Arrow/Home/End navigation, preset selection semantics and focus outlines. Add layer is primary; removal/CSV/reference actions secondary. Both themes use app tokens. Phase 4 global buttons not started.
+- Slider opt-in tick `row: 2` is requested only by θB: numeric ticks stay at top 0, θB uses top 26px and 52px reserved height. Native button click/keyboard behavior retained; ordinary accent ticks remain single-row.
+- Files in each app: `src/App.tsx`, `src/embeddedEditor.test.tsx`, `src/styles.css`, `src/ui/{controls,controls.test}.tsx`, `src/surface/{SurfaceLab,SurfaceLab.test}.tsx`, `src/surface/{surfaceLab.css,labText.ts}`, `HANDOFF.md`. Shared changes match; App surgically patched, preserving native Capacitor export/Back versus web behavior. Physics, single state/worker/persistence owner, portals/results, Ring, compact checkbox, phases 1/2, boundary picker, embedded insert and differing RayScene/adaptive DPR preserved. Dirty Android files untouched.
+- Verification: publish `npm test` **278 tests / 31 files**, build pass (**115 modules**); original app-only `npm test -- --exclude "waves-gitlab/**"` **274 / 30**, full `npm test` **550 / 58** (includes untouched nested repo), build pass (**103 modules**). Rendered markup/real callbacks cover FR/EN tabs/keyboard, profile/scenario/display, layers/capacity/thickness, host/inclusion/fog/wave controls, exposed errors and tick rows/clicks. Both diff checks pass (line-ending warnings only).
+- No commit/push, subagents, Android build or visual browser checks. Browser/mobile reflow, contrast and pointer smoke testing remain manual; rendered tests do not prove pixel geometry.
+
+## Inclusions Phase 2 — 2026-11-04 (uncommitted, both app copies)
+
+- Lab Medium adds `Whole wall` / `Mur entier` (`incTarget: "all"`) and opt-in `Apply to main simulation wall` / `Appliquer au mur de la simulation` (`applyInclusionsToMain`, default false). Existing `waves:lab:v1` storage and v2 share snapshot carry both; legacy numeric targets still load, unknown values sanitize safely.
+- `wallAt` mixes each Lab host independently using existing Maxwell Garnett and reports worst unmixed-host validity. EMT, RCWA jobs/sweeps, detail paths and both Lab canvases consume that same wall; whole-wall bubble drawing covers each region.
+- Stable `onMainInclusions` callback supplies settings to App without another solver or SimState schema change. Optional `computeResults(sim, inclusions)` mixes the expanded main physical stack once, feeding results, angle/field charts, CSV and both main views. Shared `isInclusionHost` eligibility also marks `mainWallSpec` for profiled EMT/RCWA: air, fixed/live coatings and ideal inserts remain untouched; host halves mix independently. No host state mutation. Compact FR/EN SVG HUD/results indicators include marginal/invalid warnings.
+- Phase 2 files: `src/App{,.test}.tsx`, `src/embeddedEditor.test.tsx`, `src/media/mixing.ts`, `src/state/{inclusions,inclusions.test,results}.ts`, `src/styles.css`, `src/surface/{SurfaceLab,SurfaceLab.test}.tsx`, `src/surface/{labState,labState.test,labText,rcwaJobs,profiledMain,useProfiledMain,surfaceDetail,inclusions.test}.ts`, `HANDOFF.md`. Shared files copied byte-for-byte after publish verification; App patched surgically. Native/web export/Back differences, existing Phase 1/Ring/LabResults/insert work and dirty Android files preserved. RayScene/canvas needed no changes.
+- Verification: publish `npm test` **257 / 30 files** (baseline 229), `npm run build` pass (**115 modules**); local full `npm test` **529 / 57**, local app-only `npm test -- --exclude "waves-gitlab/**"` **253 / 29**, build pass (**103 modules**). Both `git diff --check` pass (line-ending warnings only). Added 28 tests cover per-host air/water mixing, excluded pieces, exact off/zero restoration, worst validity, storage/share, actual App callback/profile wiring, chart/CSV samples, RCWA/EMT parity and recorded Lab bubble drawing.
+- No commit/push, subagents, browser or Android build. Manual browser/mobile visual smoke testing remains. Maxwell Garnett retains its small/dilute-inclusion approximation; diameter affects validity/drawing, not the mixing law. Existing angle/field charts and their CSV remain flat-stack diagnostics when profiled R/T is selected (already labelled), now using the same mixed materials.
+
+## Matching Phase 1 — 2026-11-04 (uncommitted, both app copies)
+
+- `Match wall (λ/4)` calculates fixed editable coatings on missing outer faces, selects the front coating and switches R/T to flat. Existing fixed/live outer coatings are skipped with explicit FR/EN feedback; invalid faces or insufficient physical capacity reject the entire operation. Embedded inserts count toward the six-slot limit.
+- Per-boundary `Calculate λ/4` now creates `custom + matching:true`, without live metadata. `Recalculate λ/4` explicitly redesigns from current immediate neighbours/frequency, retaining identity/editor mode. Ordinary ε′/σ/d and n/κ editing works; compact reference/caveats stay in collapsed details. Internal layer action is now `λ/4 thickness`, with its separate experiment unchanged.
+- Existing helpers provide real-part reference indices, zero coating conductivity and supported odd-quarter thicknesses. Old live imports still resolve/read-only as before. Existing share/storage format round-trips both new calculations; no schema change. Physics and ideal antireflection preset untouched.
+- Changed in each copy: `src/App.tsx`, `src/state/{layers,matching,matching.test,embeddedInsert.test}.ts`, `src/embeddedEditor.test.tsx`, `src/i18n/index.ts`, `src/styles.css`, `HANDOFF.md`. Shared changed files are byte-identical; App changes are surgical, preserving native/web differences. Existing boundary picker, embedded insert, Ring/LabResults redesign and dirty Android files preserved.
+- Verification: publish **229 tests / 28 files**, `npm run build` pass (114 modules); local full `npm test` **501 / 55**, build pass (102 modules). Local includes untouched nested `waves-gitlab` tests; requested app alone (`npm test -- --exclude "waves-gitlab/**"`) **225 / 27**. `git diff --check` passes both (only Git line-ending warnings).
+- Behaviour tests cover ε′=9 lossless slab thicknesses 0.1/0.7/2/17.3/100 cm, all TE/TM/AVG at 0° (R<1e-6, T>1−1e-6), detuning, 1 cm marble at 5.5 GHz with retained absorption, multilayer residual reflection, atomic capacity/invalid-face rollback, already-coated faces, recalculation/editability, share/storage and real FR/EN App callbacks.
+- No commit/push, subagents, browser or Android build. Browser/mobile visual smoke test remains manual; lossy or internally mismatched walls do not promise R=0 or T=100%.
+
 Last updated: 2026-10-25 (GitLab / Surface lab track: see §15; Android track unchanged since 2026-10-24)
 Repository (working copy): `C:\Users\WDAGUtilityAccount\Documents\Default Project`
 Upstream: `https://github.com/FYI88/WAVES.git`
@@ -351,6 +414,28 @@ Planned:
 
 ## 13. Journal
 
+### 2026-11-04: reviewed neighbour-derived live adaptation (supersedes optimizer)
+
+- Removed the superseded numerical optimizer. New `matchingDesign: "quarter-wave-live"` coatings use immediate ordinary neighbours, exterior air, nᵢ = Re √εᵣ,ᵢ and εᵣ,ₘ = n₁n₂. Thus ηₘ,ref = √(Z₁,ref Z₂,ref), with Zref = 376.730313668/n Ω. Lossy neighbours are explicitly an approximation, not exact complex-impedance matching or a T-improvement promise. `physics.ts` untouched.
+- `state/matching.ts` resolves every interactive simulation transition synchronously in App. Frequency/material/topology changes rebind coats; angle/pol do not redesign. Invalid interactive edits preserve the entire previous state. No adjacent-coating dependencies; separated live coats supported. Derived material/thickness read-only, no duplication; deletion is off, valid movement allowed. Smallest supported odd quarter-wave multiple, full precision, existing ranges.
+- Compact Adaptation / position / Ajouter row and read-only numerical editor; formula, neighbours, reference impedances and limitations behind disclosures. Profile still uses the first physical layer (including a coating); insertion selects Flat R/T. Original picker styles retained.
+- Share/persistence whitelist the optional discriminator, keeping resolved snapshots, keys and versions. Legacy fixed coats and the ideal preset remain fixed and detunable. Invalid imported live metadata becomes a deterministic fixed snapshot; no import notice is currently surfaced. Browser layout/gestures still need visual verification.
+- Verification: focused suite 148 passing, then final full `npm test` **434/434 passing across 46 files**; `npm run build` passes (TypeScript + Vite). Coverage includes frequency/material updates, angle/pol invariance, real-loss preservation, a finite-stack counterexample to guaranteed T improvement, topology rejection/rebinding/removal, editor/resize guards, odd orders/full precision, metadata fallback/roundtrip, fixed ideal demo/detuning, and leading-coating EMT/RCWA depth-zero agreement. No browser validation claimed. No commit or push.
+
+### 2026-11-03: reset, separate coatings, material samples
+
+- Reset previously removed storage but reloaded the live share hash, restoring the same settings. Both reset paths now clear the hash and saved lab/R-T mode before reloading. A regression test exercises the button handler with a share hash present.
+- Added dedicated matching-layer insertion controls before/after the selected layer. Neighbour materials are preserved; the coating is a custom medium electrically, but labelled as an anti-reflection layer in the list/scene. Its optional marker survives storage/share links. Existing six-layer and normal-incidence limits remain.
+- Main material picker now uses offline canvas texture thumbnails shared with the scene, with glass/air/custom glyphs. Layer-stack presets show miniature material stacks. No external image requests or dependencies.
+
+### 2026-11-03: quarter-wave matching and one ideal demo
+
+- Added `quarterWaveMatch` in `state/layers.ts`: normal-incidence estimate from adjacent real indices, odd quarter-wave thickness within existing editor limits, invalid/out-of-range inputs rejected. No physics solver changes.
+- Custom-layer editor can apply this estimate to the selected layer at θ = 0°. It sets σ = 0 and selects Flat R/T; it is explicitly not a guaranteed optimizer for lossy multilayer walls.
+- Added one `antireflection` scenario: ideal ε′ = 9 slab, 0.75 cm, between ε′ = 3 matching coatings at 10 GHz. Full-precision coating thickness gives T ≈ 1. Existing real materials are unchanged.
+- Main persistence now permits σ = 0 (also fixes κ = 0 reload/share behavior). No schema change. Existing logarithmic conductivity control retains its positive range and displays a lossless explanation at zero.
+- Verification: 421 tests pass; production typecheck/build passes; browser verification not performed. New tests cover design limits, TE/TM/AVG full transmission, detuning, bare-slab comparison, zero-loss persistence/share and retained real-wall absorption.
+
 ### 2026-10-25 (GitLab / Surface lab track): canvas drag (#1, !5)
 
 - Branch `feature/canvas-drag` from `fix/sidebar-scroll` (!3); Draft MR !5 to `main`, depends on !3. `App.tsx` changes are small (3 callbacks, 1 import, keyboard branch, 2 help rows) so the merge with !4 (#7) stays easy; the logic is in `src/scene/`.
@@ -458,7 +543,7 @@ Targets phones, laptops and teaching boards. Simple, minimal, premium; UI only (
 ### Decisions
 
 - Surface lab is a separate model (own profile, materials, layers); it shares only f, θ and polarization with the main simulator.
-- Main-view overlay (#3): default draws the lab profile and the order **directions** only (grating equation, valid for any wall); lab-wall **efficiencies** are an opt-in checkbox and labelled as such. Main R/T always stay the flat-stack result.
+- One resultant R and one resultant T (2026-11-03, supersedes the #3 order-direction beams): every view (Section, Spatial, lab detail) draws a single reflected and a single transmitted beam carrying the resultant R and T, i.e. the sum over all diffraction orders, with every internal reflection and absorption already in the math. Nothing else leaves the wall: no diffracted-order beams, no partial-reflection exits. The internal reflections inside the wall stay. Diffracted orders are an opt-in: Surface lab > Surface > "Also show the diffracted orders" (`showOrders`, off by default, saved and shared) adds m ≠ 0 beams to the main Section view and the lab detail, on top of the summed R and T (efficiencies from the main wall's RCWA result or the lab's rigorous result, directions only otherwise). The old "beam widths: lab efficiencies" option is gone (old links and saved states drop it). The lab sweep chart plots the resultant R, T and A; the order table and bars keep the per-order breakdown.
 - Lab state persists in `localStorage` (`waves:lab:v1`) and travels in share links (codec v2, optional `lab`, omitted while the lab is untouched); v1 links must keep decoding.
 - Lab UI colours use the app theme tokens `--om-*` only; never the base `--fg-*` / `--surface-*` tokens (those follow the OS scheme, not the app toggle).
 - About: compact sheet, 440px card on laptops (500px on boards), bottom sheet on phones, model assumptions behind a disclosure, email addresses only in link tooltips.
@@ -489,3 +574,88 @@ Targets phones, laptops and teaching boards. Simple, minimal, premium; UI only (
 - DOM accents (`--om-*`) and canvas palettes (`theme.ts`) use different wave colours; unify in #7.
 - Rayleigh roughness estimate (#6) not implemented.
 - A few imports in `App.tsx` on `main` are unused (left to keep !2 mergeable).
+
+### Local top-canvas switch (2026-11-04, uncommitted)
+
+- Added session-only Simulation / Surface Lab selector (FR/EN). One bottom lab stays mounted; only its extra detail canvas is portalled into the stage, using the same parameters and animation clock. Main preferences survive; inactive simulation RAF/shortcuts stop and its HUD/controls hide. Solver/persistence dependencies unchanged.
+- Validation: `npm test` 440/440; `npm run build` passes. Six new component-render/effect tests cover toolbar visibility, inactive shortcuts/RAF, paused redraw, shared detail phase, resize, hidden bottom canvas, reduced motion/visibility and cleanup. These use SSR plus explicit effect/host mocks, not browser integration.
+- Browser/mobile/presentation visual checks and live repeated-switch solver/storage counts remain unverified: no browser-harness executable or exposed Chrome debugging connection here. Existing Android/user changes preserved; no commit/push.
+# Approved visual batches A+B (2026-11-04)
+
+Tighter ordinary sidebar spacing; scrollable About formulas; shared wrapping
+chart tools; Lab legend semantic colours and main slider styling; aligned
+Adaptation controls with deliberate narrow/touch layouts. Batch C is not approved.
+Use plain text, not emoji; keep physics symbols and SVG icons.
+
+Future colour settings: no settings button/UI now. Lab DOM legend tokens
+`--sl-ref/tra/abs` inherit main `--om-ref/tra/abs`. Keep semantic UI colours
+distinct from soft canvas palettes (`src/theme.ts`). Future preferences should
+validate/persist colours, set root token overrides, optionally update the canvas
+palette consistently, preserve contrast, and support default/reset and old links.
+Do not hardcode independent Lab legend colours. Android download button remains
+deferred until a current permanently signed APK is available.
+# Batch C approved and applied (2026-11-04)
+
+Explicit wide desktop columns, available-height presentation grid with a short
+screen scroll fallback, scene-width responsive toolbar groups, canvas-row HUD
+anchoring, compact phone header, and caption/heading/projector font tokens.
+Warning and copied-success states use decorative SVG icons with text, not emoji.
+Native/physics behaviour is unchanged. Astra's read-only review found no proven
+blocker; actual 320/360px FR header, wrapped-toolbar presentation, desktop zoom,
+long invalid-EMT HUD text and projector sizing still need browser/device checks.
+# View-dependent results and sizing (2026-11-04)
+
+The right result region follows Simulation/Surface Lab. `LabResults` is display
+only, portalled by the one mounted SurfaceLab, using the same R/T/A as its detail
+canvas. It labels previous RCWA results, initial EMT previews, validity and
+request-keyed point/sweep errors separately. No extra solver or lab store.
+Desktop stage height reduced by 15% from the enlarged baseline; a 425px logical
+results column starts at 1536px, with 2/1-column layouts below that. Existing
+desktop 80% zoom paints that track at 340px. Presentation remains available-height.
+Narrow FR, paused switch/reset, zoom boundaries and fullscreen need visual checks.
+# Embedded internal layer (2026-11-04)
+
+Host-owned `embeddedInsert` stores enabled/eps/thickness. `expandLayers` derives
+host-half / lossless insert / host-half for results, charts, fields, scenes and
+profiled EMT/RCWA. Total thickness stays fixed; disabling restores original
+host physics and retains the design. λ/4 is fixed at the current design frequency,
+not an automatic cancellation promise between identical host materials.
+Internal pieces map selection to the host. Canvas reorder is disabled when
+subdivided; host panel/keyboard actions remain. Six physical layers maximum,
+thin insert UI step 0.001 cm, safe import/invalid-edit guards. No physics.ts changes.
+Sol 6.1 implemented, Astra medium reviewed without blockers. Browser/device
+visual checks remain pending. Original and publish source copies synchronized.
+# Signed Android refresh (2026-11-05)
+
+Release version 1.1.0, Android code 3; preserve the original release signing key
+and application ID. Canonical signed APK builds from the root-layout FYI88
+publish checkout so it retains native exports/Back plus all website features.
+Original local native shell now mirrors immersive fullscreen MainActivity.
+Always web-build and Capacitor-sync before release Gradle. No device connected;
+certificate/version and bundled-asset parity are checked at build time.
+# Internal quarter-wave interference demo (2026-11-05)
+
+Scenario `internalQuarterWave` starts with a disabled retained insert. Fixed
+10 GHz, normal incidence, AVG: custom host eps9/sigma0.01/thickness3.55cm;
+insert n2, thickness c/(4fn)=0.3747405725cm (10.56% of total). Toggle changes
+R14.8133%→0.3868%, T79.1584%→93.0146%, while A6.0283%→6.5986%.
+This demonstrates tuned interference, not wholesale replacement of absorption
+or automatic impedance matching between identical hosts. Original ideal 100%
+outer-coating preset remains unchanged. Main scene and Flat R/T selected;
+added bubble mixing remains user-controlled and is excluded from stated values.
+Physics/detuning/share/off-restoration and real UI callback regressions added.
+# Correction: preserve the current wall on internal λ/4 insertion (2026-11-05)
+
+Removed the stack-replacing `internalQuarterWave` scenario from the UI. A compact
+"Insert λ/4 in selected layer" action now enables a fixed embedded insert in the
+current host via `insertInternalQuarterWave`, retaining any chosen insert index
+(default n1.5), every host property/ID/thickness, other layers and wave settings.
+Fit/capacity/host failures are atomic. Disable still restores the original wall.
+The prior tuned demo numbers survive only as numerical regression fixtures;
+arbitrary existing walls are not promised improved R/T. No solver/APK changes.
+# Phone/startup pre-release 1.1.1 / code 4
+
+New signed test version: responsive phone geometry, compact tools, selected-host
+λ/4 insertion, shell skeletons and explicit readiness without the old forced
+700ms splash. Preserve `public/startup.js` in dist/APK. Fullscreen native shell
+retained. Startup and touch/layout browser checks pass; phone-device check pending.

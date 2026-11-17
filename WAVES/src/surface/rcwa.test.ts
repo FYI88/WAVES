@@ -87,6 +87,19 @@ describe("RCWA physics of profiled walls", () => {
     }
   });
 
+  it("resultant R and T (the single drawn beams) are the sums over every propagating order", () => {
+    const wall: ProfiledWall = {
+      profile: profile({ id: "bumps", period: 4, depth: 2 }),
+      eta: surfaceEta("concrete", 10),
+      below: [{ eta: surfaceEta("concrete", 10), cm: 5 }],
+    };
+    const got = solveRcwaMode(rcwaInputFor(wall, 10, 25, "AVG", 8, 12));
+    expect(got.orders.length).toBeGreaterThan(1);
+    expect(got.R).toBeCloseTo(got.orders.reduce((s, o) => s + o.R, 0), 12);
+    expect(got.T).toBeCloseTo(got.orders.reduce((s, o) => s + o.T, 0), 12);
+    expect(got.R + got.T + got.A).toBeCloseTo(1, 12);
+  });
+
   it("symmetric profile at normal incidence diffracts symmetrically", () => {
     const wall: ProfiledWall = { profile: profile({ id: "triangle", period: 3, depth: 1 }), eta: lossless, below: [] };
     const got = point(wall, 20, 0, "TE");

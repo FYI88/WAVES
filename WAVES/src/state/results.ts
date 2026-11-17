@@ -12,7 +12,9 @@ import {
   type Cx,
   type PolMode,
 } from "../physics";
-import { layerEpsSigma, type Layer } from "./layers";
+import { expandLayers, layerEpsSigma, type Layer, type PhysicalLayer } from "./layers";
+import { mixedEta, worstInclusionValidity, type Inclusions, type MixValidity } from "../media/mixing";
+import { isInclusionHost } from "./inclusions";
 
 export interface SimState {
   layers: Layer[];
@@ -47,28 +49,40 @@ export interface Results {
   RdB: number;
   TdB: number;
   layers: LayerRes[];
+  physicalLayers: PhysicalLayer[];
+  physicalResults: LayerRes[];
   etas: Cx[];
   ds: number[];
   totalCm: number;
   lambda0: number;
+  mixValidity: MixValidity;
 }
 
-export function computeResults(s: SimState): Results {
+export function computeResults(s: SimState, inclusions?: Inclusions | null): Results {
   const th = s.angle * DEG;
   const sn = Math.sin(th);
   const k0 = k0Of(s.freq);
   const lambda0 = C0 / (s.freq * 1e9);
   const etas: Cx[] = [];
   const ds: number[] = [];
-  const pre = s.layers.map((l) => {
-    const { epsR, sigma } = layerEpsSigma(l, s.freq);
-    const eta = complexPermittivity(epsR, sigma, s.freq);
+  const hosts: Cx[] = [];
+  const physicalLayers = expandLayers(s.layers);
+  const pre = physicalLayers.map((l) => {
+    let { epsR, sigma } = layerEpsSigma(l, s.freq);
+    const host = complexPermittivity(epsR, sigma, s.freq);
+    const eligible = isInclusionHost(l);
+    if (eligible) hosts.push(host);
+    const eta = inclusions && eligible ? mixedEta(host, inclusions, s.freq) : host;
+    if (eta !== host) {
+      epsR = eta.re;
+      sigma = -eta.im * s.freq / 17.98;
+    }
     etas.push(eta);
     ds.push(l.thickness / 100);
     return { l, epsR, sigma, eta };
   });
   const st = stackMode(etas, ds, s.freq, th, s.pol);
-  const layers: LayerRes[] = pre.map(({ l, epsR, sigma, eta }, i) => {
+  const physicalResults: LayerRes[] = pre.map(({ l, epsR, sigma, eta }, i) => {
     const root = sqrtC(sub(eta, cx(sn * sn)));
     const nC = sqrtC(eta);
     const def = l.mat === "air" || l.mat === "custom" ? null : MATERIALS[l.mat];
@@ -90,6 +104,14 @@ export function computeResults(s: SimState): Results {
       fluxIn: st.fluxIn[i] ?? 0,
     };
   });
+  // Material properties describe the (optionally mixed) host; powers/losses cover
+  // its whole physical group (the ideal insert itself has no absorption).
+  const layers = s.layers.map((_, owner) => {
+    const indices = physicalLayers.flatMap((l, i) => l.owner === owner ? [i] : []);
+    const first = physicalResults[indices[0]];
+    if (indices.length === 1) return first;
+    return { ...first, absorbed: indices.reduce((n, i) => n + physicalResults[i].absorbed, 0), lossDb: indices.reduce((n, i) => n + physicalResults[i].lossDb, 0) };
+  });
   return {
     R: st.R,
     T: st.T,
@@ -97,10 +119,13 @@ export function computeResults(s: SimState): Results {
     RdB: 10 * Math.log10(Math.max(st.R, 1e-30)),
     TdB: 10 * Math.log10(Math.max(st.T, 1e-30)),
     layers,
+    physicalLayers,
+    physicalResults,
     etas,
     ds,
     totalCm: s.layers.reduce((a, l) => a + l.thickness, 0),
     lambda0,
+    mixValidity: inclusions ? worstInclusionValidity(hosts, inclusions, s.freq) : "ok",
   };
 }
 

@@ -1,6 +1,7 @@
 import type { MaterialId } from "./physics";
 import { drawMaterialSurface } from "./materialSurfaces";
 import { TAU, DEG, MONO, SANS, clamp, rgba, mix, tintOf } from "./render/util";
+import type { SceneSurface } from "./surface/sceneOverlay";
 
 interface Point { x: number; y: number }
 interface Vector { x: number; y: number; z: number }
@@ -13,6 +14,7 @@ interface LayerView {
   fluxIn: number;
   fluxOut: number;
   name: string;
+  insert?: boolean;
 }
 interface Parameters {
   theta: number;
@@ -24,6 +26,7 @@ interface Parameters {
   freq: number;
   pol: "TE" | "TM" | "AVG";
   labels: { normal: string; tx: string; rx: string; refl: string };
+  surface?: SceneSurface;
 }
 interface Palette {
   dark: boolean;
@@ -48,6 +51,16 @@ export interface SceneOptions {
   lang: "fr" | "en";
 }
 
+/** Fit the actual projected wall + instruments, including orbit extremes. */
+export function fitSpatialCamera(width: number, height: number, points: Vector[], az: number, el: number) {
+  const ca = Math.cos(az), sa = Math.sin(az), se = Math.sin(el), ce = Math.cos(el);
+  const projected = points.map(p => ({ x: p.x * ca + p.y * sa, y: (-p.x * sa + p.y * ca) * se - p.z * ce }));
+  const x0 = Math.min(...projected.map(p => p.x)), x1 = Math.max(...projected.map(p => p.x));
+  const y0 = Math.min(...projected.map(p => p.y)), y1 = Math.max(...projected.map(p => p.y));
+  const scale = Math.min((width - 40) / Math.max(1, x1 - x0), (height - 142) / Math.max(1, y1 - y0));
+  return { scale, center: { x: width / 2 - scale * (x0 + x1) / 2, y: 58 + (height - 142) / 2 - scale * (y0 + y1) / 2 } };
+}
+
 export function drawSpatialScene(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -59,9 +72,9 @@ export function drawSpatialScene(
   format: (value: number, decimals?: number) => string,
   options: SceneOptions,
 ) {
-  const compact = width < 600;
-  const scale = Math.min(width / (compact ? 760 : 940), height / 510);
-  const center = { x: width * 0.50, y: height * (compact ? 0.46 : 0.50) };
+  const compact = width < 600 || height < 400;
+  let scale = Math.min(width / (compact ? 760 : 940), height / 510);
+  let center = { x: width * 0.50, y: height * (compact ? 0.46 : 0.50) };
   const ca = Math.cos(options.az), sa = Math.sin(options.az);
   const se = Math.sin(options.el), ce = Math.cos(options.el);
   const project = (point: Vector): Point => {
@@ -105,7 +118,11 @@ export function drawSpatialScene(
   };
   const label = (text: string, position: Point, color: string, align: CanvasTextAlign = "center", filled = true) => {
     ctx.save();
-    ctx.font = `500 ${compact ? 9 : 10}px ${MONO}`;
+    ctx.font = `500 ${compact ? 11.5 : 10}px ${MONO}`;
+    if (compact) {
+      while (ctx.measureText(text).width > width - 40 && text.length > 4) text = text.slice(0, -2) + "…";
+      position = { ...position, y: clamp(position.y, 16, height - 16) };
+    }
     const textWidth = ctx.measureText(text).width;
     if (align === "center") position = { ...position, x: clamp(position.x, textWidth / 2 + 12, width - textWidth / 2 - 12) };
     const left = align === "center" ? position.x - textWidth / 2 : align === "right" ? position.x - textWidth : position.x;
@@ -125,11 +142,12 @@ export function drawSpatialScene(
     ctx.restore();
   };
 
+  const floor = -120;
+  const backdrop = () => {
   ctx.clearRect(0, 0, width, height);
   ctx.save();
   ctx.globalAlpha = Math.min(1, intro * 2);
 
-  const floor = -120;
   for (let position = -480; position <= 480; position += 40) {
     ctx.globalAlpha = Math.min(1, intro * 2) * Math.max(0, 1 - Math.abs(position) / 520); line([{ x: position, y: -230, z: floor }, { x: position, y: 250, z: floor }], palette.grid, 0.7);
   }
@@ -146,6 +164,7 @@ export function drawSpatialScene(
   ctx.fillStyle = shadow;
   ctx.fillRect(-240 * scale, -240 * scale, 480 * scale, 480 * scale);
   ctx.restore();
+  };
 
   const total = params.layers.reduce((sum, layer) => sum + layer.cm, 0);
   const minimum = compact ? 14 : 12;
@@ -171,6 +190,31 @@ export function drawSpatialScene(
   const source: Vector = { x: entry.x - incomingLength * cosine, y: entry.y - incomingLength * sine, z: 8 };
   const receiver: Vector = { x: exit.x + outgoingLength * cosine, y: exit.y + outgoingLength * sine, z: 8 };
   const reflectionEnd: Vector = { x: entry.x - incomingLength * cosine, y: entry.y + incomingLength * sine, z: 8 };
+  const orderBeams = params.surface?.profile.id !== "flat" ? (params.surface?.orders ?? []).flatMap(o => {
+    if (o.m === 0 || !Number.isFinite(o.angleDeg)) return [];
+    const a = o.angleDeg * DEG;
+    return (["R", "T"] as const).flatMap(side => {
+      const power = o[side];
+      if (Number.isFinite(power) && power <= 1e-4) return [];
+      const from = side === "R" ? entry : exit;
+      const dx = (side === "R" ? -1 : 1) * Math.cos(a);
+      const dy = Math.sin(a);
+      const length = Math.min(compact ? 185 : 260, (320 - Math.abs(from.x)) / Math.max(Math.abs(dx), 0.1),
+        (210 - Math.sign(dy) * from.y) / Math.max(Math.abs(dy), 0.1));
+      return [{ from, to: { x: from.x + dx * length, y: from.y + dy * length, z: from.z },
+        side, power: Number.isFinite(power) ? power : null, m: o.m, angle: o.angleDeg }];
+    });
+  }) : [];
+  if (compact) {
+    const bounds: Vector[] = [];
+    for (const x of [boundaries[0], boundaries[boundaries.length - 1]])
+      for (const y of [-wallHalfDepth, wallHalfDepth + 27])
+        for (const z of [wallBottom - 10, wallTop]) bounds.push({ x, y, z });
+    for (const p of [source, receiver, reflectionEnd, ...orderBeams.map(o => o.to)])
+      for (const z of [-120, 42]) bounds.push({ ...p, z });
+    ({ scale, center } = fitSpatialCamera(width, height, bounds, options.az, options.el));
+  }
+  backdrop();
   const polygons: Point[][] = [];
   const rects: { x0: number; x1: number; y0: number; y1: number }[] = [];
 
@@ -226,7 +270,7 @@ export function drawSpatialScene(
   order.forEach(index => {
     const layer = params.layers[index];
     const { start, end, sideX, face, front, top } = boxes[index];
-    const tint = tintOf(layer.mat);
+    const tint = layer.insert ? palette.tra : tintOf(layer.mat);
     const selected = index === params.sel;
     const air = layer.mat === "air";
     const glass = layer.mat === "glass";
@@ -296,7 +340,7 @@ export function drawSpatialScene(
 
   const angularFrequency = time * TAU * 0.65;
   const wavelength = clamp(72 * Math.pow(2.4 / params.freq, 0.23), 32, 110);
-  const beam = (from: Vector, to: Vector, color: string, powerStart: number, powerEnd: number, index: number, phase: number) => {
+  const beam = (from: Vector, to: Vector, color: string, powerStart: number | null, powerEnd: number | null, index: number, phase: number) => {
     const deltaX = to.x - from.x;
     const deltaY = to.y - from.y;
     const length = Math.hypot(deltaX, deltaY);
@@ -304,13 +348,14 @@ export function drawSpatialScene(
     const directionX = deltaX / length;
     const directionY = deltaY / length;
     const waveNumber = TAU * index / wavelength;
-    const powerAt = (fraction: number) => Math.sqrt(Math.max(0, powerStart * (1 - fraction) + powerEnd * fraction));
+    const powerAt = (fraction: number) => powerStart === null || powerEnd === null ? 0.45
+      : Math.sqrt(Math.max(0, powerStart * (1 - fraction) + powerEnd * fraction));
     const at = (distance: number, lateral = 0, vertical = 0): Vector => ({
       x: from.x + directionX * distance - directionY * lateral,
       y: from.y + directionY * distance + directionX * lateral,
       z: from.z + vertical,
     });
-    const visible = Math.min(1, Math.sqrt(Math.max(powerStart, powerEnd)));
+    const visible = Math.min(1, Math.max(powerAt(0), powerAt(1)));
     if (visible < 0.00001) return phase + waveNumber * length;
     ctx.save();
     const startPoint = project(from);
@@ -391,6 +436,23 @@ export function drawSpatialScene(
   });
   beam(exit, receiver, palette.tra, params.T, params.T, 1, phase); { const entryPoint = project(entry); const exitPoint = project(exit); const pulse = 0.85 + 0.15 * Math.sin(time * 4.2); ctx.save(); if (palette.dark) ctx.globalCompositeOperation = "lighter"; glow(entryPoint, 46 * scale, palette.inc, (palette.dark ? 0.35 : 0.18) * pulse); glow(entryPoint, 32 * scale, palette.ref, Math.sqrt(params.R) * 0.28 * pulse); glow(exitPoint, 42 * scale, palette.tra, Math.sqrt(params.T) * (palette.dark ? 0.35 : 0.2) * pulse); ctx.restore(); }
 
+  for (const o of orderBeams) {
+    const color = o.side === "R" ? palette.ref : palette.tra;
+    beam(o.from, o.to, color, o.power, o.power, 1, phase + (o.side === "R" ? Math.PI : 0));
+    const end = project(o.to), start = project(o.from);
+    const direction = Math.atan2(end.y - start.y, end.x - start.x);
+    trace([{ x: end.x - 8 * Math.cos(direction + 0.5), y: end.y - 8 * Math.sin(direction + 0.5) }, end,
+      { x: end.x - 8 * Math.cos(direction - 0.5), y: end.y - 8 * Math.sin(direction - 0.5) }]);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    if (options.annotations && (!compact || Math.abs(o.m) === 1)) {
+      const value = o.power === null ? (options.lang === "fr" ? "schém." : "schematic") : `${format(o.power * 100, 1)}%`;
+      label(`${o.side} m${o.m > 0 ? "+" : ""}${o.m} · ${format(o.angle, 1)}° · ${value}`,
+        { x: end.x, y: end.y - 16 }, color);
+    }
+  }
+
   const instrument = (position: Vector, color: string, transmitter: boolean, power: number) => {
     const floorPosition = { ...position, z: floor + 3 };
     const foot: Vector[] = [
@@ -422,14 +484,19 @@ export function drawSpatialScene(
     }
     ctx.restore();
     if (options.annotations) {
-      label(transmitter ? `${params.labels.tx} · ${format(params.freq, 1)} GHz` : `${params.labels.rx} · ${format(power * 100, 1)}%`, { x: centerPoint.x, y: centerPoint.y - radius * 1.5 - 18 }, color);
+      label(transmitter ? `${params.labels.tx} · ${format(params.freq, 1)} GHz` : `${params.labels.rx} · ${format(power * 100, 1)}%`, compact ? { x: width * (transmitter ? 0.25 : 0.75), y: height - 62 } : { x: centerPoint.x, y: centerPoint.y - radius * 1.5 - 18 }, color);
     }
   };
   instrument(source, palette.inc, true, 1);
   instrument(receiver, palette.tra, false, params.T);
   if (options.annotations) {
+    params.layers.forEach((layer, index) => {
+      if (!layer.insert || index === params.sel || compact) return;
+      const anchor = project({ x: (boundaries[index] + boundaries[index + 1]) / 2, y: -wallHalfDepth, z: wallTop });
+      label(`${layer.name.toUpperCase()} · ${format(layer.cm, 3)} cm`, { x: clamp(anchor.x, 85, width - 85), y: Math.max(110, anchor.y - 8) }, palette.tra);
+    });
     const reflectedLabel = project(reflectionEnd);
-    label(`${params.labels.refl} · ${format(params.R * 100, 1)}%`, { x: clamp(reflectedLabel.x, 65, width - 65), y: reflectedLabel.y + 22 }, palette.ref);
+    label(`${params.labels.refl} · ${format(params.R * 100, 1)}%`, compact ? { x: width * 0.25, y: height - 32 } : { x: clamp(reflectedLabel.x, 65, width - 65), y: reflectedLabel.y + 22 }, palette.ref);
     if (params.theta >= 8) {
       const arc: Vector[] = [];
       for (let step = 0; step <= 28; step++) {
@@ -438,7 +505,7 @@ export function drawSpatialScene(
       }
       line(arc, rgba(palette.inc, 0.6), 0.9);
       const angleLabel = project({ x: entry.x - 72, y: entry.y - Math.sin(angle * 0.5) * 70, z: 8 });
-      label(`${format(params.theta, 1)}°`, { x: angleLabel.x, y: angleLabel.y - 12 }, palette.inc, "center", false);
+      label(`${format(params.theta, 1)}°`, compact ? { x: width * 0.75, y: height - 32 } : { x: angleLabel.x, y: angleLabel.y - 12 }, palette.inc, "center", false);
     }
     const rulerY = wallHalfDepth + 20;
     const rulerZ = wallBottom - 10;
@@ -452,12 +519,12 @@ export function drawSpatialScene(
       line([{ x: boundary, y: rulerY - 8, z: rulerZ }, { x: boundary, y: rulerY + 8, z: rulerZ }], palette.inc, 1.6);
     }
     const rulerCenter = project({ x: 0, y: rulerY, z: rulerZ });
-    label(`${format(total, total < 10 ? 2 : 1)} cm`, { x: rulerCenter.x, y: rulerCenter.y + 18 }, palette.muted, "center", false);
+    if (!compact) label(`${format(total, total < 10 ? 2 : 1)} cm`, { x: rulerCenter.x, y: rulerCenter.y + 18 }, palette.muted, "center", false);
     const selected = params.layers[params.sel];
     const selectedCenter = (boundaries[params.sel] + boundaries[params.sel + 1]) / 2;
     const anchor = project({ x: selectedCenter, y: -wallHalfDepth, z: wallTop });
-    const labelX = clamp(anchor.x + 30, 105, width - 105);
-    const labelY = Math.max(83, anchor.y - 28);
+    const labelX = compact ? width / 2 : clamp(anchor.x + 30, 105, width - 105);
+    const labelY = compact ? 22 : Math.max(83, anchor.y - 28);
     trace([anchor, { x: anchor.x, y: labelY }, { x: labelX, y: labelY }]);
     ctx.strokeStyle = rgba(palette.inc, 0.5);
     ctx.lineWidth = 0.8;
@@ -465,7 +532,8 @@ export function drawSpatialScene(
     label(`${String(params.sel + 1).padStart(2, "0")} / ${selected.name.toUpperCase()} · ${format(selected.cm, selected.cm < 10 ? 2 : 1)} cm`, { x: labelX, y: labelY }, palette.inc);
   }
 
-  const axisOrigin = { x: compact ? 20 : 32, y: height - (compact ? 132 : 75) };
+  if (!compact) {
+  const axisOrigin = { x: 32, y: height - 75 };
   ctx.save();
   ctx.font = `9px ${MONO}`;
   [{ text: "x", dx: 22, dy: -3, color: palette.inc }, { text: "y", dx: 12, dy: 10, color: palette.muted }, { text: "z", dx: 0, dy: -23, color: palette.tra }].forEach(axis => {
@@ -483,6 +551,7 @@ export function drawSpatialScene(
   ctx.fillText(compact
     ? (options.lang === "fr" ? "SCHÉMA · HORS ÉCHELLE" : "SCHEMATIC · NOT TO SCALE")
     : (options.lang === "fr" ? "VUE SCHÉMATIQUE · ÉCHELLES ADAPTÉES" : "SCHEMATIC VIEW · ADAPTED SCALES"), compact ? 18 : width - 20, height - (compact ? 99 : 66));
+  }
   ctx.restore();
   /** `order` is the back-to-front draw order: hit-tests walk it from the end. */
   return { rects, polygons, order, slots };
